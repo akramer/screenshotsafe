@@ -316,8 +316,7 @@ pub async fn editor_page(
     let html = EDITOR_TEMPLATE
         .replace("{{TITLE}}", &html_escape(screenshot.display_title()))
         .replace("{{TITLE_ESCAPED}}", &html_escape(screenshot.title.as_deref().unwrap_or("")))
-        .replace("{{VIS_UNLISTED}}", if screenshot.visibility == "unlisted" { "selected" } else { "" })
-        .replace("{{VIS_PUBLIC}}", if screenshot.visibility == "public" { "selected" } else { "" })
+        .replace("{{VIS_UNLISTED}}", if screenshot.visibility == "unlisted" || screenshot.visibility == "public" { "selected" } else { "" })
         .replace("{{VIS_PRIVATE}}", if screenshot.visibility == "private" { "selected" } else { "" })
         .replace("{{SHARE_URL}}", &share_url)
         .replace("{{RAW_URL}}", &raw_url)
@@ -395,9 +394,8 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
             <div class="form-group">
                 <label for="screenshot-visibility">Visibility</label>
                 <select id="screenshot-visibility">
-                    <option value="unlisted" {{VIS_UNLISTED}}>Unlisted</option>
-                    <option value="public" {{VIS_PUBLIC}}>Public</option>
-                    <option value="private" {{VIS_PRIVATE}}>Private</option>
+                    <option value="unlisted" {{VIS_UNLISTED}}>Shared with private link</option>
+                    <option value="private" {{VIS_PRIVATE}}>Unshared</option>
                 </select>
             </div>
             <div class="form-group">

@@ -376,6 +376,12 @@ pub async fn update_screenshot(
         return Err(AppError::NotFound);
     }
 
+    if let Some(vis) = &req.visibility {
+        if vis != "unlisted" && vis != "private" {
+            return Err(AppError::BadRequest("Invalid visibility value".into()));
+        }
+    }
+
     let expires_at = req
         .expires_in
         .as_deref()
