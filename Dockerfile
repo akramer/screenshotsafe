@@ -1,18 +1,30 @@
-# Build stage
-FROM rust:1.95-slim-bookworm AS builder
+# --- Chef Stage ---
+FROM rust:1.95-slim-bookworm AS chef
+WORKDIR /app
+# Install cargo-chef
+RUN cargo install cargo-chef --locked
 
+# --- Recipe Stage ---
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+# --- Build Stage ---
+FROM chef AS builder
 WORKDIR /app
 
-# Install native dependencies that might be needed by some crates (like rusqlite bundled or image processing)
+# Install native dependencies that might be needed by some crates
 RUN apt-get update && apt-get install -y pkg-config libssl-dev cmake g++ && rm -rf /var/lib/apt/lists/*
 
-# Copy the entire project
-COPY . .
+# Build dependencies - this layer is cached as long as your dependencies don't change!
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
 
-# Build the application in release mode
+# Build the actual application
+COPY . .
 RUN cargo build --release
 
-# Runtime stage
+# --- Runtime Stage ---
 FROM debian:bookworm-slim
 
 WORKDIR /app
