@@ -29,6 +29,10 @@ FROM debian:bookworm-slim
 
 WORKDIR /app
 
+# Set default data storage locations
+ENV SSS_STORAGE_PATH=/data/storage
+ENV SSS_DATABASE_PATH=/data/screenshotsafe.db
+
 # Install common runtime dependencies and troubleshooting utilities
 RUN apt-get update && apt-get install -y \
     ca-certificates \
