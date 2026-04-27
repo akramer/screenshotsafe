@@ -20,6 +20,13 @@
     let backgroundImage;
     let lineHandles = [];
 
+    const dropShadowConfig = {
+        color: 'rgba(0,0,0,0.3)',
+        blur: 4,
+        offsetX: 2,
+        offsetY: 2
+    };
+
     // ── Initialize ──
     function init() {
         canvas = new fabric.Canvas('editor-canvas', {
@@ -112,6 +119,7 @@
                         stroke: null,
                         strokeUniform: true,
                         annotationType: 'redact',
+                        shadow: dropShadowConfig,
                     });
                     obj.setControlsVisibility({ mtr: false });
                     break;
@@ -126,6 +134,7 @@
                         strokeWidth: ann.strokeWidth || 3,
                         strokeUniform: true,
                         annotationType: 'rect',
+                        shadow: dropShadowConfig,
                     });
                     obj.setControlsVisibility({ mtr: false });
                     break;
@@ -139,7 +148,8 @@
                         strokeWidth: ann.strokeWidth || 3,
                         annotationType: 'line',
                         _lineData: { x1: ann.x1, y1: ann.y1, x2: ann.x2, y2: ann.y2 },
-                        perPixelTargetFind: true
+                        perPixelTargetFind: true,
+                        shadow: dropShadowConfig,
                     });
                     obj._initialLeft = obj.left;
                     obj._initialTop = obj.top;
@@ -154,6 +164,7 @@
                         fontFamily: 'Arial, sans-serif',
                         annotationType: 'text',
                         lockUniScaling: true,
+                        shadow: dropShadowConfig,
                     });
                     obj.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false });
                     break;
@@ -303,6 +314,7 @@
             annotationType: 'arrow',
             _arrowData: { x1, y1, x2, y2, color, strokeWidth },
             perPixelTargetFind: true,
+            shadow: dropShadowConfig,
         });
         group._initialLeft = group.left;
         group._initialTop = group.top;
@@ -497,7 +509,8 @@
                         stroke: targetObj.stroke, strokeWidth: targetObj.strokeWidth,
                         annotationType: 'line',
                         _lineData: { x1, y1, x2, y2 },
-                        perPixelTargetFind: true
+                        perPixelTargetFind: true,
+                        shadow: dropShadowConfig,
                     });
                     newObj._initialLeft = newObj.left;
                     newObj._initialTop = newObj.top;
@@ -561,6 +574,7 @@
                     fontFamily: 'Arial, sans-serif',
                     annotationType: 'text',
                     lockUniScaling: true,
+                    shadow: dropShadowConfig,
                 });
                 text.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false });
                 canvas.add(text);
@@ -605,14 +619,16 @@
                     previewObj = new fabric.Rect({
                         left: Math.min(x1, x2), top: Math.min(y1, y2),
                         width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
-                        fill: '#000000', stroke: null, strokeUniform: true, selectable: false, evented: false
+                        fill: '#000000', stroke: null, strokeUniform: true, selectable: false, evented: false,
+                        shadow: dropShadowConfig,
                     });
                     break;
                 case 'rect':
                     previewObj = new fabric.Rect({
                         left: Math.min(x1, x2), top: Math.min(y1, y2),
                         width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
-                        fill: 'transparent', stroke: color, strokeWidth: strokeWidth, strokeUniform: true, selectable: false, evented: false
+                        fill: 'transparent', stroke: color, strokeWidth: strokeWidth, strokeUniform: true, selectable: false, evented: false,
+                        shadow: dropShadowConfig,
                     });
                     break;
                 case 'arrow':
@@ -621,7 +637,8 @@
                     break;
                 case 'line':
                     previewObj = new fabric.Line([x1, y1, x2, y2], {
-                        stroke: color, strokeWidth: strokeWidth, selectable: false, evented: false
+                        stroke: color, strokeWidth: strokeWidth, selectable: false, evented: false,
+                        shadow: dropShadowConfig,
                     });
                     break;
                 case 'crop':
@@ -686,6 +703,7 @@
                         stroke: null,
                         strokeUniform: true,
                         annotationType: 'redact',
+                        shadow: dropShadowConfig,
                     });
                     obj.setControlsVisibility({ mtr: false });
                     break;
@@ -700,6 +718,7 @@
                         strokeWidth: strokeWidth,
                         strokeUniform: true,
                         annotationType: 'rect',
+                        shadow: dropShadowConfig,
                     });
                     obj.setControlsVisibility({ mtr: false });
                     break;
@@ -713,7 +732,8 @@
                         strokeWidth: strokeWidth,
                         annotationType: 'line',
                         _lineData: { x1, y1, x2, y2 },
-                        perPixelTargetFind: true
+                        perPixelTargetFind: true,
+                        shadow: dropShadowConfig,
                     });
                     obj._initialLeft = obj.left;
                     obj._initialTop = obj.top;

@@ -54,6 +54,14 @@ fn build_svg(width: u32, height: u32, annotations: &[Annotation], crop: &Option<
         .unwrap_or((0.0, 0.0));
 
     let mut elements = String::new();
+    
+    elements.push_str(
+        "<defs>\n\
+            <filter id=\"shadow\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\">\n\
+                <feDropShadow dx=\"2\" dy=\"2\" stdDeviation=\"2\" flood-color=\"#000000\" flood-opacity=\"0.3\"/>\n\
+            </filter>\n\
+        </defs>"
+    );
 
     for annotation in annotations {
         match annotation {
@@ -62,7 +70,7 @@ fn build_svg(width: u32, height: u32, annotations: &[Annotation], crop: &Option<
                 let ry = *y - oy;
                 let fill = "#000000";
                 elements.push_str(&format!(
-                    r#"<rect x="{rx}" y="{ry}" width="{w}" height="{h}" fill="{fill}" />"#,
+                    r#"<rect x="{rx}" y="{ry}" width="{w}" height="{h}" fill="{fill}" filter="url(#shadow)" />"#,
                 ));
             }
             Annotation::Rect {
@@ -79,7 +87,7 @@ fn build_svg(width: u32, height: u32, annotations: &[Annotation], crop: &Option<
                 let escaped_color = svg_escape_attr(color);
                 let fill_val = if *filled { &escaped_color } else { "none" };
                 elements.push_str(&format!(
-                    r#"<rect x="{rx}" y="{ry}" width="{w}" height="{h}" fill="{fill_val}" stroke="{escaped_color}" stroke-width="{stroke_width}" />"#,
+                    r#"<rect x="{rx}" y="{ry}" width="{w}" height="{h}" fill="{fill_val}" stroke="{escaped_color}" stroke-width="{stroke_width}" filter="url(#shadow)" />"#,
                 ));
             }
             Annotation::Line {
@@ -96,7 +104,7 @@ fn build_svg(width: u32, height: u32, annotations: &[Annotation], crop: &Option<
                 let ly2 = *y2 - oy;
                 let escaped_color = svg_escape_attr(color);
                 elements.push_str(&format!(
-                    r#"<line x1="{lx1}" y1="{ly1}" x2="{lx2}" y2="{ly2}" stroke="{escaped_color}" stroke-width="{stroke_width}" />"#,
+                    r#"<line x1="{lx1}" y1="{ly1}" x2="{lx2}" y2="{ly2}" stroke="{escaped_color}" stroke-width="{stroke_width}" filter="url(#shadow)" />"#,
                 ));
             }
             Annotation::Arrow {
@@ -135,14 +143,12 @@ fn build_svg(width: u32, height: u32, annotations: &[Annotation], crop: &Option<
                     let lx2 = ax2 - line_end_dist * angle.cos();
                     let ly2 = ay2 - line_end_dist * angle.sin();
 
-                    // Draw the line body
+                    // Draw arrow grouped with shadow filter
                     elements.push_str(&format!(
-                        r#"<line x1="{ax1}" y1="{ay1}" x2="{lx2}" y2="{ly2}" stroke="{escaped_color}" stroke-width="{stroke_width}" />"#,
-                    ));
-
-                    // Draw arrowhead as a sharp delta polygon
-                    elements.push_str(&format!(
-                        r#"<polygon points="{p0x},{p0y} {p1x},{p1y} {p2x},{p2y} {p3x},{p3y}" fill="{escaped_color}" stroke="{escaped_color}" stroke-width="1" stroke-linejoin="miter" />"#,
+                        r#"<g filter="url(#shadow)">
+                            <line x1="{ax1}" y1="{ay1}" x2="{lx2}" y2="{ly2}" stroke="{escaped_color}" stroke-width="{stroke_width}" />
+                            <polygon points="{p0x},{p0y} {p1x},{p1y} {p2x},{p2y} {p3x},{p3y}" fill="{escaped_color}" stroke="{escaped_color}" stroke-width="1" stroke-linejoin="miter" />
+                        </g>"#
                     ));
                 }
             }
@@ -171,7 +177,7 @@ fn build_svg(width: u32, height: u32, annotations: &[Annotation], crop: &Option<
                 }
 
                 elements.push_str(&format!(
-                    r#"<text x="{tx}" y="{baseline_y}" font-family="Liberation Sans, Arial, sans-serif" font-size="{font_size}" fill="{escaped_color}">{tspans}</text>"#,
+                    r#"<text x="{tx}" y="{baseline_y}" font-family="Liberation Sans, Arial, sans-serif" font-size="{font_size}" fill="{escaped_color}" filter="url(#shadow)">{tspans}</text>"#,
                 ));
             }
         }
