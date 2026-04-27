@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            width: 340px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f13;
+            color: #e8e8f0;
+            padding: 16px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .header h1 {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .header .icon { font-size: 20px; }
+
+        /* Settings section */
+        .settings {
+            margin-bottom: 16px;
+        }
+        .form-group {
+            margin-bottom: 12px;
+        }
+        .form-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px 10px;
+            background: #1a1a24;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            color: #e8e8f0;
+            font-size: 13px;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #6a6aff;
+            box-shadow: 0 0 0 2px rgba(106,106,255,0.15);
+        }
+
+        /* Status indicator */
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 12px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff4d6a;
+        }
+        .status-dot.connected { background: #00cc66; }
+
+        /* Buttons */
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+        .btn-primary {
+            background: #6a6aff;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #8484ff; }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #e8e8f0;
+        }
+        .btn-outline:hover {
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(255,255,255,0.2);
+        }
+        .btn + .btn { margin-top: 8px; }
+
+        /* Result section */
+        .result {
+            display: none;
+            margin-top: 12px;
+            padding: 12px;
+            background: rgba(106,106,255,0.08);
+            border: 1px solid rgba(106,106,255,0.2);
+            border-radius: 8px;
+        }
+        .result.show { display: block; }
+        .result-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #888;
+            margin-bottom: 4px;
+        }
+        .result-link {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+        .result-link input {
+            flex: 1;
+            padding: 6px 8px;
+            background: #0f0f13;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            color: #e8e8f0;
+            font-size: 12px;
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        .result-link button {
+            padding: 6px 10px;
+            background: #1a1a24;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            color: #e8e8f0;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        .result-link button:hover { background: #22223a; }
+
+        /* Error message */
+        .error {
+            display: none;
+            margin-top: 8px;
+            padding: 8px 10px;
+            background: rgba(255,77,106,0.1);
+            border: 1px solid rgba(255,77,106,0.3);
+            border-radius: 6px;
+            font-size: 12px;
+            color: #ff4d6a;
+        }
+        .error.show { display: block; }
+
+        /* Saved indicator */
+        .saved-toast {
+            display: none;
+            position: fixed;
+            top: 8px;
+            right: 8px;
+            padding: 6px 12px;
+            background: rgba(0,204,102,0.9);
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #fff;
+        }
+        .saved-toast.show {
+            display: block;
+            animation: fadeInOut 2s ease-in-out;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-8px); }
+            15% { opacity: 1; transform: translateY(0); }
+            85% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-8px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <span class="icon">📸</span>
+        <h1>ScreenshotSafe</h1>
+    </div>
+
+    <div class="settings">
+        <div class="form-group">
+            <label for="server-url">Server URL</label>
+            <input type="text" id="server-url" placeholder="https://screenshots.example.com">
+        </div>
+        <div class="form-group">
+            <label for="api-token">API Token</label>
+            <input type="password" id="api-token" placeholder="sss_...">
+        </div>
+        <button class="btn btn-outline" id="save-settings-btn">Save Settings</button>
+    </div>
+
+    <div class="status" id="status">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Not configured</span>
+    </div>
+
+    <button class="btn btn-primary" id="capture-btn" disabled>
+        📷 Capture Screenshot
+    </button>
+
+    <div class="error" id="error-msg"></div>
+
+    <div class="result" id="result">
+        <div class="result-label">Share Link</div>
+        <div class="result-link">
+            <input type="text" id="share-url" readonly>
+            <button id="copy-share-btn">Copy</button>
+        </div>
+        <div class="result-label">Direct Image</div>
+        <div class="result-link">
+            <input type="text" id="raw-url" readonly>
+            <button id="copy-raw-btn">Copy</button>
+        </div>
+        <button class="btn btn-outline" id="open-editor-btn" style="margin-top: 8px; font-size: 12px; padding: 6px;">
+            ✏️ Open in Editor
+        </button>
+    </div>
+
+    <div class="saved-toast" id="saved-toast">Settings saved ✓</div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
