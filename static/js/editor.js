@@ -18,12 +18,16 @@
     let redoStack = [];
     let canvas;
     let backgroundImage;
+    let lineHandles = [];
 
     // ── Initialize ──
     function init() {
         canvas = new fabric.Canvas('editor-canvas', {
             selection: true,
             preserveObjectStacking: true,
+            uniformScaling: false,
+            uniScaleTransform: false,
+            targetFindTolerance: 15,
         });
 
         // Load the original image as background
@@ -69,11 +73,11 @@
         let scale = Math.min(scaleX, scaleY, 1); // Don't zoom in past 100% on fit
         
         canvas.setZoom(1);
-        canvas.viewportTransform = [
+        canvas.setViewportTransform([
             scale, 0, 0, scale,
             (wrapper.clientWidth - backgroundImage.width * scale) / 2,
             (wrapper.clientHeight - backgroundImage.height * scale) / 2
-        ];
+        ]);
         canvas.requestRenderAll();
     }
 
@@ -92,8 +96,10 @@
                         height: ann.h,
                         fill: '#000000',
                         stroke: null,
+                        strokeUniform: true,
                         annotationType: 'redact',
                     });
+                    obj.setControlsVisibility({ mtr: false });
                     break;
                 case 'rect':
                     obj = new fabric.Rect({
@@ -104,18 +110,26 @@
                         fill: ann.filled ? ann.color : 'transparent',
                         stroke: ann.color,
                         strokeWidth: ann.strokeWidth || 3,
+                        strokeUniform: true,
                         annotationType: 'rect',
                     });
+                    obj.setControlsVisibility({ mtr: false });
                     break;
                 case 'arrow':
                     obj = createArrow(ann.x1, ann.y1, ann.x2, ann.y2, ann.color, ann.strokeWidth || 3);
+                    obj.hasControls = false;
                     break;
                 case 'line':
                     obj = new fabric.Line([ann.x1, ann.y1, ann.x2, ann.y2], {
                         stroke: ann.color,
                         strokeWidth: ann.strokeWidth || 3,
                         annotationType: 'line',
+                        _lineData: { x1: ann.x1, y1: ann.y1, x2: ann.x2, y2: ann.y2 },
+                        perPixelTargetFind: true
                     });
+                    obj._initialLeft = obj.left;
+                    obj._initialTop = obj.top;
+                    obj.hasControls = false;
                     break;
                 case 'text':
                     obj = new fabric.IText(ann.text, {
@@ -126,6 +140,7 @@
                         fontFamily: 'Arial, sans-serif',
                         annotationType: 'text',
                     });
+                    obj.setControlsVisibility({ mtr: false });
                     break;
             }
             if (obj) {
@@ -137,6 +152,30 @@
 
     // ── Serialize Fabric objects back to annotation JSON ──
     function serializeAnnotations() {
+        function getTransformedPoint(obj, localX, localY) {
+            let scaleX = obj.scaleX || 1;
+            let scaleY = obj.scaleY || 1;
+            let lx = (localX - obj._initialLeft) * scaleX;
+            let ly = (localY - obj._initialTop) * scaleY;
+            let rad = (obj.angle || 0) * Math.PI / 180;
+            let rx = lx * Math.cos(rad) - ly * Math.sin(rad);
+            let ry = lx * Math.sin(rad) + ly * Math.cos(rad);
+            return {
+                x: Math.round(obj.left + rx),
+                y: Math.round(obj.top + ry)
+            };
+        }
+
+        function getNormalizedRect(obj) {
+            let w = obj.width * (obj.scaleX || 1);
+            let h = obj.height * (obj.scaleY || 1);
+            let x = obj.left;
+            let y = obj.top;
+            if (w < 0) { x += w; w = -w; }
+            if (h < 0) { y += h; h = -h; }
+            return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+        }
+
         const annotations = [];
         canvas.getObjects().forEach(function (obj) {
             const type = obj.annotationType;
@@ -144,21 +183,15 @@
 
             switch (type) {
                 case 'redact':
+                    let r1 = getNormalizedRect(obj);
                     annotations.push({
-                        type: 'redact',
-                        x: Math.round(obj.left),
-                        y: Math.round(obj.top),
-                        w: Math.round(obj.width * obj.scaleX),
-                        h: Math.round(obj.height * obj.scaleY),
+                        type: 'redact', x: r1.x, y: r1.y, w: r1.w, h: r1.h,
                     });
                     break;
                 case 'rect':
+                    let r2 = getNormalizedRect(obj);
                     annotations.push({
-                        type: 'rect',
-                        x: Math.round(obj.left),
-                        y: Math.round(obj.top),
-                        w: Math.round(obj.width * obj.scaleX),
-                        h: Math.round(obj.height * obj.scaleY),
+                        type: 'rect', x: r2.x, y: r2.y, w: r2.w, h: r2.h,
                         color: obj.stroke || obj.fill,
                         filled: obj.fill !== 'transparent',
                         strokeWidth: obj.strokeWidth,
@@ -166,27 +199,27 @@
                     break;
                 case 'arrow':
                     if (obj._arrowData) {
+                        let p1 = getTransformedPoint(obj, obj._arrowData.x1, obj._arrowData.y1);
+                        let p2 = getTransformedPoint(obj, obj._arrowData.x2, obj._arrowData.y2);
                         annotations.push({
                             type: 'arrow',
-                            x1: Math.round(obj._arrowData.x1),
-                            y1: Math.round(obj._arrowData.y1),
-                            x2: Math.round(obj._arrowData.x2),
-                            y2: Math.round(obj._arrowData.y2),
+                            x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
                             color: obj._arrowData.color,
                             strokeWidth: obj._arrowData.strokeWidth,
                         });
                     }
                     break;
                 case 'line':
-                    annotations.push({
-                        type: 'line',
-                        x1: Math.round(obj.x1 + obj.left),
-                        y1: Math.round(obj.y1 + obj.top),
-                        x2: Math.round(obj.x2 + obj.left),
-                        y2: Math.round(obj.y2 + obj.top),
-                        color: obj.stroke,
-                        strokeWidth: obj.strokeWidth,
-                    });
+                    if (obj._lineData) {
+                        let p1 = getTransformedPoint(obj, obj._lineData.x1, obj._lineData.y1);
+                        let p2 = getTransformedPoint(obj, obj._lineData.x2, obj._lineData.y2);
+                        annotations.push({
+                            type: 'line',
+                            x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
+                            color: obj.stroke,
+                            strokeWidth: obj.strokeWidth,
+                        });
+                    }
                     break;
                 case 'text':
                     annotations.push({
@@ -194,7 +227,7 @@
                         x: Math.round(obj.left),
                         y: Math.round(obj.top),
                         text: obj.text,
-                        fontSize: obj.fontSize,
+                        fontSize: Math.round(obj.fontSize * Math.max(Math.abs(obj.scaleX || 1), Math.abs(obj.scaleY || 1))),
                         color: obj.fill,
                     });
                     break;
@@ -230,9 +263,62 @@
         const group = new fabric.Group([line, head1, head2], {
             annotationType: 'arrow',
             _arrowData: { x1, y1, x2, y2, color, strokeWidth },
+            perPixelTargetFind: true,
         });
+        group._initialLeft = group.left;
+        group._initialTop = group.top;
 
         return group;
+    }
+
+    // ── Endpoint Handles ──
+    function clearHandles() {
+        lineHandles.forEach(h => canvas.remove(h));
+        lineHandles = [];
+    }
+
+    function getAbsoluteLinePoints(obj) {
+        if (obj.annotationType === 'arrow' && obj._arrowData) {
+            return {
+                p1: { x: obj.left + (obj._arrowData.x1 - obj._initialLeft), y: obj.top + (obj._arrowData.y1 - obj._initialTop) },
+                p2: { x: obj.left + (obj._arrowData.x2 - obj._initialLeft), y: obj.top + (obj._arrowData.y2 - obj._initialTop) }
+            };
+        } else if (obj.annotationType === 'line' && obj._lineData) {
+            return {
+                p1: { x: obj.left + (obj._lineData.x1 - obj._initialLeft), y: obj.top + (obj._lineData.y1 - obj._initialTop) },
+                p2: { x: obj.left + (obj._lineData.x2 - obj._initialLeft), y: obj.top + (obj._lineData.y2 - obj._initialTop) }
+            };
+        }
+        return null;
+    }
+
+    function setupHandles(obj) {
+        const pts = getAbsoluteLinePoints(obj);
+        if (!pts) return;
+
+        const makeHandle = (x, y, isStart) => {
+            const h = new fabric.Circle({
+                left: x, top: y, radius: 6, fill: '#0088ff',
+                stroke: '#ffffff', strokeWidth: 2,
+                originX: 'center', originY: 'center',
+                hasControls: false, hasBorders: false,
+                selectable: true, isHandle: true,
+                targetObj: obj, isStart: isStart,
+                excludeFromExport: true
+            });
+            return h;
+        };
+
+        const h1 = makeHandle(pts.p1.x, pts.p1.y, true);
+        const h2 = makeHandle(pts.p2.x, pts.p2.y, false);
+
+        h1.otherHandle = h2;
+        h2.otherHandle = h1;
+
+        lineHandles.push(h1, h2);
+        canvas.add(h1, h2);
+        h1.bringToFront();
+        h2.bringToFront();
     }
 
     // ── Toolbar setup ──
@@ -256,6 +342,55 @@
                     canvas.renderAll();
                 }
             });
+        });
+
+        document.getElementById('stroke-width').addEventListener('input', function(e) {
+            const width = parseInt(e.target.value);
+            let modified = false;
+            canvas.getActiveObjects().forEach(function(obj) {
+                if (obj.annotationType === 'rect' || obj.annotationType === 'line' || obj.annotationType === 'arrow') {
+                    if (obj.annotationType === 'arrow') {
+                        obj._arrowData.strokeWidth = width;
+                        obj.getObjects().forEach(function(o) { o.set('strokeWidth', width); });
+                    } else {
+                        obj.set('strokeWidth', width);
+                    }
+                    modified = true;
+                } else if (obj.annotationType === 'text') {
+                    obj.set('fontSize', width * 8);
+                    modified = true;
+                }
+            });
+            if (modified) canvas.requestRenderAll();
+        });
+        document.getElementById('stroke-width').addEventListener('change', function(e) {
+            if (canvas.getActiveObjects().length > 0) saveUndoState();
+        });
+
+        document.getElementById('annotation-color').addEventListener('input', function(e) {
+            const color = e.target.value;
+            let modified = false;
+            canvas.getActiveObjects().forEach(function(obj) {
+                if (obj.annotationType === 'rect') {
+                    obj.set('stroke', color);
+                    if (obj.fill !== 'transparent' && obj.fill !== '#000000') obj.set('fill', color);
+                    modified = true;
+                } else if (obj.annotationType === 'line') {
+                    obj.set('stroke', color);
+                    modified = true;
+                } else if (obj.annotationType === 'arrow') {
+                    obj._arrowData.color = color;
+                    obj.getObjects().forEach(function(o) { o.set('stroke', color); });
+                    modified = true;
+                } else if (obj.annotationType === 'text') {
+                    obj.set('fill', color);
+                    modified = true;
+                }
+            });
+            if (modified) canvas.requestRenderAll();
+        });
+        document.getElementById('annotation-color').addEventListener('change', function(e) {
+            if (canvas.getActiveObjects().length > 0) saveUndoState();
         });
 
         document.getElementById('zoom-in-btn').addEventListener('click', function() {
@@ -282,6 +417,74 @@
 
     // ── Canvas drawing events ──
     function setupCanvasEvents() {
+        function onSelection() {
+            const activeObjs = canvas.getActiveObjects();
+            if (activeObjs.length === 1 && activeObjs[0].isHandle) {
+                return;
+            }
+
+            clearHandles();
+
+            if (activeObjs.length === 1) {
+                let obj = activeObjs[0];
+                if (obj.annotationType === 'line' || obj.annotationType === 'arrow') {
+                    setupHandles(obj);
+                }
+            }
+        }
+
+        canvas.on('selection:created', onSelection);
+        canvas.on('selection:updated', onSelection);
+        canvas.on('selection:cleared', onSelection);
+
+        canvas.on('object:moving', function(opt) {
+            const obj = opt.target;
+            if (obj.isHandle) {
+                const isStart = obj.isStart;
+                const otherHandle = obj.otherHandle;
+                const targetObj = obj.targetObj;
+                
+                const x1 = isStart ? obj.left : otherHandle.left;
+                const y1 = isStart ? obj.top : otherHandle.top;
+                const x2 = isStart ? otherHandle.left : obj.left;
+                const y2 = isStart ? otherHandle.top : obj.top;
+
+                let newObj;
+                if (targetObj.annotationType === 'arrow') {
+                    newObj = createArrow(x1, y1, x2, y2, targetObj._arrowData.color, targetObj._arrowData.strokeWidth);
+                    newObj.hasControls = false;
+                } else {
+                    newObj = new fabric.Line([x1, y1, x2, y2], {
+                        stroke: targetObj.stroke, strokeWidth: targetObj.strokeWidth,
+                        annotationType: 'line',
+                        _lineData: { x1, y1, x2, y2 },
+                        perPixelTargetFind: true
+                    });
+                    newObj._initialLeft = newObj.left;
+                    newObj._initialTop = newObj.top;
+                    newObj.hasControls = false;
+                }
+
+                const idx = canvas.getObjects().indexOf(targetObj);
+                canvas.remove(targetObj);
+                canvas.add(newObj);
+                newObj.moveTo(idx);
+                
+                obj.targetObj = newObj;
+                otherHandle.targetObj = newObj;
+            } else if (obj.annotationType === 'line' || obj.annotationType === 'arrow') {
+                const pts = getAbsoluteLinePoints(obj);
+                if (pts && lineHandles.length === 2) {
+                    lineHandles.find(h => h.isStart).set({ left: pts.p1.x, top: pts.p1.y }).setCoords();
+                    lineHandles.find(h => !h.isStart).set({ left: pts.p2.x, top: pts.p2.y }).setCoords();
+                }
+            }
+        });
+
+        canvas.on('object:modified', function () {
+            saveUndoState();
+        });
+
         canvas.on('mouse:wheel', function(opt) {
             let delta = opt.e.deltaY;
             let zoom = canvas.getZoom();
@@ -319,6 +522,7 @@
                     fontFamily: 'Arial, sans-serif',
                     annotationType: 'text',
                 });
+                text.setControlsVisibility({ mtr: false });
                 canvas.add(text);
                 canvas.setActiveObject(text);
                 text.enterEditing();
@@ -361,14 +565,14 @@
                     previewObj = new fabric.Rect({
                         left: Math.min(x1, x2), top: Math.min(y1, y2),
                         width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
-                        fill: '#000000', stroke: null, selectable: false, evented: false
+                        fill: '#000000', stroke: null, strokeUniform: true, selectable: false, evented: false
                     });
                     break;
                 case 'rect':
                     previewObj = new fabric.Rect({
                         left: Math.min(x1, x2), top: Math.min(y1, y2),
                         width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
-                        fill: 'transparent', stroke: color, strokeWidth: strokeWidth, selectable: false, evented: false
+                        fill: 'transparent', stroke: color, strokeWidth: strokeWidth, strokeUniform: true, selectable: false, evented: false
                     });
                     break;
                 case 'arrow':
@@ -440,8 +644,10 @@
                         height: dy,
                         fill: '#000000',
                         stroke: null,
+                        strokeUniform: true,
                         annotationType: 'redact',
                     });
+                    obj.setControlsVisibility({ mtr: false });
                     break;
                 case 'rect':
                     obj = new fabric.Rect({
@@ -452,18 +658,26 @@
                         fill: 'transparent',
                         stroke: color,
                         strokeWidth: strokeWidth,
+                        strokeUniform: true,
                         annotationType: 'rect',
                     });
+                    obj.setControlsVisibility({ mtr: false });
                     break;
                 case 'arrow':
                     obj = createArrow(x1, y1, x2, y2, color, strokeWidth);
+                    obj.hasControls = false;
                     break;
                 case 'line':
                     obj = new fabric.Line([x1, y1, x2, y2], {
                         stroke: color,
                         strokeWidth: strokeWidth,
                         annotationType: 'line',
+                        _lineData: { x1, y1, x2, y2 },
+                        perPixelTargetFind: true
                     });
+                    obj._initialLeft = obj.left;
+                    obj._initialTop = obj.top;
+                    obj.hasControls = false;
                     break;
                 case 'crop':
                     // Store crop rect (visual feedback only for now)
