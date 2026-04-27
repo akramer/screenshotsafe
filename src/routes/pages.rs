@@ -367,6 +367,16 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
                 <button class="tool-btn" data-tool="crop" title="Crop">
                     <span class="tool-icon">✂</span>
                 </button>
+                <div style="width: 1px; height: 24px; background: var(--border); margin: 0 4px;"></div>
+                <button class="tool-btn" id="zoom-in-btn" title="Zoom In (Scroll Up)">
+                    <span class="tool-icon">🔍+</span>
+                </button>
+                <button class="tool-btn" id="zoom-out-btn" title="Zoom Out (Scroll Down)">
+                    <span class="tool-icon">🔍-</span>
+                </button>
+                <button class="tool-btn" id="zoom-fit-btn" title="Zoom Fit">
+                    <span class="tool-icon">🖥</span>
+                </button>
             </div>
             <div class="tool-group">
                 <label class="tool-label">Color:

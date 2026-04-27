@@ -13,6 +13,7 @@
     let currentTool = 'select';
     let isDrawing = false;
     let drawStart = null;
+    let previewObj = null;
     let undoStack = [];
     let redoStack = [];
     let canvas;
@@ -29,8 +30,10 @@
         const imgUrl = `/api/screenshots/${window.SCREENSHOT_ID}/original`;
         fabric.Image.fromURL(imgUrl, function (img) {
             backgroundImage = img;
-            canvas.setWidth(img.width);
-            canvas.setHeight(img.height);
+            const wrapper = document.querySelector('.editor-canvas-wrap');
+            canvas.setWidth(wrapper.clientWidth);
+            canvas.setHeight(wrapper.clientHeight);
+
             canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas), {
                 originX: 'left',
                 originY: 'top',
@@ -39,13 +42,39 @@
             // Load existing annotations
             loadAnnotations(window.ANNOTATIONS);
 
+            zoomToFit();
+
             // Save initial state for undo
             saveUndoState();
+
+            window.addEventListener('resize', function() {
+                const wrapper = document.querySelector('.editor-canvas-wrap');
+                canvas.setWidth(wrapper.clientWidth);
+                canvas.setHeight(wrapper.clientHeight);
+                canvas.requestRenderAll();
+            });
         }, { crossOrigin: 'anonymous' });
 
         setupToolbar();
         setupCanvasEvents();
         setupSidebar();
+    }
+
+    function zoomToFit() {
+        if (!backgroundImage) return;
+        const wrapper = document.querySelector('.editor-canvas-wrap');
+        const padding = 40;
+        const scaleX = Math.max((wrapper.clientWidth - padding) / backgroundImage.width, 0.05);
+        const scaleY = Math.max((wrapper.clientHeight - padding) / backgroundImage.height, 0.05);
+        let scale = Math.min(scaleX, scaleY, 1); // Don't zoom in past 100% on fit
+        
+        canvas.setZoom(1);
+        canvas.viewportTransform = [
+            scale, 0, 0, scale,
+            (wrapper.clientWidth - backgroundImage.width * scale) / 2,
+            (wrapper.clientHeight - backgroundImage.height * scale) / 2
+        ];
+        canvas.requestRenderAll();
     }
 
     // ── Load annotations from JSON into Fabric objects ──
@@ -229,6 +258,22 @@
             });
         });
 
+        document.getElementById('zoom-in-btn').addEventListener('click', function() {
+            let zoom = canvas.getZoom() * 1.2;
+            if (zoom > 20) zoom = 20;
+            canvas.zoomToPoint({ x: canvas.width / 2, y: canvas.height / 2 }, zoom);
+        });
+
+        document.getElementById('zoom-out-btn').addEventListener('click', function() {
+            let zoom = canvas.getZoom() / 1.2;
+            if (zoom < 0.05) zoom = 0.05;
+            canvas.zoomToPoint({ x: canvas.width / 2, y: canvas.height / 2 }, zoom);
+        });
+
+        document.getElementById('zoom-fit-btn').addEventListener('click', function() {
+            zoomToFit();
+        });
+
         document.getElementById('undo-btn').addEventListener('click', undo);
         document.getElementById('redo-btn').addEventListener('click', redo);
         document.getElementById('reset-btn').addEventListener('click', resetAll);
@@ -237,7 +282,27 @@
 
     // ── Canvas drawing events ──
     function setupCanvasEvents() {
+        canvas.on('mouse:wheel', function(opt) {
+            let delta = opt.e.deltaY;
+            let zoom = canvas.getZoom();
+            zoom *= 0.999 ** delta;
+            if (zoom > 20) zoom = 20;
+            if (zoom < 0.05) zoom = 0.05;
+            canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
+            opt.e.preventDefault();
+            opt.e.stopPropagation();
+        });
+
         canvas.on('mouse:down', function (opt) {
+            const evt = opt.e;
+            if (evt.altKey === true || evt.button === 1 || evt.button === 2) {
+                canvas.isDragging = true;
+                canvas.selection = false;
+                canvas.lastPosX = evt.clientX;
+                canvas.lastPosY = evt.clientY;
+                return;
+            }
+
             if (currentTool === 'select') return;
             isDrawing = true;
             const pointer = canvas.getPointer(opt.e);
@@ -265,13 +330,90 @@
         });
 
         canvas.on('mouse:move', function (opt) {
+            if (canvas.isDragging) {
+                const e = opt.e;
+                const vpt = canvas.viewportTransform;
+                vpt[4] += e.clientX - canvas.lastPosX;
+                vpt[5] += e.clientY - canvas.lastPosY;
+                canvas.requestRenderAll();
+                canvas.lastPosX = e.clientX;
+                canvas.lastPosY = e.clientY;
+                return;
+            }
+
             if (!isDrawing || !drawStart) return;
-            // Visual feedback could go here
+            
+            const pointer = canvas.getPointer(opt.e);
+            const x1 = drawStart.x;
+            const y1 = drawStart.y;
+            const x2 = pointer.x;
+            const y2 = pointer.y;
+            const color = document.getElementById('annotation-color').value;
+            const strokeWidth = parseInt(document.getElementById('stroke-width').value);
+
+            if (previewObj) {
+                canvas.remove(previewObj);
+                previewObj = null;
+            }
+
+            switch (currentTool) {
+                case 'redact':
+                    previewObj = new fabric.Rect({
+                        left: Math.min(x1, x2), top: Math.min(y1, y2),
+                        width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
+                        fill: '#000000', stroke: null, selectable: false, evented: false
+                    });
+                    break;
+                case 'rect':
+                    previewObj = new fabric.Rect({
+                        left: Math.min(x1, x2), top: Math.min(y1, y2),
+                        width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
+                        fill: 'transparent', stroke: color, strokeWidth: strokeWidth, selectable: false, evented: false
+                    });
+                    break;
+                case 'arrow':
+                    previewObj = createArrow(x1, y1, x2, y2, color, strokeWidth);
+                    previewObj.set({ selectable: false, evented: false });
+                    break;
+                case 'line':
+                    previewObj = new fabric.Line([x1, y1, x2, y2], {
+                        stroke: color, strokeWidth: strokeWidth, selectable: false, evented: false
+                    });
+                    break;
+                case 'crop':
+                    previewObj = new fabric.Rect({
+                        left: Math.min(x1, x2), top: Math.min(y1, y2),
+                        width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
+                        fill: 'transparent', stroke: '#00ff88', strokeWidth: 2,
+                        strokeDashArray: [8, 4], selectable: false, evented: false
+                    });
+                    break;
+            }
+
+            if (previewObj) {
+                canvas.add(previewObj);
+                canvas.renderAll();
+            }
         });
 
         canvas.on('mouse:up', function (opt) {
+            if (canvas.isDragging) {
+                canvas.setViewportTransform(canvas.viewportTransform);
+                canvas.isDragging = false;
+                if (currentTool === 'select') {
+                    canvas.selection = true;
+                }
+                return;
+            }
+
             if (!isDrawing || !drawStart) return;
             isDrawing = false;
+            
+            if (previewObj) {
+                canvas.remove(previewObj);
+                previewObj = null;
+            }
+
             const pointer = canvas.getPointer(opt.e);
             const x1 = drawStart.x;
             const y1 = drawStart.y;
