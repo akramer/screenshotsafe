@@ -48,6 +48,20 @@
 
             zoomToFit();
 
+            function updateUniformScaling(e) {
+                const obj = e.selected ? e.selected[0] : null;
+                if (obj && obj.annotationType === 'text') {
+                    canvas.uniformScaling = true;
+                } else {
+                    canvas.uniformScaling = false;
+                }
+            }
+            canvas.on('selection:created', updateUniformScaling);
+            canvas.on('selection:updated', updateUniformScaling);
+            canvas.on('selection:cleared', function() {
+                canvas.uniformScaling = false;
+            });
+
             // Save initial state for undo
             saveUndoState();
 
@@ -139,8 +153,9 @@
                         fill: ann.color,
                         fontFamily: 'Arial, sans-serif',
                         annotationType: 'text',
+                        lockUniScaling: true,
                     });
-                    obj.setControlsVisibility({ mtr: false });
+                    obj.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false });
                     break;
             }
             if (obj) {
@@ -240,27 +255,51 @@
     function createArrow(x1, y1, x2, y2, color, strokeWidth) {
         const dx = x2 - x1;
         const dy = y2 - y1;
+        const dist = Math.sqrt(dx * dx + dy * dy);
         const angle = Math.atan2(dy, dx);
         const headLen = Math.max(strokeWidth * 5, 15);
 
-        const line = new fabric.Line([x1, y1, x2, y2], {
+        const p0x = x2;
+        const p0y = y2;
+        const p1x = x2 - headLen * Math.cos(angle - Math.PI / 6);
+        const p1y = y2 - headLen * Math.sin(angle - Math.PI / 6);
+        const p2x = x2 - (headLen * 0.6) * Math.cos(angle);
+        const p2y = y2 - (headLen * 0.6) * Math.sin(angle);
+        const p3x = x2 - headLen * Math.cos(angle + Math.PI / 6);
+        const p3y = y2 - headLen * Math.sin(angle + Math.PI / 6);
+
+        const lineEndDist = Math.min(headLen * 0.6, dist);
+        const lx2 = x2 - lineEndDist * Math.cos(angle);
+        const ly2 = y2 - lineEndDist * Math.sin(angle);
+
+        const line = new fabric.Line([x1, y1, lx2, ly2], {
             stroke: color,
             strokeWidth: strokeWidth,
         });
 
-        const head1 = new fabric.Line([
-            x2, y2,
-            x2 - headLen * Math.cos(angle - Math.PI / 6),
-            y2 - headLen * Math.sin(angle - Math.PI / 6),
-        ], { stroke: color, strokeWidth: strokeWidth });
+        const head = new fabric.Polygon([
+            { x: p0x, y: p0y },
+            { x: p1x, y: p1y },
+            { x: p2x, y: p2y },
+            { x: p3x, y: p3y }
+        ], {
+            fill: color,
+            stroke: color,
+            strokeWidth: 1,
+            strokeLineJoin: 'miter'
+        });
 
-        const head2 = new fabric.Line([
-            x2, y2,
-            x2 - headLen * Math.cos(angle + Math.PI / 6),
-            y2 - headLen * Math.sin(angle + Math.PI / 6),
-        ], { stroke: color, strokeWidth: strokeWidth });
+        // Force centers to bypass fabric.js group bounding box shifts when strokeWidth differs
+        line.set({
+            originX: 'center', originY: 'center',
+            left: (x1 + lx2) / 2, top: (y1 + ly2) / 2
+        });
+        head.set({
+            originX: 'center', originY: 'center',
+            left: head.left + head.width / 2, top: head.top + head.height / 2
+        });
 
-        const group = new fabric.Group([line, head1, head2], {
+        const group = new fabric.Group([line, head], {
             annotationType: 'arrow',
             _arrowData: { x1, y1, x2, y2, color, strokeWidth },
             perPixelTargetFind: true,
@@ -521,8 +560,9 @@
                     fill: color,
                     fontFamily: 'Arial, sans-serif',
                     annotationType: 'text',
+                    lockUniScaling: true,
                 });
-                text.setControlsVisibility({ mtr: false });
+                text.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false });
                 canvas.add(text);
                 canvas.setActiveObject(text);
                 text.enterEditing();

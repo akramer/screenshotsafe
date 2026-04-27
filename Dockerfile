@@ -35,6 +35,7 @@ RUN apt-get update && apt-get install -y \
     sqlite3 \
     curl \
     procps \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the compiled binary from the builder stage
