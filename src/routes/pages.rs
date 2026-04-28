@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, State},
+    http::HeaderMap,
     response::{Html, IntoResponse, Redirect},
 };
 
@@ -10,6 +11,7 @@ use crate::{AppError, SharedState};
 /// Redirects to /setup if no users exist, or /login if not authenticated.
 pub async fn dashboard(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     user: MaybeAuthUser,
 ) -> crate::Result<impl IntoResponse> {
     // If no users exist, redirect to setup
@@ -26,7 +28,7 @@ pub async fn dashboard(
         .db
         .list_screenshots_for_user(&user.id, 50, 0)?;
 
-    let public_url = &state.config.server.public_url;
+    let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
 
     let screenshot_cards: String = if screenshots.is_empty() {
         r#"<div class="empty-state">
@@ -39,8 +41,8 @@ pub async fn dashboard(
             .iter()
             .map(|s| {
                 let title = s.display_title();
-                let share_url = format!("{}/s/{}", public_url, s.share_id);
-                let raw_url = format!("{}/s/{}.png", public_url, s.share_id);
+                let share_url = format!("{}/s/{}", base_url, s.share_id);
+                let raw_url = format!("{}/s/{}.png", base_url, s.share_id);
                 let expired_class = if s.is_expired() { " expired" } else { "" };
                 let expires_info = s.expires_at
                     .map(|e| format!("<span class=\"meta-item\">Expires: {}</span>", e.format("%b %d, %Y")))
@@ -286,6 +288,7 @@ pub async fn login_page(
 /// Editor page for a screenshot.
 pub async fn editor_page(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     AuthUser(user): AuthUser,
     Path(id): Path<uuid::Uuid>,
 ) -> crate::Result<impl IntoResponse> {
@@ -304,14 +307,9 @@ pub async fn editor_page(
         .as_ref()
         .map(|c| serde_json::to_string(c).unwrap())
         .unwrap_or("null".into());
-    let share_url = format!(
-        "{}/s/{}",
-        state.config.server.public_url, screenshot.share_id
-    );
-    let raw_url = format!(
-        "{}/s/{}.png",
-        state.config.server.public_url, screenshot.share_id
-    );
+    let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
+    let share_url = format!("{}/s/{}", base_url, screenshot.share_id);
+    let raw_url = format!("{}/s/{}.png", base_url, screenshot.share_id);
 
     let html = EDITOR_TEMPLATE
         .replace("{{TITLE}}", &html_escape(screenshot.display_title()))

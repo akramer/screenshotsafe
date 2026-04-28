@@ -47,7 +47,7 @@ fn default_bind() -> String {
     "0.0.0.0:8080".to_string()
 }
 fn default_public_url() -> String {
-    "http://localhost:8080".to_string()
+    "".to_string()
 }
 fn default_storage_path() -> String {
     "./data/storage".to_string()

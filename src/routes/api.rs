@@ -1,6 +1,6 @@
 use axum::{
     extract::{Multipart, Path, Query, State},
-    http::{header, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
@@ -137,6 +137,7 @@ pub async fn logout() -> impl IntoResponse {
 pub async fn upload_screenshot(
     State(state): State<SharedState>,
     AuthUser(user): AuthUser,
+    headers: HeaderMap,
     mut multipart: Multipart,
 ) -> crate::Result<impl IntoResponse> {
     let mut image_data: Option<Vec<u8>> = None;
@@ -247,8 +248,9 @@ pub async fn upload_screenshot(
 
     state.db.create_screenshot(&screenshot)?;
 
-    let share_url = format!("{}/s/{}", state.config.server.public_url, sid);
-    let raw_url = format!("{}/s/{}.png", state.config.server.public_url, sid);
+    let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
+    let share_url = format!("{}/s/{}", base_url, sid);
+    let raw_url = format!("{}/s/{}.png", base_url, sid);
 
     Ok((
         StatusCode::CREATED,
@@ -314,6 +316,7 @@ pub struct ScreenshotSummary {
 pub async fn list_screenshots(
     State(state): State<SharedState>,
     AuthUser(user): AuthUser,
+    headers: HeaderMap,
     Query(params): Query<ListParams>,
 ) -> crate::Result<Json<ListResponse>> {
     let page = params.page.unwrap_or(1).max(1);
@@ -325,11 +328,12 @@ pub async fn list_screenshots(
         .list_screenshots_for_user(&user.id, per_page, offset)?;
     let total = state.db.screenshot_count_for_user(&user.id)?;
 
+    let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
     let summaries: Vec<ScreenshotSummary> = screenshots
         .into_iter()
         .map(|s| {
-            let share_url = format!("{}/s/{}", state.config.server.public_url, s.share_id);
-            let raw_url = format!("{}/s/{}.png", state.config.server.public_url, s.share_id);
+            let share_url = format!("{}/s/{}", base_url, s.share_id);
+            let raw_url = format!("{}/s/{}.png", base_url, s.share_id);
             ScreenshotSummary {
                 id: s.id,
                 share_id: s.share_id,
@@ -435,6 +439,7 @@ pub struct SaveAnnotationsRequest {
 pub async fn save_annotations(
     State(state): State<SharedState>,
     AuthUser(user): AuthUser,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
     Json(req): Json<SaveAnnotationsRequest>,
 ) -> crate::Result<Json<serde_json::Value>> {
@@ -472,9 +477,10 @@ pub async fn save_annotations(
         .db
         .update_screenshot_rendered_path(&id, &rendered_path_str)?;
 
+    let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
     Ok(Json(serde_json::json!({
         "ok": true,
-        "rendered_url": format!("{}/s/{}.png", state.config.server.public_url, screenshot.share_id),
+        "rendered_url": format!("{}/s/{}.png", base_url, screenshot.share_id),
     })))
 }
 

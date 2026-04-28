@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::header,
+    http::{header, HeaderMap},
     response::{Html, IntoResponse},
 };
 
@@ -9,18 +9,20 @@ use crate::{AppError, SharedState};
 /// Dispatch handler: routes /s/{id}.png to image, /s/{id} to share page.
 pub async fn share_dispatch(
     state: State<SharedState>,
+    headers: HeaderMap,
     Path(share_id_or_file): Path<String>,
 ) -> crate::Result<axum::response::Response> {
     if let Some(share_id) = share_id_or_file.strip_suffix(".png") {
         Ok(share_image(state, Path(share_id.to_string())).await?.into_response())
     } else {
-        Ok(share_page(state, Path(share_id_or_file)).await?.into_response())
+        Ok(share_page(state, headers, Path(share_id_or_file)).await?.into_response())
     }
 }
 
 /// Public share page — displays the screenshot with title and metadata.
 pub async fn share_page(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     Path(share_id): Path<String>,
 ) -> crate::Result<impl IntoResponse> {
     let screenshot = state
@@ -38,7 +40,8 @@ pub async fn share_page(
 
     let title = screenshot.display_title().to_string();
     let cache_bust = screenshot.updated_at.timestamp();
-    let image_url = format!("{}/s/{}.png?v={}", state.config.server.public_url, share_id, cache_bust);
+    let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
+    let image_url = format!("{}/s/{}.png?v={}", base_url, share_id, cache_bust);
     let created = screenshot.created_at.format("%B %d, %Y").to_string();
     let expires_info = screenshot
         .expires_at
