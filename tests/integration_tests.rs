@@ -431,7 +431,7 @@ mod tests {
         let token = body["token"].as_str().unwrap();
         assert!(token.starts_with("sss_"), "Token should have sss_ prefix");
 
-        // Use token to list screenshots (instead of cookie)
+        // Verify token CANNOT be used to list screenshots
         let req = axum::http::Request::builder()
             .method("GET")
             .uri("/api/screenshots")
@@ -440,7 +440,31 @@ mod tests {
             .unwrap();
 
         let resp = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        // Verify token CAN be used for uploads
+        let png_data = minimal_png();
+        let boundary = "----TestBoundary";
+        let body_str = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\n",
+            boundary = boundary,
+        );
+        let mut body_bytes = body_str.into_bytes();
+        body_bytes.extend_from_slice(&png_data);
+        body_bytes.extend_from_slice(
+            format!("\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nTest Screenshot via Token\r\n--{boundary}--\r\n", boundary = boundary).as_bytes()
+        );
+
+        let req = axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/screenshots")
+            .header(header::CONTENT_TYPE, format!("multipart/form-data; boundary={}", boundary))
+            .header(header::AUTHORIZATION, format!("Bearer {}", token))
+            .body(Body::from(body_bytes))
+            .unwrap();
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
     }
 
     #[tokio::test]
@@ -473,12 +497,25 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
-        // Token should no longer work
+        // Token should no longer work for uploads
+        let png_data = minimal_png();
+        let boundary = "----TestBoundary";
+        let body_str = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\n",
+            boundary = boundary,
+        );
+        let mut body_bytes = body_str.into_bytes();
+        body_bytes.extend_from_slice(&png_data);
+        body_bytes.extend_from_slice(
+            format!("\r\n--{boundary}--\r\n", boundary = boundary).as_bytes()
+        );
+
         let req = axum::http::Request::builder()
-            .method("GET")
+            .method("POST")
             .uri("/api/screenshots")
+            .header(header::CONTENT_TYPE, format!("multipart/form-data; boundary={}", boundary))
             .header(header::AUTHORIZATION, format!("Bearer {}", token))
-            .body(Body::empty())
+            .body(Body::from(body_bytes))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
