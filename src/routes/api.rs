@@ -8,7 +8,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::auth::middleware::AuthUser;
+use crate::auth::middleware::{ApiOrSessionUser, AuthUser};
 use crate::models::{Annotation, ApiToken, CropRect, Screenshot, User};
 use crate::{auth, image_processing, share_id, AppError, SharedState};
 
@@ -136,7 +136,7 @@ pub async fn logout() -> impl IntoResponse {
 
 pub async fn upload_screenshot(
     State(state): State<SharedState>,
-    AuthUser(user): AuthUser,
+    ApiOrSessionUser(user): ApiOrSessionUser,
     headers: HeaderMap,
     mut multipart: Multipart,
 ) -> crate::Result<impl IntoResponse> {

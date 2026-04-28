@@ -5,7 +5,7 @@ use axum::{
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
-use crate::{auth, AppError, SharedState};
+use crate::{AppError, SharedState};
 use crate::models::User;
 
 /// JWT claims stored in session cookies.
@@ -30,7 +30,7 @@ pub fn create_session_token(user_id: &uuid::Uuid, secret: &str, ttl_seconds: u64
     .expect("JWT encoding should not fail")
 }
 
-/// Extractor: authenticated user from session cookie or Bearer token.
+/// Extractor: authenticated user from session cookie ONLY.
 /// Use this in route handlers: `AuthUser(user)`.
 pub struct AuthUser(pub User);
 
@@ -43,20 +43,7 @@ impl FromRequestParts<SharedState> for AuthUser {
     ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
         let state = state.clone();
         let headers = parts.headers.clone();
-        async move {
-            // Try Bearer token first (for API clients)
-            if let Some(auth_header) = headers.get(header::AUTHORIZATION) {
-                if let Ok(auth_str) = auth_header.to_str() {
-                    if let Some(token) = auth_str.strip_prefix("Bearer ") {
-                        let token_hash = auth::hash_token(token);
-                        if let Some((user, _)) = state.db.get_user_by_token_hash(&token_hash)? {
-                            return Ok(AuthUser(user));
-                        }
-                    }
-                }
-            }
-
-            // Try session cookie
+        async move {            // Try session cookie
             if let Some(cookie_header) = headers.get(header::COOKIE) {
                 if let Ok(cookie_str) = cookie_header.to_str() {
                     for cookie in cookie_str.split(';') {
@@ -105,6 +92,42 @@ impl FromRequestParts<SharedState> for MaybeAuthUser {
             match AuthUser::from_request_parts(&mut parts_clone, &state).await {
                 Ok(AuthUser(user)) => Ok(MaybeAuthUser(Some(user))),
                 Err(_) => Ok(MaybeAuthUser(None)),
+            }
+        }
+    }
+}
+
+/// Extractor: authenticated user from session cookie OR Bearer token.
+/// Use this for API routes that allow token authentication (like uploads).
+pub struct ApiOrSessionUser(pub User);
+
+impl FromRequestParts<SharedState> for ApiOrSessionUser {
+    type Rejection = AppError;
+
+    fn from_request_parts(
+        parts: &mut Parts,
+        state: &SharedState,
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+        let state = state.clone();
+        let headers = parts.headers.clone();
+        let mut parts_clone = parts.clone();
+        async move {
+            // Try Bearer token first
+            if let Some(auth_header) = headers.get(header::AUTHORIZATION) {
+                if let Ok(auth_str) = auth_header.to_str() {
+                    if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                        let token_hash = crate::auth::hash_token(token);
+                        if let Some((user, _)) = state.db.get_user_by_token_hash(&token_hash)? {
+                            return Ok(ApiOrSessionUser(user));
+                        }
+                    }
+                }
+            }
+
+            // Fallback to session cookie
+            match AuthUser::from_request_parts(&mut parts_clone, &state).await {
+                Ok(AuthUser(user)) => Ok(ApiOrSessionUser(user)),
+                Err(e) => Err(e),
             }
         }
     }
