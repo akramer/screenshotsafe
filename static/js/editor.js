@@ -305,10 +305,18 @@
             originX: 'center', originY: 'center',
             left: (x1 + lx2) / 2, top: (y1 + ly2) / 2
         });
+        line.setCoords();
+
+        const headMinX = Math.min(p0x, p1x, p2x, p3x);
+        const headMaxX = Math.max(p0x, p1x, p2x, p3x);
+        const headMinY = Math.min(p0y, p1y, p2y, p3y);
+        const headMaxY = Math.max(p0y, p1y, p2y, p3y);
+
         head.set({
             originX: 'center', originY: 'center',
-            left: head.left + head.width / 2, top: head.top + head.height / 2
+            left: (headMinX + headMaxX) / 2, top: (headMinY + headMaxY) / 2
         });
+        head.setCoords();
 
         const group = new fabric.Group([line, head], {
             annotationType: 'arrow',
