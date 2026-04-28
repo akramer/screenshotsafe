@@ -54,7 +54,7 @@
         }
 
         try {
-            const resp = await fetch(`${serverUrl}/api/screenshots?page=1&per_page=1`, {
+            const resp = await fetch(`${serverUrl}/api/ping`, {
                 headers: { 'Authorization': `Bearer ${apiToken}` },
             });
 

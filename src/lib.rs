@@ -44,6 +44,7 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/settings", get(routes::pages::settings_page));
 
     let api_routes = Router::new()
+        .route("/api/ping", get(routes::api::ping))
         .route("/api/auth/setup", post(routes::api::setup))
         .route("/api/auth/login", post(routes::api::login))
         .route("/api/auth/logout", post(routes::api::logout))

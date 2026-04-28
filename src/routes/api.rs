@@ -578,3 +578,12 @@ pub async fn revoke_token(
     }
     Ok(Json(serde_json::json!({ "ok": true })))
 }
+
+// ── Ping ──
+
+pub async fn ping(
+    ApiOrSessionUser(_user): ApiOrSessionUser,
+) -> crate::Result<Json<serde_json::Value>> {
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
