@@ -4,6 +4,7 @@ mod tests {
 
     use axum::http::{header, StatusCode};
     use axum::body::Body;
+    use chrono::{Duration, Utc};
     use tower::ServiceExt;
 
     use screenshotsafe::*;
@@ -378,7 +379,7 @@ mod tests {
     #[tokio::test]
     async fn test_delete_screenshot() {
         let dir = tempfile::tempdir().unwrap();
-        let (app, state) = test_app(dir.path());
+        let (app, _state) = test_app(dir.path());
 
         let cookie = setup_user(&app).await;
         let upload_body = upload_screenshot(&app, &cookie).await;
@@ -397,6 +398,47 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
 
         // Should no longer be accessible
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/s/{}", share_id))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_cleanup_expired_screenshots_deletes_records_and_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let upload_body = upload_screenshot(&app, &cookie).await;
+        let id: uuid::Uuid = upload_body["id"].as_str().unwrap().parse().unwrap();
+        let share_id = upload_body["share_id"].as_str().unwrap();
+
+        let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
+        let original_path = screenshot.original_path.clone();
+        let rendered_path = screenshot.rendered_path.clone().unwrap();
+        assert!(std::path::Path::new(&original_path).exists());
+        assert!(std::path::Path::new(&rendered_path).exists());
+
+        state
+            .db
+            .update_screenshot_metadata(
+                &id,
+                None,
+                None,
+                Some(Some(Utc::now() - Duration::seconds(1))),
+            )
+            .unwrap();
+
+        let deleted = cleanup_expired_screenshots(&state).unwrap();
+        assert_eq!(deleted, 1);
+        assert!(!std::path::Path::new(&original_path).exists());
+        assert!(!std::path::Path::new(&rendered_path).exists());
+        assert!(state.db.get_screenshot_by_id(&id).unwrap().is_none());
+
         let req = axum::http::Request::builder()
             .method("GET")
             .uri(format!("/s/{}", share_id))

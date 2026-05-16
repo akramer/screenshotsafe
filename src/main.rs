@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use screenshotsafe::{build_router, config, db, AppState};
+use screenshotsafe::{build_router, config, db, spawn_expired_screenshot_cleanup, AppState};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -51,6 +51,8 @@ async fn main() -> anyhow::Result<()> {
         config,
         jwt_secret,
     });
+
+    spawn_expired_screenshot_cleanup(state.clone());
 
     let app = build_router(state);
     let listener = TcpListener::bind(&bind_addr).await?;

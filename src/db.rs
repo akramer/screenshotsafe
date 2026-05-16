@@ -455,14 +455,14 @@ impl Database {
     pub fn delete_expired_screenshots(&self) -> Result<Vec<(String, Option<String>)>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT original_path, rendered_path FROM screenshots WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')",
+            "SELECT original_path, rendered_path FROM screenshots WHERE expires_at IS NOT NULL AND datetime(expires_at) <= datetime('now')",
         )?;
         let paths: Vec<(String, Option<String>)> = stmt
             .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
             .filter_map(|r| r.ok())
             .collect();
         conn.execute(
-            "DELETE FROM screenshots WHERE expires_at IS NOT NULL AND expires_at <= datetime('now')",
+            "DELETE FROM screenshots WHERE expires_at IS NOT NULL AND datetime(expires_at) <= datetime('now')",
             [],
         )?;
         Ok(paths)

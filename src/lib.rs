@@ -28,6 +28,46 @@ pub struct AppState {
 
 pub type SharedState = Arc<AppState>;
 
+/// Remove expired screenshot records and their backing image files.
+pub fn cleanup_expired_screenshots(state: &AppState) -> Result<usize> {
+    let paths = state.db.delete_expired_screenshots()?;
+    let deleted_count = paths.len();
+
+    for (original_path, rendered_path) in paths {
+        remove_screenshot_file(&original_path);
+        if let Some(path) = rendered_path {
+            remove_screenshot_file(&path);
+        }
+    }
+
+    Ok(deleted_count)
+}
+
+fn remove_screenshot_file(path: &str) {
+    match std::fs::remove_file(path) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => tracing::warn!("Failed to remove expired screenshot file {}: {}", path, err),
+    }
+}
+
+/// Start a background task that periodically deletes expired screenshots.
+pub fn spawn_expired_screenshot_cleanup(state: SharedState) {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(60 * 60));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+        loop {
+            interval.tick().await;
+            match cleanup_expired_screenshots(&state) {
+                Ok(0) => {}
+                Ok(count) => tracing::info!("Deleted {} expired screenshots", count),
+                Err(err) => tracing::warn!("Failed to delete expired screenshots: {}", err),
+            }
+        }
+    });
+}
+
 /// Build the full Axum router with all routes.
 pub fn build_router(state: SharedState) -> Router {
     let public_routes = Router::new()
