@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>ScreenshotSafe Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f13;
+            color: #e8e8f0;
+            overflow: hidden;
+        }
+        .app {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 320px;
+            height: 100vh;
+        }
+        .workspace {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+            padding: 24px;
+            background: #08080b;
+        }
+        .canvas-wrap {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+        }
+        #edit-canvas {
+            display: block;
+            max-width: 100%;
+            max-height: 100%;
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 8px;
+            background: #050507;
+            cursor: crosshair;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+        }
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            border-left: 1px solid rgba(255,255,255,0.08);
+            padding: 18px;
+            background: #121219;
+            overflow: auto;
+        }
+        .header {
+            padding-bottom: 14px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }
+        .header h1 {
+            font-size: 16px;
+            font-weight: 650;
+        }
+        .header p {
+            margin-top: 4px;
+            color: #888;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .label {
+            color: #888;
+            font-size: 11px;
+            font-weight: 650;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        .tool-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .btn,
+        .tool-btn,
+        .copy-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 36px;
+            padding: 9px 12px;
+            border: 0;
+            border-radius: 8px;
+            color: #e8e8f0;
+            font-size: 13px;
+            font-weight: 650;
+            cursor: pointer;
+            transition: 0.15s ease;
+        }
+        .btn-primary {
+            background: #6a6aff;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #8484ff; }
+        .btn-primary:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+        .btn-outline,
+        .tool-btn,
+        .copy-btn {
+            background: #1a1a24;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .btn-outline:hover,
+        .tool-btn:hover,
+        .copy-btn:hover {
+            background: #22223a;
+            border-color: rgba(255,255,255,0.2);
+        }
+        .tool-btn.active {
+            border-color: #6a6aff;
+            background: rgba(106,106,255,0.18);
+        }
+        .hint {
+            min-height: 34px;
+            color: #aaa;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .error {
+            display: none;
+            padding: 10px 12px;
+            background: rgba(255,77,106,0.1);
+            border: 1px solid rgba(255,77,106,0.3);
+            border-radius: 8px;
+            color: #ff6b83;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .error.show { display: block; }
+        .result {
+            display: none;
+            padding: 12px;
+            border: 1px solid rgba(106,106,255,0.22);
+            border-radius: 8px;
+            background: rgba(106,106,255,0.08);
+        }
+        .result.show { display: block; }
+        .result-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto;
+            gap: 6px;
+            margin-top: 6px;
+            margin-bottom: 10px;
+        }
+        .result-row input {
+            min-width: 0;
+            padding: 7px 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            background: #0f0f13;
+            color: #e8e8f0;
+            font: 12px 'SF Mono', Monaco, monospace;
+        }
+        .copy-btn {
+            min-height: 32px;
+            padding: 7px 10px;
+            font-size: 12px;
+        }
+        .spacer { flex: 1; }
+        @media (max-width: 840px) {
+            body { overflow: auto; }
+            .app {
+                display: flex;
+                flex-direction: column;
+                height: auto;
+                min-height: 100vh;
+            }
+            .workspace {
+                min-height: 58vh;
+                padding: 12px;
+            }
+            .sidebar {
+                border-left: 0;
+                border-top: 1px solid rgba(255,255,255,0.08);
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="app">
+        <section class="workspace">
+            <div class="canvas-wrap">
+                <canvas id="edit-canvas"></canvas>
+            </div>
+        </section>
+
+        <aside class="sidebar">
+            <div class="header">
+                <h1>ScreenshotSafe</h1>
+                <p id="source-label">Loading screenshot...</p>
+            </div>
+
+            <div class="section">
+                <div class="label">Tools</div>
+                <div class="tool-grid">
+                    <button class="tool-btn active" id="crop-tool-btn" type="button">Crop</button>
+                    <button class="tool-btn" id="redact-tool-btn" type="button">Blackout</button>
+                </div>
+                <div class="hint" id="editor-hint">Drag to set the crop area.</div>
+            </div>
+
+            <div class="section">
+                <button class="btn btn-primary" id="upload-btn" type="button">Upload Edited Screenshot</button>
+                <div class="tool-grid">
+                    <button class="btn btn-outline" id="undo-edit-btn" type="button">Undo</button>
+                    <button class="btn btn-outline" id="reset-edit-btn" type="button">Reset</button>
+                </div>
+            </div>
+
+            <div class="error" id="error-msg"></div>
+
+            <div class="result" id="result">
+                <div class="label">Share Link</div>
+                <div class="result-row">
+                    <input type="text" id="share-url" readonly>
+                    <button class="copy-btn" id="copy-share-btn" type="button">Copy</button>
+                </div>
+                <div class="label">Direct Image</div>
+                <div class="result-row">
+                    <input type="text" id="raw-url" readonly>
+                    <button class="copy-btn" id="copy-raw-btn" type="button">Copy</button>
+                </div>
+                <button class="btn btn-outline" id="open-server-editor-btn" type="button">Open in Server Editor</button>
+            </div>
+
+            <div class="spacer"></div>
+            <button class="btn btn-outline" id="discard-btn" type="button">Discard</button>
+        </aside>
+    </main>
+
+    <script src="webext-api.js"></script>
+    <script src="editor.js"></script>
+</body>
+</html>

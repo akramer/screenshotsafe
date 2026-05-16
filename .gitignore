@@ -1,5 +1,9 @@
 target
+build
+dist
 data
 implementation_plan.md
 tasks.md
 .DS_Store
+xcuserdata
+*.xcuserstate

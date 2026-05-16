@@ -1,0 +1,1005 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A2C5525E2FB8F0D800BDB49F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C5525D2FB8F0D800BDB49F /* AppDelegate.swift */; };
+		A2C552602FB8F0D800BDB49F /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C5525F2FB8F0D800BDB49F /* SceneDelegate.swift */; };
+		A2C552632FB8F0D800BDB49F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A2C552612FB8F0D800BDB49F /* LaunchScreen.storyboard */; };
+		A2C552662FB8F0D800BDB49F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A2C552642FB8F0D800BDB49F /* Main.storyboard */; };
+		A2C5526F2FB8F0D800BDB49F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C5526E2FB8F0D800BDB49F /* AppDelegate.swift */; };
+		A2C552722FB8F0D800BDB49F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A2C552702FB8F0D800BDB49F /* Main.storyboard */; };
+		A2C552792FB8F0D800BDB49F /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A2C552782FB8F0D800BDB49F /* ScreenshotSafe Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A2C552832FB8F0D800BDB49F /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A2C552822FB8F0D800BDB49F /* ScreenshotSafe Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A2C552882FB8F0D800BDB49F /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = A2C5524D2FB8F0D700BDB49F /* Main.html */; };
+		A2C552892FB8F0D800BDB49F /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = A2C5524D2FB8F0D700BDB49F /* Main.html */; };
+		A2C5528A2FB8F0D800BDB49F /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = A2C5524F2FB8F0D700BDB49F /* Icon.png */; };
+		A2C5528B2FB8F0D800BDB49F /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = A2C5524F2FB8F0D700BDB49F /* Icon.png */; };
+		A2C5528C2FB8F0D800BDB49F /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = A2C552502FB8F0D700BDB49F /* Style.css */; };
+		A2C5528D2FB8F0D800BDB49F /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = A2C552502FB8F0D700BDB49F /* Style.css */; };
+		A2C5528E2FB8F0D800BDB49F /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = A2C552512FB8F0D700BDB49F /* Script.js */; };
+		A2C5528F2FB8F0D800BDB49F /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = A2C552512FB8F0D700BDB49F /* Script.js */; };
+		A2C552902FB8F0D800BDB49F /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C552522FB8F0D700BDB49F /* ViewController.swift */; };
+		A2C552912FB8F0D800BDB49F /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C552522FB8F0D700BDB49F /* ViewController.swift */; };
+		A2C552922FB8F0D800BDB49F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2C552532FB8F0D800BDB49F /* Assets.xcassets */; };
+		A2C552932FB8F0D800BDB49F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2C552532FB8F0D800BDB49F /* Assets.xcassets */; };
+		A2C552942FB8F0D800BDB49F /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C552552FB8F0D800BDB49F /* SafariWebExtensionHandler.swift */; };
+		A2C552952FB8F0D800BDB49F /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2C552552FB8F0D800BDB49F /* SafariWebExtensionHandler.swift */; };
+		A2C552AF2FB8F0D900BDB49F /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = A2C552A72FB8F0D900BDB49F /* popup.js */; };
+		A2C552B02FB8F0D900BDB49F /* webext-api.js in Resources */ = {isa = PBXBuildFile; fileRef = A2C552A82FB8F0D900BDB49F /* webext-api.js */; };
+		A2C552B12FB8F0D900BDB49F /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = A2C552A92FB8F0D900BDB49F /* background.js */; };
+		A2C552B22FB8F0D900BDB49F /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = A2C552AA2FB8F0D900BDB49F /* popup.html */; };
+		A2C552B32FB8F0D900BDB49F /* editor.html in Resources */ = {isa = PBXBuildFile; fileRef = A2C552AB2FB8F0D900BDB49F /* editor.html */; };
+		A2C552B42FB8F0D900BDB49F /* editor.js in Resources */ = {isa = PBXBuildFile; fileRef = A2C552AC2FB8F0D900BDB49F /* editor.js */; };
+		A2C552B52FB8F0D900BDB49F /* icons in Resources */ = {isa = PBXBuildFile; fileRef = A2C552AD2FB8F0D900BDB49F /* icons */; };
+		A2C552B62FB8F0D900BDB49F /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = A2C552AE2FB8F0D900BDB49F /* manifest.json */; };
+		A2C552B72FB8F0D900BDB49F /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = A2C552A72FB8F0D900BDB49F /* popup.js */; };
+		A2C552B82FB8F0D900BDB49F /* webext-api.js in Resources */ = {isa = PBXBuildFile; fileRef = A2C552A82FB8F0D900BDB49F /* webext-api.js */; };
+		A2C552B92FB8F0D900BDB49F /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = A2C552A92FB8F0D900BDB49F /* background.js */; };
+		A2C552BA2FB8F0D900BDB49F /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = A2C552AA2FB8F0D900BDB49F /* popup.html */; };
+		A2C552BB2FB8F0D900BDB49F /* editor.html in Resources */ = {isa = PBXBuildFile; fileRef = A2C552AB2FB8F0D900BDB49F /* editor.html */; };
+		A2C552BC2FB8F0D900BDB49F /* editor.js in Resources */ = {isa = PBXBuildFile; fileRef = A2C552AC2FB8F0D900BDB49F /* editor.js */; };
+		A2C552BD2FB8F0D900BDB49F /* icons in Resources */ = {isa = PBXBuildFile; fileRef = A2C552AD2FB8F0D900BDB49F /* icons */; };
+		A2C552BE2FB8F0D900BDB49F /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = A2C552AE2FB8F0D900BDB49F /* manifest.json */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A2C5527A2FB8F0D800BDB49F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A2C552472FB8F0D700BDB49F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A2C552772FB8F0D800BDB49F;
+			remoteInfo = "ScreenshotSafe Extension (iOS)";
+		};
+		A2C552842FB8F0D800BDB49F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A2C552472FB8F0D700BDB49F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A2C552812FB8F0D800BDB49F;
+			remoteInfo = "ScreenshotSafe Extension (macOS)";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A2C5529B2FB8F0D800BDB49F /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A2C552792FB8F0D800BDB49F /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2C552A22FB8F0D800BDB49F /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A2C552832FB8F0D800BDB49F /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		A2C5524E2FB8F0D700BDB49F /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		A2C5524F2FB8F0D700BDB49F /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		A2C552502FB8F0D700BDB49F /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		A2C552512FB8F0D700BDB49F /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
+		A2C552522FB8F0D700BDB49F /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		A2C552532FB8F0D800BDB49F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A2C552552FB8F0D800BDB49F /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		A2C5525A2FB8F0D800BDB49F /* ScreenshotSafe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScreenshotSafe.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2C5525D2FB8F0D800BDB49F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A2C5525F2FB8F0D800BDB49F /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		A2C552622FB8F0D800BDB49F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		A2C552652FB8F0D800BDB49F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		A2C552672FB8F0D800BDB49F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2C5526C2FB8F0D800BDB49F /* ScreenshotSafe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScreenshotSafe.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2C5526E2FB8F0D800BDB49F /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A2C552712FB8F0D800BDB49F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		A2C552732FB8F0D800BDB49F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2C552782FB8F0D800BDB49F /* ScreenshotSafe Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2C5527D2FB8F0D800BDB49F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2C552822FB8F0D800BDB49F /* ScreenshotSafe Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2C552872FB8F0D800BDB49F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A2C552A72FB8F0D900BDB49F /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup.js; path = Resources/popup.js; sourceTree = "<group>"; };
+		A2C552A82FB8F0D900BDB49F /* webext-api.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "webext-api.js"; path = "Resources/webext-api.js"; sourceTree = "<group>"; };
+		A2C552A92FB8F0D900BDB49F /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = Resources/background.js; sourceTree = "<group>"; };
+		A2C552AA2FB8F0D900BDB49F /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = Resources/popup.html; sourceTree = "<group>"; };
+		A2C552AB2FB8F0D900BDB49F /* editor.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = editor.html; path = Resources/editor.html; sourceTree = "<group>"; };
+		A2C552AC2FB8F0D900BDB49F /* editor.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = editor.js; path = Resources/editor.js; sourceTree = "<group>"; };
+		A2C552AD2FB8F0D900BDB49F /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = Resources/icons; sourceTree = "<group>"; };
+		A2C552AE2FB8F0D900BDB49F /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = Resources/manifest.json; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A2C552572FB8F0D800BDB49F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2C552692FB8F0D800BDB49F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2C552752FB8F0D800BDB49F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2C5527F2FB8F0D800BDB49F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A2C552462FB8F0D700BDB49F = {
+			isa = PBXGroup;
+			children = (
+				A2C5524B2FB8F0D700BDB49F /* Shared (App) */,
+				A2C552542FB8F0D800BDB49F /* Shared (Extension) */,
+				A2C5525C2FB8F0D800BDB49F /* iOS (App) */,
+				A2C5526D2FB8F0D800BDB49F /* macOS (App) */,
+				A2C5527C2FB8F0D800BDB49F /* iOS (Extension) */,
+				A2C552862FB8F0D800BDB49F /* macOS (Extension) */,
+				A2C5525B2FB8F0D800BDB49F /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A2C5524B2FB8F0D700BDB49F /* Shared (App) */ = {
+			isa = PBXGroup;
+			children = (
+				A2C552522FB8F0D700BDB49F /* ViewController.swift */,
+				A2C552532FB8F0D800BDB49F /* Assets.xcassets */,
+				A2C5524C2FB8F0D700BDB49F /* Resources */,
+			);
+			path = "Shared (App)";
+			sourceTree = "<group>";
+		};
+		A2C5524C2FB8F0D700BDB49F /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A2C5524D2FB8F0D700BDB49F /* Main.html */,
+				A2C5524F2FB8F0D700BDB49F /* Icon.png */,
+				A2C552502FB8F0D700BDB49F /* Style.css */,
+				A2C552512FB8F0D700BDB49F /* Script.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		A2C552542FB8F0D800BDB49F /* Shared (Extension) */ = {
+			isa = PBXGroup;
+			children = (
+				A2C552A62FB8F0D900BDB49F /* Resources */,
+				A2C552552FB8F0D800BDB49F /* SafariWebExtensionHandler.swift */,
+			);
+			path = "Shared (Extension)";
+			sourceTree = "<group>";
+		};
+		A2C5525B2FB8F0D800BDB49F /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A2C5525A2FB8F0D800BDB49F /* ScreenshotSafe.app */,
+				A2C5526C2FB8F0D800BDB49F /* ScreenshotSafe.app */,
+				A2C552782FB8F0D800BDB49F /* ScreenshotSafe Extension.appex */,
+				A2C552822FB8F0D800BDB49F /* ScreenshotSafe Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A2C5525C2FB8F0D800BDB49F /* iOS (App) */ = {
+			isa = PBXGroup;
+			children = (
+				A2C5525D2FB8F0D800BDB49F /* AppDelegate.swift */,
+				A2C5525F2FB8F0D800BDB49F /* SceneDelegate.swift */,
+				A2C552612FB8F0D800BDB49F /* LaunchScreen.storyboard */,
+				A2C552642FB8F0D800BDB49F /* Main.storyboard */,
+				A2C552672FB8F0D800BDB49F /* Info.plist */,
+			);
+			path = "iOS (App)";
+			sourceTree = "<group>";
+		};
+		A2C5526D2FB8F0D800BDB49F /* macOS (App) */ = {
+			isa = PBXGroup;
+			children = (
+				A2C5526E2FB8F0D800BDB49F /* AppDelegate.swift */,
+				A2C552702FB8F0D800BDB49F /* Main.storyboard */,
+				A2C552732FB8F0D800BDB49F /* Info.plist */,
+			);
+			path = "macOS (App)";
+			sourceTree = "<group>";
+		};
+		A2C5527C2FB8F0D800BDB49F /* iOS (Extension) */ = {
+			isa = PBXGroup;
+			children = (
+				A2C5527D2FB8F0D800BDB49F /* Info.plist */,
+			);
+			path = "iOS (Extension)";
+			sourceTree = "<group>";
+		};
+		A2C552862FB8F0D800BDB49F /* macOS (Extension) */ = {
+			isa = PBXGroup;
+			children = (
+				A2C552872FB8F0D800BDB49F /* Info.plist */,
+			);
+			path = "macOS (Extension)";
+			sourceTree = "<group>";
+		};
+		A2C552A62FB8F0D900BDB49F /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A2C552A72FB8F0D900BDB49F /* popup.js */,
+				A2C552A82FB8F0D900BDB49F /* webext-api.js */,
+				A2C552A92FB8F0D900BDB49F /* background.js */,
+				A2C552AA2FB8F0D900BDB49F /* popup.html */,
+				A2C552AB2FB8F0D900BDB49F /* editor.html */,
+				A2C552AC2FB8F0D900BDB49F /* editor.js */,
+				A2C552AD2FB8F0D900BDB49F /* icons */,
+				A2C552AE2FB8F0D900BDB49F /* manifest.json */,
+			);
+			name = Resources;
+			path = "Shared (Extension)";
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A2C552592FB8F0D800BDB49F /* ScreenshotSafe (iOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2C5529C2FB8F0D800BDB49F /* Build configuration list for PBXNativeTarget "ScreenshotSafe (iOS)" */;
+			buildPhases = (
+				A2C552562FB8F0D800BDB49F /* Sources */,
+				A2C552572FB8F0D800BDB49F /* Frameworks */,
+				A2C552582FB8F0D800BDB49F /* Resources */,
+				A2C5529B2FB8F0D800BDB49F /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A2C5527B2FB8F0D800BDB49F /* PBXTargetDependency */,
+			);
+			name = "ScreenshotSafe (iOS)";
+			packageProductDependencies = (
+			);
+			productName = "ScreenshotSafe (iOS)";
+			productReference = A2C5525A2FB8F0D800BDB49F /* ScreenshotSafe.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A2C5526B2FB8F0D800BDB49F /* ScreenshotSafe (macOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2C552A32FB8F0D800BDB49F /* Build configuration list for PBXNativeTarget "ScreenshotSafe (macOS)" */;
+			buildPhases = (
+				A2C552682FB8F0D800BDB49F /* Sources */,
+				A2C552692FB8F0D800BDB49F /* Frameworks */,
+				A2C5526A2FB8F0D800BDB49F /* Resources */,
+				A2C552A22FB8F0D800BDB49F /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A2C552852FB8F0D800BDB49F /* PBXTargetDependency */,
+			);
+			name = "ScreenshotSafe (macOS)";
+			packageProductDependencies = (
+			);
+			productName = "ScreenshotSafe (macOS)";
+			productReference = A2C5526C2FB8F0D800BDB49F /* ScreenshotSafe.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A2C552772FB8F0D800BDB49F /* ScreenshotSafe Extension (iOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2C552982FB8F0D800BDB49F /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (iOS)" */;
+			buildPhases = (
+				A2C552742FB8F0D800BDB49F /* Sources */,
+				A2C552752FB8F0D800BDB49F /* Frameworks */,
+				A2C552762FB8F0D800BDB49F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "ScreenshotSafe Extension (iOS)";
+			packageProductDependencies = (
+			);
+			productName = "ScreenshotSafe Extension (iOS)";
+			productReference = A2C552782FB8F0D800BDB49F /* ScreenshotSafe Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A2C552812FB8F0D800BDB49F /* ScreenshotSafe Extension (macOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A2C5529F2FB8F0D800BDB49F /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (macOS)" */;
+			buildPhases = (
+				A2C5527E2FB8F0D800BDB49F /* Sources */,
+				A2C5527F2FB8F0D800BDB49F /* Frameworks */,
+				A2C552802FB8F0D800BDB49F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "ScreenshotSafe Extension (macOS)";
+			packageProductDependencies = (
+			);
+			productName = "ScreenshotSafe Extension (macOS)";
+			productReference = A2C552822FB8F0D800BDB49F /* ScreenshotSafe Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A2C552472FB8F0D700BDB49F /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2650;
+				LastUpgradeCheck = 2650;
+				TargetAttributes = {
+					A2C552592FB8F0D800BDB49F = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					A2C5526B2FB8F0D800BDB49F = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					A2C552772FB8F0D800BDB49F = {
+						CreatedOnToolsVersion = 26.5;
+					};
+					A2C552812FB8F0D800BDB49F = {
+						CreatedOnToolsVersion = 26.5;
+					};
+				};
+			};
+			buildConfigurationList = A2C5524A2FB8F0D700BDB49F /* Build configuration list for PBXProject "ScreenshotSafe" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A2C552462FB8F0D700BDB49F;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = A2C5525B2FB8F0D800BDB49F /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A2C552592FB8F0D800BDB49F /* ScreenshotSafe (iOS) */,
+				A2C5526B2FB8F0D800BDB49F /* ScreenshotSafe (macOS) */,
+				A2C552772FB8F0D800BDB49F /* ScreenshotSafe Extension (iOS) */,
+				A2C552812FB8F0D800BDB49F /* ScreenshotSafe Extension (macOS) */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A2C552582FB8F0D800BDB49F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2C5528A2FB8F0D800BDB49F /* Icon.png in Resources */,
+				A2C552632FB8F0D800BDB49F /* LaunchScreen.storyboard in Resources */,
+				A2C552882FB8F0D800BDB49F /* Main.html in Resources */,
+				A2C5528E2FB8F0D800BDB49F /* Script.js in Resources */,
+				A2C552922FB8F0D800BDB49F /* Assets.xcassets in Resources */,
+				A2C552662FB8F0D800BDB49F /* Main.storyboard in Resources */,
+				A2C5528C2FB8F0D800BDB49F /* Style.css in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2C5526A2FB8F0D800BDB49F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2C5528B2FB8F0D800BDB49F /* Icon.png in Resources */,
+				A2C5528D2FB8F0D800BDB49F /* Style.css in Resources */,
+				A2C552722FB8F0D800BDB49F /* Main.storyboard in Resources */,
+				A2C5528F2FB8F0D800BDB49F /* Script.js in Resources */,
+				A2C552932FB8F0D800BDB49F /* Assets.xcassets in Resources */,
+				A2C552892FB8F0D800BDB49F /* Main.html in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2C552762FB8F0D800BDB49F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2C552B82FB8F0D900BDB49F /* webext-api.js in Resources */,
+				A2C552BB2FB8F0D900BDB49F /* editor.html in Resources */,
+				A2C552BA2FB8F0D900BDB49F /* popup.html in Resources */,
+				A2C552B92FB8F0D900BDB49F /* background.js in Resources */,
+				A2C552BE2FB8F0D900BDB49F /* manifest.json in Resources */,
+				A2C552B72FB8F0D900BDB49F /* popup.js in Resources */,
+				A2C552BD2FB8F0D900BDB49F /* icons in Resources */,
+				A2C552BC2FB8F0D900BDB49F /* editor.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2C552802FB8F0D800BDB49F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2C552B02FB8F0D900BDB49F /* webext-api.js in Resources */,
+				A2C552B32FB8F0D900BDB49F /* editor.html in Resources */,
+				A2C552B22FB8F0D900BDB49F /* popup.html in Resources */,
+				A2C552B12FB8F0D900BDB49F /* background.js in Resources */,
+				A2C552B62FB8F0D900BDB49F /* manifest.json in Resources */,
+				A2C552AF2FB8F0D900BDB49F /* popup.js in Resources */,
+				A2C552B52FB8F0D900BDB49F /* icons in Resources */,
+				A2C552B42FB8F0D900BDB49F /* editor.js in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A2C552562FB8F0D800BDB49F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2C552902FB8F0D800BDB49F /* ViewController.swift in Sources */,
+				A2C5525E2FB8F0D800BDB49F /* AppDelegate.swift in Sources */,
+				A2C552602FB8F0D800BDB49F /* SceneDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2C552682FB8F0D800BDB49F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2C552912FB8F0D800BDB49F /* ViewController.swift in Sources */,
+				A2C5526F2FB8F0D800BDB49F /* AppDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2C552742FB8F0D800BDB49F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2C552942FB8F0D800BDB49F /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A2C5527E2FB8F0D800BDB49F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A2C552952FB8F0D800BDB49F /* SafariWebExtensionHandler.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A2C5527B2FB8F0D800BDB49F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A2C552772FB8F0D800BDB49F /* ScreenshotSafe Extension (iOS) */;
+			targetProxy = A2C5527A2FB8F0D800BDB49F /* PBXContainerItemProxy */;
+		};
+		A2C552852FB8F0D800BDB49F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A2C552812FB8F0D800BDB49F /* ScreenshotSafe Extension (macOS) */;
+			targetProxy = A2C552842FB8F0D800BDB49F /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		A2C5524D2FB8F0D700BDB49F /* Main.html */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A2C5524E2FB8F0D700BDB49F /* Base */,
+			);
+			name = Main.html;
+			sourceTree = "<group>";
+		};
+		A2C552612FB8F0D800BDB49F /* LaunchScreen.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A2C552622FB8F0D800BDB49F /* Base */,
+			);
+			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+		A2C552642FB8F0D800BDB49F /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A2C552652FB8F0D800BDB49F /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+		A2C552702FB8F0D800BDB49F /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A2C552712FB8F0D800BDB49F /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		A2C552962FB8F0D800BDB49F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A2C552972FB8F0D800BDB49F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		A2C552992FB8F0D800BDB49F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari.Extension;
+				PRODUCT_NAME = "ScreenshotSafe Extension";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A2C5529A2FB8F0D800BDB49F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari.Extension;
+				PRODUCT_NAME = "ScreenshotSafe Extension";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A2C5529D2FB8F0D800BDB49F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = ScreenshotSafe;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari;
+				PRODUCT_NAME = ScreenshotSafe;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A2C5529E2FB8F0D800BDB49F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = ScreenshotSafe;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari;
+				PRODUCT_NAME = ScreenshotSafe;
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A2C552A02FB8F0D800BDB49F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari.Extension;
+				PRODUCT_NAME = "ScreenshotSafe Extension";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A2C552A12FB8F0D800BDB49F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari.Extension;
+				PRODUCT_NAME = "ScreenshotSafe Extension";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		A2C552A42FB8F0D800BDB49F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = ScreenshotSafe;
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari;
+				PRODUCT_NAME = ScreenshotSafe;
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		A2C552A52FB8F0D800BDB49F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = ScreenshotSafe;
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 10.14;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari;
+				PRODUCT_NAME = ScreenshotSafe;
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A2C5524A2FB8F0D700BDB49F /* Build configuration list for PBXProject "ScreenshotSafe" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2C552962FB8F0D800BDB49F /* Debug */,
+				A2C552972FB8F0D800BDB49F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A2C552982FB8F0D800BDB49F /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (iOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2C552992FB8F0D800BDB49F /* Debug */,
+				A2C5529A2FB8F0D800BDB49F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A2C5529C2FB8F0D800BDB49F /* Build configuration list for PBXNativeTarget "ScreenshotSafe (iOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2C5529D2FB8F0D800BDB49F /* Debug */,
+				A2C5529E2FB8F0D800BDB49F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A2C5529F2FB8F0D800BDB49F /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (macOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2C552A02FB8F0D800BDB49F /* Debug */,
+				A2C552A12FB8F0D800BDB49F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A2C552A32FB8F0D800BDB49F /* Build configuration list for PBXNativeTarget "ScreenshotSafe (macOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A2C552A42FB8F0D800BDB49F /* Debug */,
+				A2C552A52FB8F0D800BDB49F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A2C552472FB8F0D700BDB49F /* Project object */;
+}
