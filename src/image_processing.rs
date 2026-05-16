@@ -47,14 +47,19 @@ pub fn render_screenshot(
 
 /// Build an SVG document string from a list of annotations.
 /// Coordinates are in original image space; they get offset by the crop origin.
-fn build_svg(width: u32, height: u32, annotations: &[Annotation], crop: &Option<CropRect>) -> String {
+fn build_svg(
+    width: u32,
+    height: u32,
+    annotations: &[Annotation],
+    crop: &Option<CropRect>,
+) -> String {
     let (ox, oy) = crop
         .as_ref()
         .map(|c| (c.x as f64, c.y as f64))
         .unwrap_or((0.0, 0.0));
 
     let mut elements = String::new();
-    
+
     elements.push_str(
         "<defs>\n\
             <filter id=\"shadow\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\">\n\
@@ -162,7 +167,7 @@ fn build_svg(width: u32, height: u32, annotations: &[Annotation], crop: &Option<
                 let tx = *x - ox;
                 let ty = *y - oy;
                 let escaped_color = svg_escape_attr(color);
-                
+
                 // SVG <text> y is the baseline; offset by ~0.90em to approximate top-left origin
                 // matching Fabric.js IText positioning (incorporating its 1.16 default line height padding).
                 let baseline_y = ty + font_size * 0.90;
@@ -213,7 +218,11 @@ fn render_svg_to_pixmap(
         .ok_or_else(|| crate::AppError::Internal("Failed to create pixmap".into()))?;
 
     // Render
-    resvg::render(&tree, tiny_skia::Transform::identity(), &mut pixmap.as_mut());
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::identity(),
+        &mut pixmap.as_mut(),
+    );
 
     Ok(pixmap)
 }
@@ -261,11 +270,7 @@ fn composite_overlay(canvas: &mut RgbaImage, overlay: &resvg::tiny_skia::Pixmap)
                 let b = sb + (db as u32 * inv_sa / 255);
                 let a = sa + (da as u32 * inv_sa / 255);
 
-                canvas.put_pixel(
-                    x,
-                    y,
-                    image::Rgba([r as u8, g as u8, b as u8, a as u8]),
-                );
+                canvas.put_pixel(x, y, image::Rgba([r as u8, g as u8, b as u8, a as u8]));
             }
         }
     }

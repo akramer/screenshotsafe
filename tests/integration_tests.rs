@@ -2,14 +2,14 @@
 mod tests {
     use std::sync::Arc;
 
-    use axum::http::{header, StatusCode};
     use axum::body::Body;
+    use axum::http::{header, StatusCode};
     use chrono::{Duration, Utc};
     use tower::ServiceExt;
 
-    use screenshotsafe::*;
-    use screenshotsafe::db::Database;
     use screenshotsafe::config::Config;
+    use screenshotsafe::db::Database;
+    use screenshotsafe::*;
 
     /// Create a test app with an in-memory database and temp storage.
     fn test_app(dir: &std::path::Path) -> (axum::Router, SharedState) {
@@ -46,7 +46,9 @@ mod tests {
 
     /// Helper: get response body as JSON.
     async fn body_json(response: axum::http::Response<Body>) -> serde_json::Value {
-        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
         serde_json::from_slice(&bytes).unwrap()
     }
 
@@ -76,11 +78,15 @@ mod tests {
         // No users initially
         assert_eq!(state.db.user_count().unwrap(), 0);
 
-        let req = json_request("POST", "/api/auth/setup", serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123",
-            "display_name": "Admin User"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123",
+                "display_name": "Admin User"
+            }),
+        );
 
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
@@ -104,18 +110,26 @@ mod tests {
         let (app, _state) = test_app(dir.path());
 
         // First setup
-        let req = json_request("POST", "/api/auth/setup", serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::CREATED);
 
         // Second setup should fail
-        let req = json_request("POST", "/api/auth/setup", serde_json::json!({
-            "username": "admin2",
-            "password": "testpassword456"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin2",
+                "password": "testpassword456"
+            }),
+        );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -125,10 +139,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app(dir.path());
 
-        let req = json_request("POST", "/api/auth/setup", serde_json::json!({
-            "username": "admin",
-            "password": "short"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "short"
+            }),
+        );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
@@ -139,17 +157,25 @@ mod tests {
         let (app, _state) = test_app(dir.path());
 
         // Setup first
-        let req = json_request("POST", "/api/auth/setup", serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
         app.clone().oneshot(req).await.unwrap();
 
         // Login
-        let req = json_request("POST", "/api/auth/login", serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
@@ -163,17 +189,25 @@ mod tests {
         let (app, _state) = test_app(dir.path());
 
         // Setup first
-        let req = json_request("POST", "/api/auth/setup", serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
         app.clone().oneshot(req).await.unwrap();
 
         // Login with wrong password
-        let req = json_request("POST", "/api/auth/login", serde_json::json!({
-            "username": "admin",
-            "password": "wrongpassword"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "admin",
+                "password": "wrongpassword"
+            }),
+        );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
@@ -184,17 +218,25 @@ mod tests {
         let (app, _state) = test_app(dir.path());
 
         // Setup first
-        let req = json_request("POST", "/api/auth/setup", serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
         app.clone().oneshot(req).await.unwrap();
 
         // Login as nonexistent user
-        let req = json_request("POST", "/api/auth/login", serde_json::json!({
-            "username": "nobody",
-            "password": "testpassword123"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "nobody",
+                "password": "testpassword123"
+            }),
+        );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
     }
@@ -203,10 +245,14 @@ mod tests {
 
     /// Helper: set up a user and return the session cookie string.
     async fn setup_user(app: &axum::Router) -> String {
-        let req = json_request("POST", "/api/auth/setup", serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
         let resp = app.clone().oneshot(req).await.unwrap();
         extract_session_cookie(&resp).unwrap()
     }
@@ -244,7 +290,10 @@ mod tests {
         let req = axum::http::Request::builder()
             .method("POST")
             .uri("/api/screenshots")
-            .header(header::CONTENT_TYPE, format!("multipart/form-data; boundary={}", boundary))
+            .header(
+                header::CONTENT_TYPE,
+                format!("multipart/form-data; boundary={}", boundary),
+            )
             .header(header::COOKIE, cookie)
             .body(Body::from(body_bytes))
             .unwrap();
@@ -331,7 +380,9 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
 
-        let body = axum::body::to_bytes(resp.into_body(), 1024 * 1024).await.unwrap();
+        let body = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
         let html = String::from_utf8(body.to_vec()).unwrap();
         assert!(html.contains("Test Screenshot"));
         assert!(html.contains("og:image")); // OpenGraph meta tag
@@ -500,7 +551,10 @@ mod tests {
         let req = axum::http::Request::builder()
             .method("POST")
             .uri("/api/screenshots")
-            .header(header::CONTENT_TYPE, format!("multipart/form-data; boundary={}", boundary))
+            .header(
+                header::CONTENT_TYPE,
+                format!("multipart/form-data; boundary={}", boundary),
+            )
             .header(header::AUTHORIZATION, format!("Bearer {}", token))
             .body(Body::from(body_bytes))
             .unwrap();
@@ -548,14 +602,16 @@ mod tests {
         );
         let mut body_bytes = body_str.into_bytes();
         body_bytes.extend_from_slice(&png_data);
-        body_bytes.extend_from_slice(
-            format!("\r\n--{boundary}--\r\n", boundary = boundary).as_bytes()
-        );
+        body_bytes
+            .extend_from_slice(format!("\r\n--{boundary}--\r\n", boundary = boundary).as_bytes());
 
         let req = axum::http::Request::builder()
             .method("POST")
             .uri("/api/screenshots")
-            .header(header::CONTENT_TYPE, format!("multipart/form-data; boundary={}", boundary))
+            .header(
+                header::CONTENT_TYPE,
+                format!("multipart/form-data; boundary={}", boundary),
+            )
             .header(header::AUTHORIZATION, format!("Bearer {}", token))
             .body(Body::from(body_bytes))
             .unwrap();
@@ -622,10 +678,14 @@ mod tests {
         let (app, _state) = test_app(dir.path());
 
         // Create user first
-        let req = json_request("POST", "/api/auth/setup", serde_json::json!({
-            "username": "admin",
-            "password": "testpassword123"
-        }));
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
         app.clone().oneshot(req).await.unwrap();
 
         // Visit root without auth

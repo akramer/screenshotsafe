@@ -39,19 +39,31 @@ impl IntoResponse for AppError {
             AppError::Gone(msg) => (StatusCode::GONE, msg.clone()),
             AppError::Internal(msg) => {
                 tracing::error!("Internal error: {}", msg);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
             }
             AppError::Rusqlite(e) => {
                 tracing::error!("Database error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
             }
             AppError::Io(e) => {
                 tracing::error!("IO error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
             }
             AppError::ImageError(e) => {
                 tracing::error!("Image processing error: {}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, "Image processing error".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Image processing error".to_string(),
+                )
             }
         };
 

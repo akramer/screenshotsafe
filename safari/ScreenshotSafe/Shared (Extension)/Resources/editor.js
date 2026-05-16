@@ -22,6 +22,7 @@
     const copyRawBtn = document.getElementById('copy-raw-btn');
     const openServerEditorBtn = document.getElementById('open-server-editor-btn');
     const sourceLabel = document.getElementById('source-label');
+    const expiresInSelect = document.getElementById('expires-in');
 
     const ext = window.sssWebExt;
 
@@ -133,6 +134,9 @@
         formData.append('image', blob, 'screenshot.png');
         formData.append('title', draft.title);
         formData.append('source_url', draft.sourceUrl);
+        if (expiresInSelect.value) {
+            formData.append('expires_in', expiresInSelect.value);
+        }
 
         const resp = await fetch(`${settings.serverUrl}/api/screenshots`, {
             method: 'POST',

@@ -93,7 +93,10 @@ pub async fn login(
         .get_user_by_username(&req.username)?
         .ok_or(AppError::Unauthorized)?;
 
-    let hash = user.password_hash.as_deref().ok_or(AppError::Unauthorized)?;
+    let hash = user
+        .password_hash
+        .as_deref()
+        .ok_or(AppError::Unauthorized)?;
     if !auth::verify_password(&req.password, hash) {
         return Err(AppError::Unauthorized);
     }
@@ -196,9 +199,8 @@ pub async fn upload_screenshot(
     let image_data = image_data.ok_or(AppError::BadRequest("No image provided".into()))?;
 
     // Validate it's actually an image
-    image::load_from_memory(&image_data).map_err(|_| {
-        AppError::BadRequest("Invalid image data".into())
-    })?;
+    image::load_from_memory(&image_data)
+        .map_err(|_| AppError::BadRequest("Invalid image data".into()))?;
 
     let id = Uuid::new_v4();
     let sid = share_id::generate();
@@ -220,14 +222,13 @@ pub async fn upload_screenshot(
     std::fs::write(&rendered_path, &image_data)?;
 
     // Calculate expiration
-    let expires_at = parse_expires_in(expires_in.as_deref())
-        .or_else(|| {
-            state
-                .config
-                .auth
-                .default_expiry_seconds
-                .map(|s| Utc::now() + chrono::Duration::seconds(s as i64))
-        });
+    let expires_at = parse_expires_in(expires_in.as_deref()).or_else(|| {
+        state
+            .config
+            .auth
+            .default_expiry_seconds
+            .map(|s| Utc::now() + chrono::Duration::seconds(s as i64))
+    });
 
     let screenshot = Screenshot {
         id,
@@ -386,10 +387,7 @@ pub async fn update_screenshot(
         }
     }
 
-    let expires_at = req
-        .expires_in
-        .as_deref()
-        .map(|s| parse_expires_in(Some(s)));
+    let expires_at = req.expires_in.as_deref().map(|s| parse_expires_in(Some(s)));
 
     state.db.update_screenshot_metadata(
         &id,
@@ -502,10 +500,7 @@ pub async fn serve_original(
 
     let data = std::fs::read(&screenshot.original_path)?;
 
-    Ok((
-        [(header::CONTENT_TYPE, "image/png".to_string())],
-        data,
-    ))
+    Ok(([(header::CONTENT_TYPE, "image/png".to_string())], data))
 }
 
 // ── API Tokens ──
@@ -586,4 +581,3 @@ pub async fn ping(
 ) -> crate::Result<Json<serde_json::Value>> {
     Ok(Json(serde_json::json!({ "ok": true })))
 }
-

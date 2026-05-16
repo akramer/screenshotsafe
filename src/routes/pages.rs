@@ -24,9 +24,7 @@ pub async fn dashboard(
         None => return Ok(Redirect::to("/login").into_response()),
     };
 
-    let screenshots = state
-        .db
-        .list_screenshots_for_user(&user.id, 50, 0)?;
+    let screenshots = state.db.list_screenshots_for_user(&user.id, 50, 0)?;
 
     let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
 
@@ -35,7 +33,8 @@ pub async fn dashboard(
             <div class="empty-icon">📸</div>
             <h2>No screenshots yet</h2>
             <p>Upload your first screenshot using the API or Chrome extension.</p>
-        </div>"#.to_string()
+        </div>"#
+            .to_string()
     } else {
         screenshots
             .iter()
@@ -139,9 +138,7 @@ pub async fn dashboard(
 }
 
 /// Setup page — shown on first run when no users exist.
-pub async fn setup_page(
-    State(state): State<SharedState>,
-) -> crate::Result<impl IntoResponse> {
+pub async fn setup_page(State(state): State<SharedState>) -> crate::Result<impl IntoResponse> {
     if state.db.user_count()? > 0 {
         return Ok(Redirect::to("/login").into_response());
     }
@@ -310,12 +307,43 @@ pub async fn editor_page(
     let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
     let share_url = format!("{}/s/{}", base_url, screenshot.share_id);
     let raw_url = format!("{}/s/{}.png", base_url, screenshot.share_id);
+    let expiration_keep_label = screenshot
+        .expires_at
+        .map(|d| format!("Keep current ({})", d.format("%b %d, %Y %H:%M UTC")))
+        .unwrap_or_else(|| "Keep current (never)".to_string());
+    let expires_never_selected = if screenshot.expires_at.is_none() {
+        "selected"
+    } else {
+        ""
+    };
 
     let html = EDITOR_TEMPLATE
         .replace("{{TITLE}}", &html_escape(screenshot.display_title()))
-        .replace("{{TITLE_ESCAPED}}", &html_escape(screenshot.title.as_deref().unwrap_or("")))
-        .replace("{{VIS_UNLISTED}}", if screenshot.visibility == "unlisted" || screenshot.visibility == "public" { "selected" } else { "" })
-        .replace("{{VIS_PRIVATE}}", if screenshot.visibility == "private" { "selected" } else { "" })
+        .replace(
+            "{{TITLE_ESCAPED}}",
+            &html_escape(screenshot.title.as_deref().unwrap_or("")),
+        )
+        .replace(
+            "{{VIS_UNLISTED}}",
+            if screenshot.visibility == "unlisted" || screenshot.visibility == "public" {
+                "selected"
+            } else {
+                ""
+            },
+        )
+        .replace(
+            "{{VIS_PRIVATE}}",
+            if screenshot.visibility == "private" {
+                "selected"
+            } else {
+                ""
+            },
+        )
+        .replace(
+            "{{EXPIRATION_KEEP_LABEL}}",
+            &html_escape(&expiration_keep_label),
+        )
+        .replace("{{EXPIRES_NEVER_SELECTED}}", expires_never_selected)
         .replace("{{SHARE_URL}}", &share_url)
         .replace("{{RAW_URL}}", &raw_url)
         .replace("{{ID}}", &screenshot.id.to_string())
@@ -404,6 +432,17 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
                 <select id="screenshot-visibility">
                     <option value="unlisted" {{VIS_UNLISTED}}>Shared with private link</option>
                     <option value="private" {{VIS_PRIVATE}}>Unshared</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="screenshot-expires-in">Expires</label>
+                <select id="screenshot-expires-in">
+                    <option value="">{{EXPIRATION_KEEP_LABEL}}</option>
+                    <option value="never" {{EXPIRES_NEVER_SELECTED}}>Never</option>
+                    <option value="1h">In 1 hour</option>
+                    <option value="24h">In 24 hours</option>
+                    <option value="7d">In 7 days</option>
+                    <option value="30d">In 30 days</option>
                 </select>
             </div>
             <div class="form-group">

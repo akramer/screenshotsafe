@@ -70,17 +70,14 @@ pub fn spawn_expired_screenshot_cleanup(state: SharedState) {
 
 /// Build the full Axum router with all routes.
 pub fn build_router(state: SharedState) -> Router {
-    let public_routes = Router::new()
-        .route("/s/{share_id_or_file}", get(routes::share::share_dispatch));
+    let public_routes =
+        Router::new().route("/s/{share_id_or_file}", get(routes::share::share_dispatch));
 
     let auth_pages = Router::new()
         .route("/", get(routes::pages::dashboard))
         .route("/setup", get(routes::pages::setup_page))
         .route("/login", get(routes::pages::login_page))
-        .route(
-            "/screenshots/{id}/edit",
-            get(routes::pages::editor_page),
-        )
+        .route("/screenshots/{id}/edit", get(routes::pages::editor_page))
         .route("/settings", get(routes::pages::settings_page));
 
     let api_routes = Router::new()
@@ -108,10 +105,7 @@ pub fn build_router(state: SharedState) -> Router {
         )
         .route("/api/auth/tokens", post(routes::api::create_token))
         .route("/api/auth/tokens", get(routes::api::list_tokens))
-        .route(
-            "/api/auth/tokens/{id}",
-            delete(routes::api::revoke_token),
-        );
+        .route("/api/auth/tokens/{id}", delete(routes::api::revoke_token));
 
     let cors = CorsLayer::new()
         .allow_origin(Any)

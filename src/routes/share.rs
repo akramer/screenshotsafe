@@ -13,9 +13,13 @@ pub async fn share_dispatch(
     Path(share_id_or_file): Path<String>,
 ) -> crate::Result<axum::response::Response> {
     if let Some(share_id) = share_id_or_file.strip_suffix(".png") {
-        Ok(share_image(state, Path(share_id.to_string())).await?.into_response())
+        Ok(share_image(state, Path(share_id.to_string()))
+            .await?
+            .into_response())
     } else {
-        Ok(share_page(state, headers, Path(share_id_or_file)).await?.into_response())
+        Ok(share_page(state, headers, Path(share_id_or_file))
+            .await?
+            .into_response())
     }
 }
 
@@ -172,7 +176,14 @@ pub async fn share_image(
     let etag = std::fs::metadata(rendered_path)
         .ok()
         .and_then(|m| m.modified().ok())
-        .map(|t| format!("\"{:?}\"", t.duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs()))
+        .map(|t| {
+            format!(
+                "\"{:?}\"",
+                t.duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs()
+            )
+        })
         .unwrap_or_default();
 
     Ok((

@@ -856,11 +856,16 @@
             // Save metadata
             const title = document.getElementById('screenshot-title').value;
             const visibility = document.getElementById('screenshot-visibility').value;
+            const expiresIn = document.getElementById('screenshot-expires-in').value;
+            const metadata = { title, visibility };
+            if (expiresIn) {
+                metadata.expires_in = expiresIn;
+            }
 
             await fetch(`/api/screenshots/${window.SCREENSHOT_ID}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, visibility }),
+                body: JSON.stringify(metadata),
             });
 
             saveBtn.textContent = 'Saved ✓';

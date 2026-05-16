@@ -256,27 +256,30 @@ impl Database {
             "SELECT id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, visibility, expires_at, created_at, updated_at
              FROM screenshots WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3",
         )?;
-        let rows = stmt.query_map(params![user_id.to_string(), limit as i64, offset as i64], |row| {
-            let annotations_str: String = row.get(8)?;
-            let crop_str: Option<String> = row.get(9)?;
-            let expires_str: Option<String> = row.get(11)?;
-            Ok(Screenshot {
-                id: row.get::<_, String>(0)?.parse().unwrap(),
-                user_id: row.get::<_, String>(1)?.parse().unwrap(),
-                share_id: row.get(2)?,
-                title: row.get(3)?,
-                source_url: row.get(4)?,
-                original_filename: row.get(5)?,
-                original_path: row.get(6)?,
-                rendered_path: row.get(7)?,
-                annotations: serde_json::from_str(&annotations_str).unwrap_or_default(),
-                crop_rect: crop_str.and_then(|s| serde_json::from_str(&s).ok()),
-                visibility: row.get(10)?,
-                expires_at: expires_str.and_then(|s| parse_datetime_opt(&s)),
-                created_at: parse_datetime(&row.get::<_, String>(12)?),
-                updated_at: parse_datetime(&row.get::<_, String>(13)?),
-            })
-        })?;
+        let rows = stmt.query_map(
+            params![user_id.to_string(), limit as i64, offset as i64],
+            |row| {
+                let annotations_str: String = row.get(8)?;
+                let crop_str: Option<String> = row.get(9)?;
+                let expires_str: Option<String> = row.get(11)?;
+                Ok(Screenshot {
+                    id: row.get::<_, String>(0)?.parse().unwrap(),
+                    user_id: row.get::<_, String>(1)?.parse().unwrap(),
+                    share_id: row.get(2)?,
+                    title: row.get(3)?,
+                    source_url: row.get(4)?,
+                    original_filename: row.get(5)?,
+                    original_path: row.get(6)?,
+                    rendered_path: row.get(7)?,
+                    annotations: serde_json::from_str(&annotations_str).unwrap_or_default(),
+                    crop_rect: crop_str.and_then(|s| serde_json::from_str(&s).ok()),
+                    visibility: row.get(10)?,
+                    expires_at: expires_str.and_then(|s| parse_datetime_opt(&s)),
+                    created_at: parse_datetime(&row.get::<_, String>(12)?),
+                    updated_at: parse_datetime(&row.get::<_, String>(13)?),
+                })
+            },
+        )?;
         let mut screenshots = Vec::new();
         for row in rows {
             screenshots.push(row?);
@@ -349,7 +352,10 @@ impl Database {
 
     pub fn delete_screenshot(&self, id: &uuid::Uuid) -> Result<bool> {
         let conn = self.conn.lock().unwrap();
-        let rows = conn.execute("DELETE FROM screenshots WHERE id = ?1", params![id.to_string()])?;
+        let rows = conn.execute(
+            "DELETE FROM screenshots WHERE id = ?1",
+            params![id.to_string()],
+        )?;
         Ok(rows > 0)
     }
 

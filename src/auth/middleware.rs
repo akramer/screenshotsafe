@@ -5,8 +5,8 @@ use axum::{
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
-use crate::{AppError, SharedState};
 use crate::models::User;
+use crate::{AppError, SharedState};
 
 /// JWT claims stored in session cookies.
 #[derive(Debug, Serialize, Deserialize)]
@@ -43,7 +43,8 @@ impl FromRequestParts<SharedState> for AuthUser {
     ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
         let state = state.clone();
         let headers = parts.headers.clone();
-        async move {            // Try session cookie
+        async move {
+            // Try session cookie
             if let Some(cookie_header) = headers.get(header::COOKIE) {
                 if let Ok(cookie_str) = cookie_header.to_str() {
                     for cookie in cookie_str.split(';') {
