@@ -173,6 +173,15 @@ impl Database {
         Ok(result)
     }
 
+    pub fn update_user_password_hash(&self, id: &uuid::Uuid, password_hash: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE users SET password_hash = ?1 WHERE id = ?2",
+            params![password_hash, id.to_string()],
+        )?;
+        Ok(())
+    }
+
     // ── Screenshot operations ──
 
     pub fn create_screenshot(&self, s: &Screenshot) -> Result<()> {

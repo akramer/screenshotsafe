@@ -19,6 +19,7 @@
     --accent-hover: #8484ff;
     --danger: #ff4d6a;
     --danger-hover: #ff6680;
+    --success: #30d158;
     --border: rgba(255, 255, 255, 0.08);
     --border-hover: rgba(255, 255, 255, 0.15);
     --radius: 8px;
@@ -348,6 +349,29 @@ body {
     color: var(--text-secondary);
     font-size: 0.9rem;
     margin-bottom: 1.5rem;
+}
+
+.password-form {
+    max-width: 420px;
+}
+
+.settings-message {
+    padding: 0.65rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.settings-message-error {
+    background: rgba(255, 77, 106, 0.1);
+    border: 1px solid var(--danger);
+    color: var(--danger);
+}
+
+.settings-message-success {
+    background: rgba(48, 209, 88, 0.1);
+    border: 1px solid var(--success);
+    color: var(--success);
 }
 
 .token-create {

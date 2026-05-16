@@ -44,6 +44,22 @@ mod tests {
             .unwrap()
     }
 
+    /// Helper: create an authenticated JSON request.
+    fn authed_json_request(
+        method: &str,
+        uri: &str,
+        cookie: &str,
+        body: serde_json::Value,
+    ) -> axum::http::Request<Body> {
+        axum::http::Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::COOKIE, cookie)
+            .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap()
+    }
+
     /// Helper: get response body as JSON.
     async fn body_json(response: axum::http::Response<Body>) -> serde_json::Value {
         let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
@@ -239,6 +255,88 @@ mod tests {
         );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_change_password_updates_login_password() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "PUT",
+            "/api/auth/password",
+            &cookie,
+            serde_json::json!({
+                "current_password": "testpassword123",
+                "new_password": "newpassword456"
+            }),
+        );
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "admin",
+                "password": "newpassword456"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_change_password_rejects_wrong_current_password() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "PUT",
+            "/api/auth/password",
+            &cookie,
+            serde_json::json!({
+                "current_password": "wrongpassword",
+                "new_password": "newpassword456"
+            }),
+        );
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_change_password_validates_new_password_length() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "PUT",
+            "/api/auth/password",
+            &cookie,
+            serde_json::json!({
+                "current_password": "testpassword123",
+                "new_password": "short"
+            }),
+        );
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     // ── Screenshot Tests ──

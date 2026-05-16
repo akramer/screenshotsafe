@@ -526,6 +526,27 @@ pub async fn settings_page(
         <h1>Settings</h1>
 
         <section class="settings-section">
+            <h2>Password</h2>
+            <p>Change the password used to sign in to ScreenshotSafe.</p>
+            <form id="password-form" class="password-form">
+                <div id="password-message" class="settings-message" style="display:none"></div>
+                <div class="form-group">
+                    <label for="current-password">Current password</label>
+                    <input type="password" id="current-password" autocomplete="current-password" required>
+                </div>
+                <div class="form-group">
+                    <label for="new-password">New password</label>
+                    <input type="password" id="new-password" autocomplete="new-password" minlength="8" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirm-password">Confirm new password</label>
+                    <input type="password" id="confirm-password" autocomplete="new-password" minlength="8" required>
+                </div>
+                <button class="btn btn-primary" type="submit">Change Password</button>
+            </form>
+        </section>
+
+        <section class="settings-section">
             <h2>API Tokens</h2>
             <p>Use API tokens to authenticate the Chrome extension or other clients.</p>
             <div class="token-create">
@@ -553,6 +574,49 @@ pub async fn settings_page(
         </section>
     </main>
     <script>
+        const passwordForm = document.getElementById('password-form');
+        const passwordMessage = document.getElementById('password-message');
+
+        function showPasswordMessage(text, isError) {{
+            passwordMessage.textContent = text;
+            passwordMessage.className = `settings-message ${{isError ? 'settings-message-error' : 'settings-message-success'}}`;
+            passwordMessage.style.display = 'block';
+        }}
+
+        passwordForm.addEventListener('submit', async (event) => {{
+            event.preventDefault();
+            const currentPassword = document.getElementById('current-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+
+            if (newPassword !== confirmPassword) {{
+                showPasswordMessage('New passwords do not match.', true);
+                return;
+            }}
+
+            const resp = await fetch('/api/auth/password', {{
+                method: 'PUT',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    current_password: currentPassword,
+                    new_password: newPassword,
+                }}),
+            }});
+
+            if (resp.ok) {{
+                passwordForm.reset();
+                showPasswordMessage('Password changed.', false);
+            }} else {{
+                let message = 'Unable to change password.';
+                try {{
+                    const data = await resp.json();
+                    if (data.error) message = data.error;
+                }} catch (_) {{}}
+                if (resp.status === 401) message = 'Current password is incorrect.';
+                showPasswordMessage(message, true);
+            }}
+        }});
+
         document.getElementById('create-token-btn').addEventListener('click', async () => {{
             const label = document.getElementById('token-label').value;
             const resp = await fetch('/api/auth/tokens', {{

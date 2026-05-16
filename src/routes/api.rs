@@ -135,6 +135,40 @@ pub async fn logout() -> impl IntoResponse {
     )
 }
 
+// ── Change password ──
+
+#[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+pub async fn change_password(
+    State(state): State<SharedState>,
+    AuthUser(user): AuthUser,
+    Json(req): Json<ChangePasswordRequest>,
+) -> crate::Result<Json<serde_json::Value>> {
+    if req.new_password.len() < 8 {
+        return Err(AppError::BadRequest(
+            "New password must be at least 8 characters".into(),
+        ));
+    }
+
+    let hash = user
+        .password_hash
+        .as_deref()
+        .ok_or(AppError::Unauthorized)?;
+    if !auth::verify_password(&req.current_password, hash) {
+        return Err(AppError::Unauthorized);
+    }
+
+    let new_hash = auth::hash_password(&req.new_password)
+        .map_err(|e| AppError::Internal(format!("Password hashing failed: {}", e)))?;
+    state.db.update_user_password_hash(&user.id, &new_hash)?;
+
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
 // ── Screenshot upload ──
 
 pub async fn upload_screenshot(

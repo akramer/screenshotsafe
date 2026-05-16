@@ -85,6 +85,7 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/api/auth/setup", post(routes::api::setup))
         .route("/api/auth/login", post(routes::api::login))
         .route("/api/auth/logout", post(routes::api::logout))
+        .route("/api/auth/password", put(routes::api::change_password))
         .route("/api/screenshots", post(routes::api::upload_screenshot))
         .route("/api/screenshots", get(routes::api::list_screenshots))
         .route(
