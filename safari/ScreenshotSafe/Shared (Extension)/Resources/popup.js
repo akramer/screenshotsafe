@@ -5,73 +5,61 @@
 (function () {
     'use strict';
 
-    const serverUrlInput = document.getElementById('server-url');
-    const apiTokenInput = document.getElementById('api-token');
-    const saveSettingsBtn = document.getElementById('save-settings-btn');
     const captureBtn = document.getElementById('capture-btn');
+    const settingsBtn = document.getElementById('settings-btn');
     const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
     const errorMsg = document.getElementById('error-msg');
-    const savedToast = document.getElementById('saved-toast');
 
     const ext = window.sssWebExt;
+    let settings = null;
+    let openedSettings = false;
 
-    ext.storage.get(['serverUrl', 'apiToken']).then((data) => {
-        if (data.serverUrl) serverUrlInput.value = data.serverUrl;
-        if (data.apiToken) apiTokenInput.value = data.apiToken;
-        checkConnection();
-    }).catch((err) => {
-        statusDot.classList.remove('connected');
-        statusText.textContent = err.message;
-        captureBtn.disabled = true;
-    });
-
-    saveSettingsBtn.addEventListener('click', () => {
-        const serverUrl = normalizedServerUrl();
-        const apiToken = apiTokenInput.value.trim();
-
-        ext.storage.set({ serverUrl, apiToken }).then(() => {
-            savedToast.classList.add('show');
-            setTimeout(() => savedToast.classList.remove('show'), 2000);
-            checkConnection();
-        }).catch((err) => showError(err.message));
-    });
+    init();
 
     captureBtn.addEventListener('click', captureAndOpenEditor);
+    settingsBtn.addEventListener('click', () => openSettings('manual'));
+
+    async function init() {
+        try {
+            settings = await ext.storage.get(['serverUrl', 'apiToken']);
+            await checkConnection();
+        } catch (err) {
+            markInvalid(err.message);
+            openSettings('load-error');
+        }
+    }
 
     async function checkConnection() {
-        const serverUrl = normalizedServerUrl();
-        const apiToken = apiTokenInput.value.trim();
-
-        if (!serverUrl || !apiToken) {
-            statusDot.classList.remove('connected');
-            statusText.textContent = 'Not configured';
-            captureBtn.disabled = true;
+        if (!settings.serverUrl || !settings.apiToken) {
+            markInvalid('Settings required');
+            openSettings('missing');
             return;
         }
 
         try {
-            const resp = await fetch(`${serverUrl}/api/ping`, {
-                headers: { 'Authorization': `Bearer ${apiToken}` },
+            const resp = await fetch(`${settings.serverUrl}/api/ping`, {
+                headers: { 'Authorization': `Bearer ${settings.apiToken}` },
             });
 
             if (resp.ok) {
                 statusDot.classList.add('connected');
                 statusText.textContent = 'Connected';
                 captureBtn.disabled = false;
-            } else if (resp.status === 401) {
-                statusDot.classList.remove('connected');
-                statusText.textContent = 'Invalid token';
-                captureBtn.disabled = true;
-            } else {
-                statusDot.classList.remove('connected');
-                statusText.textContent = 'Server error';
-                captureBtn.disabled = true;
+                return;
             }
+
+            if (resp.status === 401) {
+                markInvalid('Invalid API token');
+                openSettings('invalid-token');
+                return;
+            }
+
+            markInvalid('Server error');
+            openSettings('server-error');
         } catch (_) {
-            statusDot.classList.remove('connected');
-            statusText.textContent = 'Cannot reach server';
-            captureBtn.disabled = true;
+            markInvalid('Cannot reach server');
+            openSettings('cannot-reach-server');
         }
     }
 
@@ -110,15 +98,25 @@
         }
     }
 
+    function markInvalid(message) {
+        statusDot.classList.remove('connected');
+        statusText.textContent = message;
+        captureBtn.disabled = true;
+    }
+
+    async function openSettings(reason) {
+        if (openedSettings && reason !== 'manual') return;
+        openedSettings = true;
+        await ext.tabs.create({
+            url: ext.runtime.getURL(`options.html?reason=${encodeURIComponent(reason)}`),
+        });
+    }
+
     function makeDraftId() {
         if (crypto && crypto.randomUUID) {
             return crypto.randomUUID();
         }
         return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    }
-
-    function normalizedServerUrl() {
-        return serverUrlInput.value.trim().replace(/\/+$/, '');
     }
 
     function hideError() {

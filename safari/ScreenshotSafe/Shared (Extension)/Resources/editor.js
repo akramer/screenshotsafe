@@ -32,6 +32,7 @@
     let dragStart = null;
     let previewRect = null;
     let editHistory = [];
+    let finalized = false;
 
     init();
 
@@ -112,17 +113,18 @@
             const blob = await renderEditedBlob();
             const result = await uploadBlob(blob);
             currentResult = result;
+            finalized = true;
 
             shareUrlInput.value = result.share_url;
             rawUrlInput.value = result.raw_url;
             resultDiv.classList.add('show');
 
             const copied = await copyText(result.share_url);
-            uploadBtn.textContent = copied ? 'Uploaded and copied' : 'Uploaded';
+            lockEditor(copied ? 'Finalized, uploaded, and copied.' : 'Finalized and uploaded.');
         } catch (err) {
             showError(err.message);
             uploadBtn.disabled = false;
-            uploadBtn.textContent = 'Upload Edited Screenshot';
+            uploadBtn.textContent = 'Finalize and Upload';
         }
     }
 
@@ -197,7 +199,7 @@
     }
 
     function resetEdits() {
-        if (!draft) return;
+        if (!draft || finalized) return;
         pushHistory();
         draft.cropRect = null;
         draft.redactions = [];
@@ -206,13 +208,14 @@
 
     function undoEdit() {
         const previous = editHistory.pop();
-        if (!draft || !previous) return;
+        if (!draft || !previous || finalized) return;
         draft.cropRect = previous.cropRect;
         draft.redactions = previous.redactions;
         renderEditor();
     }
 
     function setTool(tool) {
+        if (finalized) return;
         activeTool = tool;
         cropToolBtn.classList.toggle('active', tool === 'crop');
         redactToolBtn.classList.toggle('active', tool === 'redact');
@@ -255,21 +258,21 @@
     }
 
     function startDrag(event) {
-        if (!draft) return;
+        if (!draft || finalized) return;
         canvas.setPointerCapture(event.pointerId);
         dragStart = canvasToImagePoint(event);
         previewRect = null;
     }
 
     function moveDrag(event) {
-        if (!draft || !dragStart) return;
+        if (!draft || !dragStart || finalized) return;
         const point = canvasToImagePoint(event);
         previewRect = normalizeRect(dragStart.x, dragStart.y, point.x, point.y);
         renderEditor();
     }
 
     function finishDrag(event) {
-        if (!draft || !dragStart) return;
+        if (!draft || !dragStart || finalized) return;
         const point = canvasToImagePoint(event);
         const rect = normalizeRect(dragStart.x, dragStart.y, point.x, point.y);
         canvas.releasePointerCapture(event.pointerId);
@@ -294,6 +297,17 @@
         dragStart = null;
         previewRect = null;
         renderEditor();
+    }
+
+    function lockEditor(message) {
+        cropToolBtn.disabled = true;
+        redactToolBtn.disabled = true;
+        undoEditBtn.disabled = true;
+        resetEditBtn.disabled = true;
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = 'Finalized and Uploaded';
+        canvas.classList.add('locked');
+        editorHint.textContent = message;
     }
 
     function canvasToImagePoint(event) {

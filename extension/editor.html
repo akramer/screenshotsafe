@@ -43,6 +43,7 @@
             cursor: crosshair;
             box-shadow: 0 24px 80px rgba(0,0,0,0.45);
         }
+        #edit-canvas.locked { cursor: default; }
         .sidebar {
             display: flex;
             flex-direction: column;
@@ -124,6 +125,16 @@
             border-color: #6a6aff;
             background: rgba(106,106,255,0.18);
         }
+        .btn:disabled,
+        .tool-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+        .btn:disabled:hover,
+        .tool-btn:disabled:hover {
+            background: #1a1a24;
+            border-color: rgba(255,255,255,0.1);
+        }
         .hint {
             min-height: 34px;
             color: #aaa;
@@ -199,6 +210,8 @@
         </section>
 
         <aside class="sidebar">
+            <button class="btn btn-outline" id="discard-btn" type="button">Discard Screenshot</button>
+
             <div class="header">
                 <h1>ScreenshotSafe</h1>
                 <p id="source-label">Loading screenshot...</p>
@@ -210,15 +223,15 @@
                     <button class="tool-btn active" id="crop-tool-btn" type="button">Crop</button>
                     <button class="tool-btn" id="redact-tool-btn" type="button">Blackout</button>
                 </div>
-                <div class="hint" id="editor-hint">Drag to set the crop area.</div>
-            </div>
-
-            <div class="section">
-                <button class="btn btn-primary" id="upload-btn" type="button">Upload Edited Screenshot</button>
                 <div class="tool-grid">
                     <button class="btn btn-outline" id="undo-edit-btn" type="button">Undo</button>
                     <button class="btn btn-outline" id="reset-edit-btn" type="button">Reset</button>
                 </div>
+                <div class="hint" id="editor-hint">Drag to set the crop area.</div>
+            </div>
+
+            <div class="section">
+                <button class="btn btn-primary" id="upload-btn" type="button">Finalize and Upload</button>
             </div>
 
             <div class="error" id="error-msg"></div>
@@ -238,7 +251,6 @@
             </div>
 
             <div class="spacer"></div>
-            <button class="btn btn-outline" id="discard-btn" type="button">Discard</button>
         </aside>
     </main>
 

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>ScreenshotSafe Settings</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { min-height: 100%; }
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f13;
+            color: #e8e8f0;
+        }
+        main {
+            width: min(520px, 100%);
+            padding: 22px;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 10px;
+            background: #14141d;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+        }
+        h1 {
+            font-size: 18px;
+            font-weight: 650;
+            margin-bottom: 6px;
+        }
+        .subhead {
+            color: #aaa;
+            font-size: 13px;
+            line-height: 1.45;
+            margin-bottom: 20px;
+        }
+        .notice {
+            display: none;
+            margin-bottom: 16px;
+            padding: 10px 12px;
+            border: 1px solid rgba(255,199,95,0.35);
+            border-radius: 8px;
+            background: rgba(255,199,95,0.1);
+            color: #ffd68a;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+        .notice.show { display: block; }
+        .form-group { margin-bottom: 14px; }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #888;
+            font-size: 11px;
+            font-weight: 650;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+        input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            background: #0f0f13;
+            color: #e8e8f0;
+            font-size: 14px;
+        }
+        input:focus {
+            outline: none;
+            border-color: #6a6aff;
+            box-shadow: 0 0 0 3px rgba(106,106,255,0.16);
+        }
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            margin-top: 18px;
+        }
+        button {
+            min-height: 40px;
+            padding: 10px 14px;
+            border: 0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 650;
+            cursor: pointer;
+            transition: 0.15s ease;
+        }
+        .primary {
+            background: #6a6aff;
+            color: #fff;
+        }
+        .primary:hover { background: #8484ff; }
+        .secondary {
+            background: #1a1a24;
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #e8e8f0;
+        }
+        .secondary:hover {
+            background: #22223a;
+            border-color: rgba(255,255,255,0.2);
+        }
+        button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+        .status {
+            min-height: 20px;
+            margin-top: 14px;
+            font-size: 13px;
+            line-height: 1.4;
+            color: #aaa;
+        }
+        .status.ok { color: #66e0a3; }
+        .status.bad { color: #ff6b83; }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>ScreenshotSafe Settings</h1>
+        <p class="subhead">Connect the extension to your ScreenshotSafe server before capturing screenshots.</p>
+        <div class="notice" id="notice"></div>
+
+        <div class="form-group">
+            <label for="server-url">Server URL</label>
+            <input type="text" id="server-url" placeholder="https://screenshots.example.com">
+        </div>
+
+        <div class="form-group">
+            <label for="api-token">API Token</label>
+            <input type="password" id="api-token" placeholder="sss_...">
+        </div>
+
+        <div class="actions">
+            <button class="primary" id="save-btn" type="button">Save and Verify</button>
+            <button class="secondary" id="close-btn" type="button">Close</button>
+        </div>
+
+        <div class="status" id="status"></div>
+    </main>
+
+    <script src="webext-api.js"></script>
+    <script src="options.js"></script>
+</body>
+</html>

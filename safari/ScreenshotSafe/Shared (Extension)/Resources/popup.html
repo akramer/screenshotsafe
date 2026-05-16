@@ -5,7 +5,7 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            width: 340px;
+            width: 320px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #0f0f13;
             color: #e8e8f0;
@@ -24,31 +24,6 @@
             font-weight: 600;
         }
         .header .icon { font-size: 20px; }
-        .settings { margin-bottom: 16px; }
-        .form-group { margin-bottom: 12px; }
-        .form-group label {
-            display: block;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: #888;
-            margin-bottom: 4px;
-        }
-        .form-group input {
-            width: 100%;
-            padding: 8px 10px;
-            background: #1a1a24;
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 6px;
-            color: #e8e8f0;
-            font-size: 13px;
-        }
-        .form-group input:focus {
-            outline: none;
-            border-color: #6a6aff;
-            box-shadow: 0 0 0 2px rgba(106,106,255,0.15);
-        }
         .status {
             display: flex;
             align-items: center;
@@ -68,8 +43,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
             width: 100%;
+            min-height: 38px;
             padding: 10px;
             border: none;
             border-radius: 8px;
@@ -106,30 +81,9 @@
             border-radius: 6px;
             font-size: 12px;
             color: #ff4d6a;
+            line-height: 1.4;
         }
         .error.show { display: block; }
-        .saved-toast {
-            display: none;
-            position: fixed;
-            top: 8px;
-            right: 8px;
-            padding: 6px 12px;
-            background: rgba(0,204,102,0.9);
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-            color: #fff;
-        }
-        .saved-toast.show {
-            display: block;
-            animation: fadeInOut 2s ease-in-out;
-        }
-        @keyframes fadeInOut {
-            0% { opacity: 0; transform: translateY(-8px); }
-            15% { opacity: 1; transform: translateY(0); }
-            85% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-8px); }
-        }
     </style>
 </head>
 <body>
@@ -138,29 +92,15 @@
         <h1>ScreenshotSafe</h1>
     </div>
 
-    <div class="settings">
-        <div class="form-group">
-            <label for="server-url">Server URL</label>
-            <input type="text" id="server-url" placeholder="https://screenshots.example.com">
-        </div>
-        <div class="form-group">
-            <label for="api-token">API Token</label>
-            <input type="password" id="api-token" placeholder="sss_...">
-        </div>
-        <button class="btn btn-outline" id="save-settings-btn">Save Settings</button>
-    </div>
-
     <div class="status" id="status">
         <span class="status-dot" id="status-dot"></span>
-        <span id="status-text">Not configured</span>
+        <span id="status-text">Checking settings...</span>
     </div>
 
-    <button class="btn btn-primary" id="capture-btn" disabled>
-        📷 Capture and Edit
-    </button>
+    <button class="btn btn-primary" id="capture-btn" disabled>📷 Capture and Edit</button>
+    <button class="btn btn-outline" id="settings-btn" type="button">Settings</button>
 
     <div class="error" id="error-msg"></div>
-    <div class="saved-toast" id="saved-toast">Settings saved ✓</div>
 
     <script src="webext-api.js"></script>
     <script src="popup.js"></script>
