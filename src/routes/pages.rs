@@ -406,7 +406,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
     <title>Edit — {{TITLE}}</title>
     <link rel="icon" type="image/png" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/editor.css?v=dpi-edit-1">
+    <link rel="stylesheet" href="/static/css/editor.css?v=toolbar-icons-1">
 </head>
 <body>
     <nav class="navbar">
@@ -418,36 +418,62 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
     <main class="editor-container">
         <div class="editor-toolbar" id="toolbar">
             <div class="tool-group">
-                <button class="tool-btn active" data-tool="select" title="Select">
-                    <span class="tool-icon">↖</span>
+                <button class="tool-btn active" data-tool="select" title="Select" aria-label="Select">
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 3l9 18 2.1-7.1L23 12 5 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                    </svg>
                 </button>
-                <button class="tool-btn" data-tool="redact" title="Redact (black rectangle)">
-                    <span class="tool-icon">■</span>
+                <button class="tool-btn" data-tool="redact" title="Redact (black rectangle)" aria-label="Redact">
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="4" y="7" width="16" height="10" rx="1.5" fill="currentColor"/>
+                        <path d="M7 5h10M7 19h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity=".55"/>
+                    </svg>
                 </button>
-                <button class="tool-btn" data-tool="rect" title="Rectangle">
-                    <span class="tool-icon">□</span>
+                <button class="tool-btn" data-tool="rect" title="Rectangle" aria-label="Rectangle">
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <rect x="5" y="6" width="14" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                    </svg>
                 </button>
-                <button class="tool-btn" data-tool="arrow" title="Arrow">
-                    <span class="tool-icon">↗</span>
+                <button class="tool-btn" data-tool="arrow" title="Arrow" aria-label="Arrow">
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 19 18 6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"/>
+                        <path d="M10 6h8v8" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
                 </button>
-                <button class="tool-btn" data-tool="line" title="Line">
-                    <span class="tool-icon">─</span>
+                <button class="tool-btn" data-tool="line" title="Line" aria-label="Line">
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 19 19 5" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round"/>
+                    </svg>
                 </button>
-                <button class="tool-btn" data-tool="text" title="Text">
-                    <span class="tool-icon">T</span>
+                <button class="tool-btn" data-tool="text" title="Text" aria-label="Text">
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M5 6h14M12 6v12M9 18h6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
                 </button>
-                <button class="tool-btn" data-tool="crop" title="Crop">
-                    <span class="tool-icon">✂</span>
+                <button class="tool-btn" data-tool="crop" title="Crop" aria-label="Crop">
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 3v14h14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M3 7h14v14" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
                 </button>
                 <div style="width: 1px; height: 24px; background: var(--border); margin: 0 4px;"></div>
-                <button class="tool-btn" id="zoom-in-btn" title="Zoom In (Scroll Up)">
-                    <span class="tool-icon">🔍+</span>
+                <button class="tool-btn" id="zoom-in-btn" title="Zoom In (Scroll Up)" aria-label="Zoom in">
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <path d="M15 15l5 5M10.5 8v5M8 10.5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
                 </button>
-                <button class="tool-btn" id="zoom-out-btn" title="Zoom Out (Scroll Down)">
-                    <span class="tool-icon">🔍-</span>
+                <button class="tool-btn" id="zoom-out-btn" title="Zoom Out (Scroll Down)" aria-label="Zoom out">
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <path d="M15 15l5 5M8 10.5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
                 </button>
-                <button class="tool-btn" id="zoom-fit-btn" title="Zoom Fit">
-                    <span class="tool-icon">🖥</span>
+                <button class="tool-btn" id="zoom-fit-btn" title="Zoom Fit" aria-label="Fit to screen">
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <rect x="8" y="8" width="8" height="8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                    </svg>
                 </button>
             </div>
             <div class="tool-group">
@@ -458,7 +484,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
                     <input type="range" id="stroke-width" min="1" max="10" value="3">
                 </label>
             </div>
-            <div class="tool-group">
+            <div class="tool-group editor-actions">
                 <button class="tool-btn" id="undo-btn" title="Undo">↩</button>
                 <button class="tool-btn" id="redo-btn" title="Redo">↪</button>
                 <button class="tool-btn" id="reset-btn" title="Reset all">Reset</button>
