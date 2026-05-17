@@ -529,6 +529,19 @@
             if (!obj) return null;
 
             if (obj.annotationType === 'arrow' && obj._arrowData) {
+                if (obj.group && obj.group.type === 'activeSelection') {
+                    obj._arrowData.strokeWidth = width;
+                    obj.getObjects().forEach(function(child) {
+                        if (child.type === 'line') {
+                            child.set('strokeWidth', toImagePixels(width));
+                        }
+                        child.dirty = true;
+                    });
+                    obj.dirty = true;
+                    obj.setCoords();
+                    return obj;
+                }
+
                 const pts = getAbsoluteLinePoints(obj);
                 if (!pts) return obj;
 
