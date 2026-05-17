@@ -28,6 +28,8 @@
     let imageDpi = getImageDpi();
     let visualScale = dpiToVisualScale(imageDpi);
     const AUTOSAVE_DELAY_MS = 5000;
+    const CROP_STROKE = '#ffcc00';
+    const CROP_FILL = 'rgba(255, 204, 0, 0.08)';
 
     const dropShadowConfig = {
         color: 'rgba(0,0,0,0.3)',
@@ -43,6 +45,102 @@
 
     function dpiToVisualScale(dpi) {
         return Math.max(0.1, Math.min(10, dpi / 100));
+    }
+
+    function isObjectInteractiveInSelectMode(obj) {
+        return obj && (obj.annotationType || obj.isHandle || obj._isCropIndicator);
+    }
+
+    function applyObjectInteractionMode(obj) {
+        if (!obj) return;
+
+        const enabled = obj._isCropIndicator
+            ? (currentTool === 'select' || currentTool === 'crop')
+            : (currentTool === 'select' && isObjectInteractiveInSelectMode(obj));
+        obj.selectable = enabled;
+        obj.evented = enabled;
+    }
+
+    function applyCanvasInteractionMode() {
+        const isSelectTool = currentTool === 'select';
+        const isCropTool = currentTool === 'crop';
+
+        if (!isSelectTool && !isCropTool) {
+            clearHandles();
+            canvas.discardActiveObject();
+            selectedAnnotationObjects = [];
+        } else if (isCropTool) {
+            clearHandles();
+            selectedAnnotationObjects = [];
+            const activeObject = canvas.getActiveObject();
+            if (activeObject && !activeObject._isCropIndicator) {
+                canvas.discardActiveObject();
+            }
+        }
+
+        canvas.selection = isSelectTool;
+        canvas.skipTargetFind = !isSelectTool && !isCropTool;
+        canvas.defaultCursor = isSelectTool ? 'default' : 'crosshair';
+        canvas.hoverCursor = isSelectTool ? 'move' : 'crosshair';
+        canvas.moveCursor = isSelectTool ? 'move' : 'crosshair';
+
+        canvas.forEachObject(applyObjectInteractionMode);
+        canvas.requestRenderAll();
+    }
+
+    function updateCropRectFromObject(obj) {
+        const width = Math.max(1, Math.abs(obj.width * (obj.scaleX || 1)));
+        const height = Math.max(1, Math.abs(obj.height * (obj.scaleY || 1)));
+        const x = Math.round(obj.left || 0);
+        const y = Math.round(obj.top || 0);
+
+        window.CROP_RECT = {
+            x,
+            y,
+            w: Math.round(width),
+            h: Math.round(height),
+        };
+    }
+
+    function normalizeCropRect(obj) {
+        updateCropRectFromObject(obj);
+
+        obj.set({
+            left: window.CROP_RECT.x,
+            top: window.CROP_RECT.y,
+            width: window.CROP_RECT.w,
+            height: window.CROP_RECT.h,
+            scaleX: 1,
+            scaleY: 1,
+            angle: 0,
+        });
+        obj.setCoords();
+    }
+
+    function configureCropIndicator(rect) {
+        rect.set({
+            fill: CROP_FILL,
+            stroke: CROP_STROKE,
+            strokeWidth: 4,
+            strokeDashArray: [12, 6],
+            strokeUniform: true,
+            lockRotation: true,
+            lockScalingFlip: true,
+            hasControls: true,
+            hasBorders: true,
+            borderColor: CROP_STROKE,
+            cornerColor: '#111827',
+            cornerStrokeColor: CROP_STROKE,
+            cornerStyle: 'rect',
+            cornerSize: 12,
+            transparentCorners: false,
+            padding: 0,
+            objectCaching: false,
+            _isCropIndicator: true,
+        });
+        rect.setControlsVisibility({ mtr: false });
+        applyObjectInteractionMode(rect);
+        return rect;
     }
 
     function toImagePixels(value) {
@@ -105,6 +203,7 @@
 
             // Load existing annotations
             loadAnnotations(window.ANNOTATIONS);
+            showCropIndicator();
 
             zoomToFit();
 
@@ -224,6 +323,7 @@
                     break;
             }
             if (obj) {
+                applyObjectInteractionMode(obj);
                 canvas.add(obj);
             }
         });
@@ -493,6 +593,8 @@
         h2.otherHandle = h1;
 
         lineHandles.push(h1, h2);
+        applyObjectInteractionMode(h1);
+        applyObjectInteractionMode(h2);
         canvas.add(h1, h2);
         h1.bringToFront();
         h2.bringToFront();
@@ -513,16 +615,7 @@
                 });
                 btn.classList.add('active');
 
-                // Configure canvas for current tool
-                if (currentTool === 'select') {
-                    canvas.selection = true;
-                    canvas.forEachObject(function (o) { o.selectable = true; });
-                } else {
-                    canvas.selection = false;
-                    canvas.discardActiveObject();
-                    canvas.forEachObject(function (o) { o.selectable = false; });
-                    canvas.renderAll();
-                }
+                applyCanvasInteractionMode();
             });
         });
 
@@ -555,6 +648,7 @@
                     width
                 );
                 replacement.hasControls = false;
+                applyObjectInteractionMode(replacement);
 
                 const idx = canvas.getObjects().indexOf(obj);
                 canvas.remove(obj);
@@ -736,6 +830,7 @@
                     newObj._initialTop = newObj.top;
                     newObj.hasControls = false;
                 }
+                applyObjectInteractionMode(newObj);
 
                 const idx = canvas.getObjects().indexOf(targetObj);
                 canvas.remove(targetObj);
@@ -750,10 +845,23 @@
                     lineHandles.find(h => h.isStart).set({ left: pts.p1.x, top: pts.p1.y }).setCoords();
                     lineHandles.find(h => !h.isStart).set({ left: pts.p2.x, top: pts.p2.y }).setCoords();
                 }
+            } else if (obj._isCropIndicator) {
+                updateCropRectFromObject(obj);
             }
         });
 
-        canvas.on('object:modified', function () {
+        canvas.on('object:scaling', function(opt) {
+            const obj = opt.target;
+            if (obj && obj._isCropIndicator) {
+                updateCropRectFromObject(obj);
+            }
+        });
+
+        canvas.on('object:modified', function (opt) {
+            const obj = opt.target;
+            if (obj && obj._isCropIndicator) {
+                normalizeCropRect(obj);
+            }
             saveUndoState();
         });
 
@@ -783,6 +891,8 @@
             }
 
             if (currentTool === 'select') return;
+            if (currentTool === 'crop' && opt.target && opt.target._isCropIndicator) return;
+
             isDrawing = true;
             const pointer = canvas.getPointer(opt.e);
             drawStart = { x: pointer.x, y: pointer.y };
@@ -801,12 +911,14 @@
                     shadow: dropShadowConfig,
                 });
                 text.setControlsVisibility({ mt: false, mb: false, ml: false, mr: false, mtr: false });
+                currentTool = 'select';
+                document.querySelector('.tool-btn[data-tool="select"]').click();
+                applyObjectInteractionMode(text);
                 canvas.add(text);
                 canvas.setActiveObject(text);
                 text.enterEditing();
+                text.selectAll();
                 isDrawing = false;
-                currentTool = 'select';
-                document.querySelector('.tool-btn[data-tool="select"]').click();
                 saveUndoState();
             }
         });
@@ -869,8 +981,8 @@
                     previewObj = new fabric.Rect({
                         left: Math.min(x1, x2), top: Math.min(y1, y2),
                         width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
-                        fill: 'transparent', stroke: '#00ff88', strokeWidth: 2,
-                        strokeDashArray: [8, 4], selectable: false, evented: false
+                        fill: CROP_FILL, stroke: CROP_STROKE, strokeWidth: 4,
+                        strokeDashArray: [12, 6], strokeUniform: true, selectable: false, evented: false
                     });
                     break;
             }
@@ -972,11 +1084,13 @@
                         h: Math.round(dy),
                     };
                     // Show visual crop indicator
-                    showCropIndicator();
+                    canvas.setActiveObject(showCropIndicator());
+                    saveUndoState();
                     break;
             }
 
             if (obj) {
+                applyObjectInteractionMode(obj);
                 canvas.add(obj);
                 canvas.renderAll();
                 saveUndoState();
@@ -993,22 +1107,18 @@
         });
 
         if (window.CROP_RECT) {
-            const rect = new fabric.Rect({
+            const rect = configureCropIndicator(new fabric.Rect({
                 left: window.CROP_RECT.x,
                 top: window.CROP_RECT.y,
                 width: window.CROP_RECT.w,
                 height: window.CROP_RECT.h,
-                fill: 'transparent',
-                stroke: '#00ff88',
-                strokeWidth: 2,
-                strokeDashArray: [8, 4],
-                selectable: false,
-                evented: false,
-                _isCropIndicator: true,
-            });
+            }));
             canvas.add(rect);
             canvas.renderAll();
+            return rect;
         }
+
+        return null;
     }
 
     // ── Undo / Redo ──
@@ -1034,6 +1144,11 @@
     function restoreEditorState(state) {
         window.CROP_RECT = state.crop ? { ...state.crop } : null;
         canvas.loadFromJSON(state.canvas, function () {
+            canvas.getObjects().forEach(function (o) {
+                if (o._isCropIndicator) canvas.remove(o);
+            });
+            showCropIndicator();
+            applyCanvasInteractionMode();
             canvas.renderAll();
             scheduleAutosave();
         });
