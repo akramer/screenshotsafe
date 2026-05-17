@@ -8,7 +8,7 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::auth::middleware::{ApiOrSessionUser, AuthUser};
+use crate::auth::middleware::{AdminUser, ApiOrSessionUser, AuthUser};
 use crate::models::{Annotation, ApiToken, CropRect, Screenshot, User};
 use crate::{auth, image_processing, share_id, AppError, SharedState};
 
@@ -30,7 +30,8 @@ pub async fn setup(
         return Err(AppError::BadRequest("Setup already completed".into()));
     }
 
-    if req.username.is_empty() || req.password.len() < 8 {
+    let username = req.username.trim();
+    if username.is_empty() || req.password.len() < 8 {
         return Err(AppError::BadRequest(
             "Username required, password must be at least 8 characters".into(),
         ));
@@ -41,9 +42,14 @@ pub async fn setup(
 
     let user = User {
         id: Uuid::new_v4(),
-        username: req.username.clone(),
+        username: username.to_string(),
         password_hash: Some(password_hash),
-        display_name: req.display_name.unwrap_or_else(|| req.username.clone()),
+        display_name: req
+            .display_name
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| username.to_string()),
+        is_admin: true,
         created_at: Utc::now(),
     };
 
@@ -71,6 +77,7 @@ pub async fn setup(
                 "id": user.id,
                 "username": user.username,
                 "display_name": user.display_name,
+                "is_admin": user.is_admin,
             }
         })),
     ))
@@ -120,9 +127,126 @@ pub async fn login(
                 "id": user.id,
                 "username": user.username,
                 "display_name": user.display_name,
+                "is_admin": user.is_admin,
             }
         })),
     ))
+}
+
+// ── Admin users ──
+
+#[derive(Deserialize)]
+pub struct CreateUserRequest {
+    pub username: String,
+    pub password: String,
+    pub display_name: Option<String>,
+    pub is_admin: Option<bool>,
+}
+
+pub async fn admin_list_users(
+    State(state): State<SharedState>,
+    AdminUser(_admin): AdminUser,
+) -> crate::Result<Json<Vec<serde_json::Value>>> {
+    let users = state.db.list_users()?;
+    let result = users
+        .into_iter()
+        .map(|user| {
+            serde_json::json!({
+                "id": user.id,
+                "username": user.username,
+                "display_name": user.display_name,
+                "is_admin": user.is_admin,
+                "created_at": user.created_at,
+            })
+        })
+        .collect();
+    Ok(Json(result))
+}
+
+pub async fn admin_create_user(
+    State(state): State<SharedState>,
+    AdminUser(_admin): AdminUser,
+    Json(req): Json<CreateUserRequest>,
+) -> crate::Result<impl IntoResponse> {
+    let username = req.username.trim();
+    if username.is_empty() || req.password.len() < 8 {
+        return Err(AppError::BadRequest(
+            "Username required, password must be at least 8 characters".into(),
+        ));
+    }
+
+    if state.db.get_user_by_username(username)?.is_some() {
+        return Err(AppError::BadRequest("Username already exists".into()));
+    }
+
+    let password_hash = auth::hash_password(&req.password)
+        .map_err(|e| AppError::Internal(format!("Password hashing failed: {}", e)))?;
+    let user = User {
+        id: Uuid::new_v4(),
+        username: username.to_string(),
+        password_hash: Some(password_hash),
+        display_name: req
+            .display_name
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| username.to_string()),
+        is_admin: req.is_admin.unwrap_or(false),
+        created_at: Utc::now(),
+    };
+
+    state.db.create_user(&user)?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name,
+            "is_admin": user.is_admin,
+            "created_at": user.created_at,
+        })),
+    ))
+}
+
+pub async fn admin_delete_user(
+    State(state): State<SharedState>,
+    AdminUser(admin): AdminUser,
+    Path(id): Path<Uuid>,
+) -> crate::Result<Json<serde_json::Value>> {
+    if id == admin.id {
+        return Err(AppError::BadRequest(
+            "You cannot delete your own user account".into(),
+        ));
+    }
+
+    let user = state.db.get_user_by_id(&id)?.ok_or(AppError::NotFound)?;
+    if user.is_admin && state.db.admin_count()? <= 1 {
+        return Err(AppError::BadRequest(
+            "Cannot delete the last admin user".into(),
+        ));
+    }
+
+    let paths = state.db.delete_user(&id)?.ok_or(AppError::NotFound)?;
+    for (original_path, rendered_path) in paths {
+        remove_file_if_present(&original_path);
+        if let Some(path) = rendered_path {
+            remove_file_if_present(&path);
+        }
+    }
+
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+fn remove_file_if_present(path: &str) {
+    match std::fs::remove_file(path) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => tracing::warn!(
+            "Failed to remove user-owned screenshot file {}: {}",
+            path,
+            err
+        ),
+    }
 }
 
 // ── Logout ──

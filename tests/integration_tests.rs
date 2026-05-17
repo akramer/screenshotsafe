@@ -339,6 +339,130 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
+    #[tokio::test]
+    async fn test_setup_creates_admin_user() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+        assert!(admin.is_admin);
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/admin")
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_admin_can_create_list_and_delete_users() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "POST",
+            "/api/admin/users",
+            &cookie,
+            serde_json::json!({
+                "username": "alice",
+                "password": "testpassword456",
+                "display_name": "Alice Example",
+                "is_admin": false
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let created = body_json(resp).await;
+        assert_eq!(created["username"], "alice");
+        assert_eq!(created["is_admin"], false);
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/admin/users")
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let users = body_json(resp).await;
+        assert_eq!(users.as_array().unwrap().len(), 2);
+
+        let alice = state.db.get_user_by_username("alice").unwrap().unwrap();
+        let req = axum::http::Request::builder()
+            .method("DELETE")
+            .uri(format!("/api/admin/users/{}", alice.id))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(state.db.get_user_by_username("alice").unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_non_admin_cannot_manage_users() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+        let admin_cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "POST",
+            "/api/admin/users",
+            &admin_cookie,
+            serde_json::json!({
+                "username": "bob",
+                "password": "testpassword456",
+                "is_admin": false
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "bob",
+                "password": "testpassword456"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let user_cookie = extract_session_cookie(&resp).unwrap();
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/admin/users")
+            .header(header::COOKIE, &user_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_admin_cannot_delete_self() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+
+        let req = axum::http::Request::builder()
+            .method("DELETE")
+            .uri(format!("/api/admin/users/{}", admin.id))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert!(state.db.get_user_by_username("admin").unwrap().is_some());
+    }
+
     // ── Screenshot Tests ──
 
     /// Helper: set up a user and return the session cookie string.

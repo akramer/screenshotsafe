@@ -4,7 +4,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect},
 };
 
-use crate::auth::middleware::{AuthUser, MaybeAuthUser};
+use crate::auth::middleware::{AdminUser, AuthUser, MaybeAuthUser};
 use crate::{AppError, SharedState};
 
 const FAVICON_LINK: &str = r#"<link rel="icon" type="image/png" href="/favicon.ico">"#;
@@ -29,6 +29,11 @@ pub async fn dashboard(
     let screenshots = state.db.list_screenshots_for_user(&user.id, 50, 0)?;
 
     let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
+    let admin_link = if user.is_admin {
+        r#"<a href="/admin" class="btn btn-sm btn-outline">Admin</a>"#
+    } else {
+        ""
+    };
 
     let screenshot_cards: String = if screenshots.is_empty() {
         r#"<div class="empty-state">
@@ -97,6 +102,7 @@ pub async fn dashboard(
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
             <span class="nav-user">{display_name}</span>
+            {admin_link}
             <a href="/settings" class="btn btn-sm btn-outline">Settings</a>
             <button id="logout-btn" class="btn btn-sm btn-outline">Logout</button>
         </div>
@@ -135,6 +141,7 @@ pub async fn dashboard(
 </html>"#,
         favicon = FAVICON_LINK,
         display_name = html_escape(&user.display_name),
+        admin_link = admin_link,
         screenshot_cards = screenshot_cards,
     );
 
@@ -719,6 +726,172 @@ pub async fn settings_page(
 </html>"#,
         favicon = FAVICON_LINK,
         token_rows = token_rows,
+    );
+
+    Ok(Html(html).into_response())
+}
+
+/// Administration page for managing users.
+pub async fn admin_page(
+    State(state): State<SharedState>,
+    AdminUser(admin): AdminUser,
+) -> crate::Result<impl IntoResponse> {
+    let users = state.db.list_users()?;
+    let user_rows = users
+        .iter()
+        .map(|user| {
+            let role = if user.is_admin { "Admin" } else { "User" };
+            let delete_button = if user.id == admin.id {
+                "<span class=\"admin-muted\">Current user</span>".to_string()
+            } else {
+                format!(
+                    r#"<button class="btn btn-sm btn-danger delete-user-btn" data-id="{}" data-username="{}">Delete</button>"#,
+                    user.id,
+                    html_escape(&user.username),
+                )
+            };
+            format!(
+                r#"<tr>
+                    <td>{}</td>
+                    <td>{}</td>
+                    <td><span class="role-pill{}">{}</span></td>
+                    <td>{}</td>
+                    <td>{}</td>
+                </tr>"#,
+                html_escape(&user.username),
+                html_escape(&user.display_name),
+                if user.is_admin { " role-pill-admin" } else { "" },
+                role,
+                user.created_at.format("%b %d, %Y"),
+                delete_button,
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ScreenshotSafe — Admin</title>
+    {favicon}
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
+        <div class="nav-right">
+            <a href="/" class="btn btn-sm btn-outline">Dashboard</a>
+            <a href="/settings" class="btn btn-sm btn-outline">Settings</a>
+        </div>
+    </nav>
+    <main class="container">
+        <div class="page-header">
+            <h1>Administration</h1>
+        </div>
+
+        <section class="settings-section">
+            <h2>Add User</h2>
+            <form id="user-form" class="admin-user-form">
+                <div id="user-message" class="settings-message" style="display:none"></div>
+                <div class="admin-form-grid">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" autocomplete="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="display-name">Display Name</label>
+                        <input type="text" id="display-name" autocomplete="name">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" autocomplete="new-password" minlength="8" required>
+                    </div>
+                    <label class="checkbox-row">
+                        <input type="checkbox" id="is-admin">
+                        <span>Admin user</span>
+                    </label>
+                </div>
+                <button class="btn btn-primary" type="submit">Add User</button>
+            </form>
+        </section>
+
+        <section class="settings-section">
+            <h2>Users</h2>
+            <table class="tokens-table users-table">
+                <thead>
+                    <tr>
+                        <th>Username</th>
+                        <th>Display Name</th>
+                        <th>Role</th>
+                        <th>Created</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {user_rows}
+                </tbody>
+            </table>
+        </section>
+    </main>
+    <script>
+        const form = document.getElementById('user-form');
+        const message = document.getElementById('user-message');
+
+        function showMessage(text, isError) {{
+            message.textContent = text;
+            message.className = `settings-message ${{isError ? 'settings-message-error' : 'settings-message-success'}}`;
+            message.style.display = 'block';
+        }}
+
+        form.addEventListener('submit', async (event) => {{
+            event.preventDefault();
+            const resp = await fetch('/api/admin/users', {{
+                method: 'POST',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    username: document.getElementById('username').value,
+                    display_name: document.getElementById('display-name').value || undefined,
+                    password: document.getElementById('password').value,
+                    is_admin: document.getElementById('is-admin').checked,
+                }}),
+            }});
+
+            if (resp.ok) {{
+                window.location.reload();
+            }} else {{
+                let text = 'Unable to add user.';
+                try {{
+                    const data = await resp.json();
+                    if (data.error) text = data.error;
+                }} catch (_) {{}}
+                showMessage(text, true);
+            }}
+        }});
+
+        document.querySelectorAll('.delete-user-btn').forEach((btn) => {{
+            btn.addEventListener('click', async () => {{
+                if (!confirm(`Delete user "${{btn.dataset.username}}"? Their screenshots and API tokens will also be deleted.`)) return;
+                const resp = await fetch(`/api/admin/users/${{btn.dataset.id}}`, {{ method: 'DELETE' }});
+                if (resp.ok) {{
+                    window.location.reload();
+                }} else {{
+                    let text = 'Unable to delete user.';
+                    try {{
+                        const data = await resp.json();
+                        if (data.error) text = data.error;
+                    }} catch (_) {{}}
+                    alert(text);
+                }}
+            }});
+        }});
+    </script>
+</body>
+</html>"#,
+        favicon = FAVICON_LINK,
+        user_rows = user_rows,
     );
 
     Ok(Html(html).into_response())

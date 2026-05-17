@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDateTime, Utc};
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::sync::Mutex;
 
 use crate::models::{ApiToken, Screenshot, User};
@@ -70,6 +70,7 @@ impl Database {
                 username TEXT NOT NULL UNIQUE,
                 password_hash TEXT,
                 display_name TEXT NOT NULL,
+                is_admin INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
@@ -106,6 +107,13 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON api_tokens(token_hash);
             ",
         )?;
+        add_column_if_missing(&conn, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")?;
+        conn.execute(
+            "UPDATE users SET is_admin = 1
+             WHERE NOT EXISTS (SELECT 1 FROM users WHERE is_admin = 1)
+               AND id = (SELECT id FROM users ORDER BY created_at ASC LIMIT 1)",
+            [],
+        )?;
         add_column_if_missing(
             &conn,
             "screenshots",
@@ -123,37 +131,53 @@ impl Database {
         Ok(count)
     }
 
+    pub fn admin_count(&self) -> Result<usize> {
+        let conn = self.conn.lock().unwrap();
+        let count: usize =
+            conn.query_row("SELECT COUNT(*) FROM users WHERE is_admin = 1", [], |row| {
+                row.get(0)
+            })?;
+        Ok(count)
+    }
+
     pub fn create_user(&self, user: &User) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO users (id, username, password_hash, display_name, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO users (id, username, password_hash, display_name, is_admin, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 user.id.to_string(),
                 user.username,
                 user.password_hash,
                 user.display_name,
+                user.is_admin,
                 user.created_at.to_rfc3339(),
             ],
         )?;
         Ok(())
     }
 
+    pub fn list_users(&self) -> Result<Vec<User>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, username, password_hash, display_name, is_admin, created_at
+             FROM users ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map([], Self::user_from_row)?;
+        let mut users = Vec::new();
+        for row in rows {
+            users.push(row?);
+        }
+        Ok(users)
+    }
+
     pub fn get_user_by_username(&self, username: &str) -> Result<Option<User>> {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT id, username, password_hash, display_name, created_at FROM users WHERE username = ?1",
+                "SELECT id, username, password_hash, display_name, is_admin, created_at FROM users WHERE username = ?1",
                 params![username],
-                |row| {
-                    Ok(User {
-                        id: row.get::<_, String>(0)?.parse().unwrap(),
-                        username: row.get(1)?,
-                        password_hash: row.get(2)?,
-                        display_name: row.get(3)?,
-                        created_at: parse_datetime(&row.get::<_, String>(4)?),
-                    })
-                },
+                Self::user_from_row,
             )
             .optional()?;
         Ok(result)
@@ -163,17 +187,9 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT id, username, password_hash, display_name, created_at FROM users WHERE id = ?1",
+                "SELECT id, username, password_hash, display_name, is_admin, created_at FROM users WHERE id = ?1",
                 params![id.to_string()],
-                |row| {
-                    Ok(User {
-                        id: row.get::<_, String>(0)?.parse().unwrap(),
-                        username: row.get(1)?,
-                        password_hash: row.get(2)?,
-                        display_name: row.get(3)?,
-                        created_at: parse_datetime(&row.get::<_, String>(4)?),
-                    })
-                },
+                Self::user_from_row,
             )
             .optional()?;
         Ok(result)
@@ -186,6 +202,39 @@ impl Database {
             params![password_hash, id.to_string()],
         )?;
         Ok(())
+    }
+
+    pub fn delete_user(&self, id: &uuid::Uuid) -> Result<Option<Vec<(String, Option<String>)>>> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        let mut stmt =
+            tx.prepare("SELECT original_path, rendered_path FROM screenshots WHERE user_id = ?1")?;
+        let paths: Vec<(String, Option<String>)> = stmt
+            .query_map(params![id.to_string()], |row| {
+                Ok((row.get(0)?, row.get(1)?))
+            })?
+            .collect::<std::result::Result<_, _>>()?;
+        drop(stmt);
+
+        let rows = tx.execute("DELETE FROM users WHERE id = ?1", params![id.to_string()])?;
+        tx.commit()?;
+
+        if rows == 0 {
+            Ok(None)
+        } else {
+            Ok(Some(paths))
+        }
+    }
+
+    fn user_from_row(row: &Row<'_>) -> rusqlite::Result<User> {
+        Ok(User {
+            id: row.get::<_, String>(0)?.parse().unwrap(),
+            username: row.get(1)?,
+            password_hash: row.get(2)?,
+            display_name: row.get(3)?,
+            is_admin: row.get(4)?,
+            created_at: parse_datetime(&row.get::<_, String>(5)?),
+        })
     }
 
     // ── Screenshot operations ──
@@ -424,7 +473,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT u.id, u.username, u.password_hash, u.display_name, u.created_at, t.id
+                "SELECT u.id, u.username, u.password_hash, u.display_name, u.is_admin, u.created_at, t.id
                  FROM api_tokens t JOIN users u ON t.user_id = u.id
                  WHERE t.token_hash = ?1 AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))",
                 params![token_hash],
@@ -435,9 +484,10 @@ impl Database {
                             username: row.get(1)?,
                             password_hash: row.get(2)?,
                             display_name: row.get(3)?,
-                            created_at: parse_datetime(&row.get::<_, String>(4)?),
+                            is_admin: row.get(4)?,
+                            created_at: parse_datetime(&row.get::<_, String>(5)?),
                         },
-                        row.get::<_, String>(5)?.parse::<uuid::Uuid>().unwrap(),
+                        row.get::<_, String>(6)?.parse::<uuid::Uuid>().unwrap(),
                     ))
                 },
             )

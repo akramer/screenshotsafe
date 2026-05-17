@@ -75,6 +75,29 @@ impl FromRequestParts<SharedState> for AuthUser {
     }
 }
 
+/// Extractor: authenticated admin user from session cookie ONLY.
+pub struct AdminUser(pub User);
+
+impl FromRequestParts<SharedState> for AdminUser {
+    type Rejection = AppError;
+
+    fn from_request_parts(
+        parts: &mut Parts,
+        state: &SharedState,
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+        let state = state.clone();
+        let mut parts_clone = parts.clone();
+        async move {
+            let AuthUser(user) = AuthUser::from_request_parts(&mut parts_clone, &state).await?;
+            if user.is_admin {
+                Ok(AdminUser(user))
+            } else {
+                Err(AppError::Forbidden)
+            }
+        }
+    }
+}
+
 /// Extractor: optional authenticated user (doesn't fail if not logged in).
 pub struct MaybeAuthUser(pub Option<User>);
 

@@ -78,7 +78,8 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/setup", get(routes::pages::setup_page))
         .route("/login", get(routes::pages::login_page))
         .route("/screenshots/{id}/edit", get(routes::pages::editor_page))
-        .route("/settings", get(routes::pages::settings_page));
+        .route("/settings", get(routes::pages::settings_page))
+        .route("/admin", get(routes::pages::admin_page));
 
     let api_routes = Router::new()
         .route("/api/ping", get(routes::api::ping))
@@ -86,6 +87,12 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/api/auth/login", post(routes::api::login))
         .route("/api/auth/logout", post(routes::api::logout))
         .route("/api/auth/password", put(routes::api::change_password))
+        .route("/api/admin/users", get(routes::api::admin_list_users))
+        .route("/api/admin/users", post(routes::api::admin_create_user))
+        .route(
+            "/api/admin/users/{id}",
+            delete(routes::api::admin_delete_user),
+        )
         .route("/api/screenshots", post(routes::api::upload_screenshot))
         .route("/api/screenshots", get(routes::api::list_screenshots))
         .route(
