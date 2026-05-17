@@ -54,6 +54,9 @@ Example `config.toml`:
 [server]
 bind = "0.0.0.0:8080"
 public_url = "https://screenshots.example.com"
+max_screenshot_size_bytes = 26214400
+# Optional. Omit or set to 0 for no global maximum.
+max_expiry_seconds = 7776000
 
 [storage]
 path = "./data/storage"
@@ -72,6 +75,8 @@ Environment variable overrides:
 ```sh
 SSS_BIND=127.0.0.1:8080
 SSS_PUBLIC_URL=https://screenshots.example.com
+SSS_MAX_SCREENSHOT_SIZE_BYTES=26214400
+SSS_MAX_EXPIRY_SECONDS=7776000
 SSS_STORAGE_PATH=/data/storage
 SSS_DATABASE_PATH=/data/screenshotsafe.db
 SSS_JWT_SECRET=replace-with-a-long-random-secret
@@ -79,7 +84,7 @@ SSS_JWT_SECRET=replace-with-a-long-random-secret
 
 If `jwt_secret` is omitted, ScreenshotSafe generates one and stores it next to the storage directory as `.jwt_secret`.
 
-`default_expiry_seconds` controls the default retention window for newly uploaded screenshots.
+`max_screenshot_size_bytes` defaults to 25 MiB. `default_expiry_seconds` controls the default retention window for newly uploaded screenshots, and `max_expiry_seconds` optionally caps requested expiry windows. Admins can set per-user overrides for both limits from the Admin page; blank or `0` means the user follows the server setting.
 
 ## Browser Extension
 

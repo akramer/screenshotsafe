@@ -71,6 +71,8 @@ impl Database {
                 password_hash TEXT,
                 display_name TEXT NOT NULL,
                 is_admin INTEGER NOT NULL DEFAULT 0,
+                max_screenshot_size_bytes INTEGER,
+                max_expiry_seconds INTEGER,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
@@ -108,6 +110,8 @@ impl Database {
             ",
         )?;
         add_column_if_missing(&conn, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")?;
+        add_column_if_missing(&conn, "users", "max_screenshot_size_bytes", "INTEGER")?;
+        add_column_if_missing(&conn, "users", "max_expiry_seconds", "INTEGER")?;
         conn.execute(
             "UPDATE users SET is_admin = 1
              WHERE NOT EXISTS (SELECT 1 FROM users WHERE is_admin = 1)
@@ -143,14 +147,16 @@ impl Database {
     pub fn create_user(&self, user: &User) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO users (id, username, password_hash, display_name, is_admin, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO users (id, username, password_hash, display_name, is_admin, max_screenshot_size_bytes, max_expiry_seconds, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 user.id.to_string(),
                 user.username,
                 user.password_hash,
                 user.display_name,
                 user.is_admin,
+                user.max_screenshot_size_bytes.map(|v| v as i64),
+                user.max_expiry_seconds.map(|v| v as i64),
                 user.created_at.to_rfc3339(),
             ],
         )?;
@@ -160,7 +166,7 @@ impl Database {
     pub fn list_users(&self) -> Result<Vec<User>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, username, password_hash, display_name, is_admin, created_at
+            "SELECT id, username, password_hash, display_name, is_admin, max_screenshot_size_bytes, max_expiry_seconds, created_at
              FROM users ORDER BY created_at ASC",
         )?;
         let rows = stmt.query_map([], Self::user_from_row)?;
@@ -175,7 +181,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT id, username, password_hash, display_name, is_admin, created_at FROM users WHERE username = ?1",
+                "SELECT id, username, password_hash, display_name, is_admin, max_screenshot_size_bytes, max_expiry_seconds, created_at FROM users WHERE username = ?1",
                 params![username],
                 Self::user_from_row,
             )
@@ -187,7 +193,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT id, username, password_hash, display_name, is_admin, created_at FROM users WHERE id = ?1",
+                "SELECT id, username, password_hash, display_name, is_admin, max_screenshot_size_bytes, max_expiry_seconds, created_at FROM users WHERE id = ?1",
                 params![id.to_string()],
                 Self::user_from_row,
             )
@@ -202,6 +208,24 @@ impl Database {
             params![password_hash, id.to_string()],
         )?;
         Ok(())
+    }
+
+    pub fn update_user_limits(
+        &self,
+        id: &uuid::Uuid,
+        max_screenshot_size_bytes: Option<u64>,
+        max_expiry_seconds: Option<u64>,
+    ) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let rows = conn.execute(
+            "UPDATE users SET max_screenshot_size_bytes = ?1, max_expiry_seconds = ?2 WHERE id = ?3",
+            params![
+                max_screenshot_size_bytes.map(|v| v as i64),
+                max_expiry_seconds.map(|v| v as i64),
+                id.to_string(),
+            ],
+        )?;
+        Ok(rows > 0)
     }
 
     pub fn delete_user(&self, id: &uuid::Uuid) -> Result<Option<Vec<(String, Option<String>)>>> {
@@ -233,7 +257,9 @@ impl Database {
             password_hash: row.get(2)?,
             display_name: row.get(3)?,
             is_admin: row.get(4)?,
-            created_at: parse_datetime(&row.get::<_, String>(5)?),
+            max_screenshot_size_bytes: optional_u64(row.get(5)?),
+            max_expiry_seconds: optional_u64(row.get(6)?),
+            created_at: parse_datetime(&row.get::<_, String>(7)?),
         })
     }
 
@@ -473,7 +499,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT u.id, u.username, u.password_hash, u.display_name, u.is_admin, u.created_at, t.id
+                "SELECT u.id, u.username, u.password_hash, u.display_name, u.is_admin, u.max_screenshot_size_bytes, u.max_expiry_seconds, u.created_at, t.id
                  FROM api_tokens t JOIN users u ON t.user_id = u.id
                  WHERE t.token_hash = ?1 AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))",
                 params![token_hash],
@@ -485,9 +511,11 @@ impl Database {
                             password_hash: row.get(2)?,
                             display_name: row.get(3)?,
                             is_admin: row.get(4)?,
-                            created_at: parse_datetime(&row.get::<_, String>(5)?),
+                            max_screenshot_size_bytes: optional_u64(row.get(5)?),
+                            max_expiry_seconds: optional_u64(row.get(6)?),
+                            created_at: parse_datetime(&row.get::<_, String>(7)?),
                         },
-                        row.get::<_, String>(6)?.parse::<uuid::Uuid>().unwrap(),
+                        row.get::<_, String>(8)?.parse::<uuid::Uuid>().unwrap(),
                     ))
                 },
             )
@@ -555,6 +583,10 @@ impl Database {
         )?;
         Ok(paths)
     }
+}
+
+fn optional_u64(value: Option<i64>) -> Option<u64> {
+    value.and_then(|v| u64::try_from(v).ok())
 }
 
 fn add_column_if_missing(

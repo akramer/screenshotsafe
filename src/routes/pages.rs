@@ -768,6 +768,14 @@ pub async fn admin_page(
         .iter()
         .map(|user| {
             let role = if user.is_admin { "Admin" } else { "User" };
+            let size_limit = user
+                .max_screenshot_size_bytes
+                .map(|v| v.to_string())
+                .unwrap_or_default();
+            let expiry_limit = user
+                .max_expiry_seconds
+                .map(|v| v.to_string())
+                .unwrap_or_default();
             let delete_button = if user.id == admin.id {
                 "<span class=\"admin-muted\">Current user</span>".to_string()
             } else {
@@ -782,14 +790,24 @@ pub async fn admin_page(
                     <td>{}</td>
                     <td>{}</td>
                     <td><span class="role-pill{}">{}</span></td>
+                    <td><input class="admin-limit-input" type="number" min="0" step="1" value="{}" data-field="max_screenshot_size_bytes" data-user-id="{}" placeholder="Server"></td>
+                    <td><input class="admin-limit-input" type="number" min="0" step="1" value="{}" data-field="max_expiry_seconds" data-user-id="{}" placeholder="Server"></td>
                     <td>{}</td>
-                    <td>{}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline save-limits-btn" data-id="{}">Save Limits</button>
+                        {}
+                    </td>
                 </tr>"#,
                 html_escape(&user.username),
                 html_escape(&user.display_name),
                 if user.is_admin { " role-pill-admin" } else { "" },
                 role,
+                size_limit,
+                user.id,
+                expiry_limit,
+                user.id,
                 user.created_at.format("%b %d, %Y"),
+                user.id,
                 delete_button,
             )
         })
@@ -836,6 +854,14 @@ pub async fn admin_page(
                         <label for="password">Password</label>
                         <input type="password" id="password" autocomplete="new-password" minlength="8" required>
                     </div>
+                    <div class="form-group">
+                        <label for="max-screenshot-size-bytes">Max Screenshot Bytes</label>
+                        <input type="number" id="max-screenshot-size-bytes" min="0" step="1" placeholder="Server default">
+                    </div>
+                    <div class="form-group">
+                        <label for="max-expiry-seconds">Max Expiry Seconds</label>
+                        <input type="number" id="max-expiry-seconds" min="0" step="1" placeholder="Server default">
+                    </div>
                     <label class="checkbox-row">
                         <input type="checkbox" id="is-admin">
                         <span>Admin user</span>
@@ -853,6 +879,8 @@ pub async fn admin_page(
                         <th>Username</th>
                         <th>Display Name</th>
                         <th>Role</th>
+                        <th>Max Screenshot Bytes</th>
+                        <th>Max Expiry Seconds</th>
                         <th>Created</th>
                         <th></th>
                     </tr>
@@ -873,6 +901,11 @@ pub async fn admin_page(
             message.style.display = 'block';
         }}
 
+        function optionalNumber(id) {{
+            const value = document.getElementById(id).value.trim();
+            return value ? Number(value) : undefined;
+        }}
+
         form.addEventListener('submit', async (event) => {{
             event.preventDefault();
             const resp = await fetch('/api/admin/users', {{
@@ -883,6 +916,8 @@ pub async fn admin_page(
                     display_name: document.getElementById('display-name').value || undefined,
                     password: document.getElementById('password').value,
                     is_admin: document.getElementById('is-admin').checked,
+                    max_screenshot_size_bytes: optionalNumber('max-screenshot-size-bytes'),
+                    max_expiry_seconds: optionalNumber('max-expiry-seconds'),
                 }}),
             }});
 
@@ -896,6 +931,33 @@ pub async fn admin_page(
                 }} catch (_) {{}}
                 showMessage(text, true);
             }}
+        }});
+
+        document.querySelectorAll('.save-limits-btn').forEach((btn) => {{
+            btn.addEventListener('click', async () => {{
+                const id = btn.dataset.id;
+                const sizeInput = document.querySelector(`input[data-user-id="${{id}}"][data-field="max_screenshot_size_bytes"]`);
+                const expiryInput = document.querySelector(`input[data-user-id="${{id}}"][data-field="max_expiry_seconds"]`);
+                const payload = {{
+                    max_screenshot_size_bytes: sizeInput.value.trim() ? Number(sizeInput.value) : null,
+                    max_expiry_seconds: expiryInput.value.trim() ? Number(expiryInput.value) : null,
+                }};
+                const resp = await fetch(`/api/admin/users/${{id}}`, {{
+                    method: 'PATCH',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify(payload),
+                }});
+                if (resp.ok) {{
+                    showMessage('User limits saved.', false);
+                }} else {{
+                    let text = 'Unable to save user limits.';
+                    try {{
+                        const data = await resp.json();
+                        if (data.error) text = data.error;
+                    }} catch (_) {{}}
+                    showMessage(text, true);
+                }}
+            }});
         }});
 
         document.querySelectorAll('.delete-user-btn').forEach((btn) => {{

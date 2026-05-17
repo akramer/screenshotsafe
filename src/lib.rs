@@ -95,6 +95,10 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/api/admin/users", post(routes::api::admin_create_user))
         .route(
             "/api/admin/users/{id}",
+            patch(routes::api::admin_update_user_limits),
+        )
+        .route(
+            "/api/admin/users/{id}",
             delete(routes::api::admin_delete_user),
         )
         .route("/api/screenshots", post(routes::api::upload_screenshot))
@@ -137,9 +141,8 @@ pub fn build_router(state: SharedState) -> Router {
 
 async fn favicon() -> Response {
     let mut response = FAVICON_PNG.into_response();
-    response.headers_mut().insert(
-        header::CONTENT_TYPE,
-        HeaderValue::from_static("image/png"),
-    );
+    response
+        .headers_mut()
+        .insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
     response
 }

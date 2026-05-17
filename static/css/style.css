@@ -491,6 +491,10 @@ body {
     font-size: 0.85rem;
 }
 
+.admin-limit-input {
+    width: 11rem;
+}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
     .navbar {

@@ -497,6 +497,16 @@ mod tests {
 
     /// Helper: upload a screenshot and return the response body.
     async fn upload_screenshot(app: &axum::Router, cookie: &str) -> serde_json::Value {
+        let resp = upload_screenshot_response(app, cookie, &[]).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        body_json(resp).await
+    }
+
+    async fn upload_screenshot_response(
+        app: &axum::Router,
+        cookie: &str,
+        fields: &[(&str, &str)],
+    ) -> axum::http::Response<Body> {
         let png_data = minimal_png();
         let boundary = "----TestBoundary";
         let body = format!(
@@ -505,9 +515,28 @@ mod tests {
         );
         let mut body_bytes = body.into_bytes();
         body_bytes.extend_from_slice(&png_data);
-        body_bytes.extend_from_slice(
-            format!("\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nTest Screenshot\r\n--{boundary}--\r\n", boundary = boundary).as_bytes()
-        );
+        body_bytes
+            .extend_from_slice(format!("\r\n--{boundary}\r\n", boundary = boundary).as_bytes());
+        let mut all_fields = vec![("title", "Test Screenshot")];
+        all_fields.extend_from_slice(fields);
+        for (idx, (name, value)) in all_fields.iter().enumerate() {
+            body_bytes.extend_from_slice(
+                format!(
+                    "Content-Disposition: form-data; name=\"{}\"\r\n\r\n{}",
+                    name, value
+                )
+                .as_bytes(),
+            );
+            if idx + 1 == all_fields.len() {
+                body_bytes.extend_from_slice(
+                    format!("\r\n--{boundary}--\r\n", boundary = boundary).as_bytes(),
+                );
+            } else {
+                body_bytes.extend_from_slice(
+                    format!("\r\n--{boundary}\r\n", boundary = boundary).as_bytes(),
+                );
+            }
+        }
 
         let req = axum::http::Request::builder()
             .method("POST")
@@ -520,9 +549,7 @@ mod tests {
             .body(Body::from(body_bytes))
             .unwrap();
 
-        let resp = app.clone().oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::CREATED);
-        body_json(resp).await
+        app.clone().oneshot(req).await.unwrap()
     }
 
     #[tokio::test]
@@ -537,6 +564,85 @@ mod tests {
         assert!(body["share_id"].is_string());
         assert!(body["share_url"].as_str().unwrap().contains("/s/"));
         assert!(body["raw_url"].as_str().unwrap().ends_with(".png"));
+    }
+
+    #[tokio::test]
+    async fn test_upload_rejects_per_user_screenshot_size_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+        state
+            .db
+            .update_user_limits(&admin.id, Some(10), None)
+            .unwrap();
+
+        let resp = upload_screenshot_response(&app, &cookie, &[]).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body = body_json(resp).await;
+        assert!(body["error"].as_str().unwrap().contains("maximum size"));
+    }
+
+    #[tokio::test]
+    async fn test_upload_clamps_per_user_expiry_limit_from_creation_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+        state
+            .db
+            .update_user_limits(&admin.id, None, Some(3600))
+            .unwrap();
+
+        let resp = upload_screenshot_response(&app, &cookie, &[("expires_in", "2h")]).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let body = body_json(resp).await;
+        let id: uuid::Uuid = body["id"].as_str().unwrap().parse().unwrap();
+        let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
+        assert_eq!(
+            screenshot.expires_at.unwrap(),
+            screenshot.created_at + Duration::seconds(3600)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_clamps_expiry_limit_from_creation_time() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+        state
+            .db
+            .update_user_limits(&admin.id, None, Some(3600))
+            .unwrap();
+
+        let upload_body = upload_screenshot(&app, &cookie).await;
+        let id = upload_body["id"].as_str().unwrap();
+        let parsed_id: uuid::Uuid = id.parse().unwrap();
+        let created_at = state
+            .db
+            .get_screenshot_by_id(&parsed_id)
+            .unwrap()
+            .unwrap()
+            .created_at;
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/screenshots/{}", id),
+            &cookie,
+            serde_json::json!({ "expires_in": "2h" }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
+        assert_eq!(
+            screenshot.expires_at.unwrap(),
+            created_at + Duration::seconds(3600)
+        );
     }
 
     #[tokio::test]

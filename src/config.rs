@@ -20,6 +20,10 @@ pub struct ServerConfig {
     pub bind: String,
     #[serde(default = "default_public_url")]
     pub public_url: String,
+    #[serde(default = "default_max_screenshot_size_bytes")]
+    pub max_screenshot_size_bytes: u64,
+    #[serde(default)]
+    pub max_expiry_seconds: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -61,12 +65,17 @@ fn default_session_ttl() -> u64 {
 fn default_expiry_seconds() -> Option<u64> {
     Some(30 * 24 * 3600) // 30 days
 }
+fn default_max_screenshot_size_bytes() -> u64 {
+    25 * 1024 * 1024 // 25 MiB
+}
 
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             bind: default_bind(),
             public_url: default_public_url(),
+            max_screenshot_size_bytes: default_max_screenshot_size_bytes(),
+            max_expiry_seconds: None,
         }
     }
 }
@@ -129,7 +138,7 @@ impl Config {
         // Allow env var overrides
         let config = Self::apply_env_overrides(config);
 
-        Ok(config)
+        Ok(Self::normalize(config))
     }
 
     fn apply_env_overrides(mut config: Config) -> Config {
@@ -138,6 +147,14 @@ impl Config {
         }
         if let Ok(val) = std::env::var("SSS_PUBLIC_URL") {
             config.server.public_url = val;
+        }
+        if let Ok(val) = std::env::var("SSS_MAX_SCREENSHOT_SIZE_BYTES") {
+            if let Ok(bytes) = val.parse::<u64>() {
+                config.server.max_screenshot_size_bytes = bytes;
+            }
+        }
+        if let Ok(val) = std::env::var("SSS_MAX_EXPIRY_SECONDS") {
+            config.server.max_expiry_seconds = parse_optional_u64(&val);
         }
         if let Ok(val) = std::env::var("SSS_STORAGE_PATH") {
             config.storage.path = val;
@@ -149,6 +166,26 @@ impl Config {
             config.auth.jwt_secret = Some(val);
         }
         config
+    }
+
+    fn normalize(mut config: Config) -> Config {
+        if config.server.max_screenshot_size_bytes == 0 {
+            config.server.max_screenshot_size_bytes = default_max_screenshot_size_bytes();
+        }
+        config.server.max_expiry_seconds = config
+            .server
+            .max_expiry_seconds
+            .filter(|seconds| *seconds > 0 && i64::try_from(*seconds).is_ok());
+        config
+    }
+}
+
+fn parse_optional_u64(value: &str) -> Option<u64> {
+    let value = value.trim();
+    if value.is_empty() || value == "0" || value.eq_ignore_ascii_case("none") {
+        None
+    } else {
+        value.parse::<u64>().ok()
     }
 }
 

@@ -11,6 +11,8 @@ pub struct User {
     pub password_hash: Option<String>,
     pub display_name: String,
     pub is_admin: bool,
+    pub max_screenshot_size_bytes: Option<u64>,
+    pub max_expiry_seconds: Option<u64>,
     pub created_at: DateTime<Utc>,
 }
 

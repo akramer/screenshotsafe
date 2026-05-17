@@ -50,6 +50,8 @@ pub async fn setup(
             .filter(|name| !name.is_empty())
             .unwrap_or_else(|| username.to_string()),
         is_admin: true,
+        max_screenshot_size_bytes: None,
+        max_expiry_seconds: None,
         created_at: Utc::now(),
     };
 
@@ -141,6 +143,14 @@ pub struct CreateUserRequest {
     pub password: String,
     pub display_name: Option<String>,
     pub is_admin: Option<bool>,
+    pub max_screenshot_size_bytes: Option<u64>,
+    pub max_expiry_seconds: Option<u64>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateUserLimitsRequest {
+    pub max_screenshot_size_bytes: Option<u64>,
+    pub max_expiry_seconds: Option<u64>,
 }
 
 pub async fn admin_list_users(
@@ -156,6 +166,8 @@ pub async fn admin_list_users(
                 "username": user.username,
                 "display_name": user.display_name,
                 "is_admin": user.is_admin,
+                "max_screenshot_size_bytes": user.max_screenshot_size_bytes,
+                "max_expiry_seconds": user.max_expiry_seconds,
                 "created_at": user.created_at,
             })
         })
@@ -191,6 +203,8 @@ pub async fn admin_create_user(
             .filter(|name| !name.is_empty())
             .unwrap_or_else(|| username.to_string()),
         is_admin: req.is_admin.unwrap_or(false),
+        max_screenshot_size_bytes: normalize_user_limit(req.max_screenshot_size_bytes),
+        max_expiry_seconds: normalize_user_limit(req.max_expiry_seconds),
         created_at: Utc::now(),
     };
 
@@ -203,9 +217,34 @@ pub async fn admin_create_user(
             "username": user.username,
             "display_name": user.display_name,
             "is_admin": user.is_admin,
+            "max_screenshot_size_bytes": user.max_screenshot_size_bytes,
+            "max_expiry_seconds": user.max_expiry_seconds,
             "created_at": user.created_at,
         })),
     ))
+}
+
+pub async fn admin_update_user_limits(
+    State(state): State<SharedState>,
+    AdminUser(_admin): AdminUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<UpdateUserLimitsRequest>,
+) -> crate::Result<Json<serde_json::Value>> {
+    let max_screenshot_size_bytes = normalize_user_limit(req.max_screenshot_size_bytes);
+    let max_expiry_seconds = normalize_user_limit(req.max_expiry_seconds);
+    let updated =
+        state
+            .db
+            .update_user_limits(&id, max_screenshot_size_bytes, max_expiry_seconds)?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
+
+    Ok(Json(serde_json::json!({
+        "ok": true,
+        "max_screenshot_size_bytes": max_screenshot_size_bytes,
+        "max_expiry_seconds": max_expiry_seconds,
+    })))
 }
 
 pub async fn admin_delete_user(
@@ -363,6 +402,13 @@ pub async fn upload_screenshot(
     }
 
     let image_data = image_data.ok_or(AppError::BadRequest("No image provided".into()))?;
+    let max_screenshot_size_bytes = effective_max_screenshot_size_bytes(&state, &user);
+    if image_data.len() as u64 > max_screenshot_size_bytes {
+        return Err(AppError::BadRequest(format!(
+            "Screenshot exceeds the maximum size of {}",
+            format_bytes(max_screenshot_size_bytes)
+        )));
+    }
 
     // Validate it's actually an image
     image::load_from_memory(&image_data)
@@ -390,14 +436,15 @@ pub async fn upload_screenshot(
         .join(format!("{}.png", sid));
     std::fs::write(&rendered_path, &image_data)?;
 
+    let created_at = Utc::now();
+
     // Calculate expiration
-    let expires_at = parse_expires_in(expires_in.as_deref()).or_else(|| {
-        state
-            .config
-            .auth
-            .default_expiry_seconds
-            .map(|s| Utc::now() + chrono::Duration::seconds(s as i64))
-    });
+    let expires_at = resolve_expires_at(
+        expires_in.as_deref(),
+        state.config.auth.default_expiry_seconds,
+        effective_max_expiry_seconds(&state, &user),
+        created_at,
+    )?;
 
     let screenshot = Screenshot {
         id,
@@ -413,8 +460,8 @@ pub async fn upload_screenshot(
         image_dpi,
         visibility: "unlisted".to_string(),
         expires_at,
-        created_at: Utc::now(),
-        updated_at: Utc::now(),
+        created_at,
+        updated_at: created_at,
     };
 
     state.db.create_screenshot(&screenshot)?;
@@ -487,24 +534,77 @@ fn png_dpi_from_phys_chunk(data: &[u8]) -> Option<f64> {
     None
 }
 
-fn parse_expires_in(s: Option<&str>) -> Option<chrono::DateTime<Utc>> {
-    let s = s?;
+fn normalize_user_limit(value: Option<u64>) -> Option<u64> {
+    value.filter(|v| *v > 0 && i64::try_from(*v).is_ok())
+}
+
+fn effective_max_screenshot_size_bytes(state: &SharedState, user: &User) -> u64 {
+    user.max_screenshot_size_bytes
+        .unwrap_or(state.config.server.max_screenshot_size_bytes)
+}
+
+fn effective_max_expiry_seconds(state: &SharedState, user: &User) -> Option<u64> {
+    user.max_expiry_seconds
+        .or(state.config.server.max_expiry_seconds)
+}
+
+fn resolve_expires_at(
+    requested: Option<&str>,
+    default_expiry_seconds: Option<u64>,
+    max_expiry_seconds: Option<u64>,
+    base_time: chrono::DateTime<Utc>,
+) -> crate::Result<Option<chrono::DateTime<Utc>>> {
+    let seconds = match requested {
+        Some(value) => parse_expiry_seconds(value)?,
+        None => default_expiry_seconds,
+    };
+    let Some(seconds) = seconds else {
+        return Ok(None);
+    };
+    let capped_seconds = max_expiry_seconds.map_or(seconds, |max| seconds.min(max));
+    if i64::try_from(capped_seconds).is_err() {
+        return Err(AppError::BadRequest("Expiry value is too large".into()));
+    }
+    Ok(Some(
+        base_time + chrono::Duration::seconds(capped_seconds as i64),
+    ))
+}
+
+fn parse_expiry_seconds(s: &str) -> crate::Result<Option<u64>> {
     let s = s.trim();
     if s.is_empty() || s == "0" || s == "never" {
-        return None;
+        return Ok(None);
     }
 
     // Parse formats like "30d", "24h", "1w"
+    if s.len() < 2 {
+        return Err(AppError::BadRequest("Invalid expiry value".into()));
+    }
     let (num_str, unit) = s.split_at(s.len() - 1);
-    let num: i64 = num_str.parse().ok()?;
-    let seconds = match unit {
-        "m" => num * 60,
-        "h" => num * 3600,
-        "d" => num * 86400,
-        "w" => num * 604800,
-        _ => return None,
+    let num: u64 = num_str
+        .parse()
+        .map_err(|_| AppError::BadRequest("Invalid expiry value".into()))?;
+    let multiplier = match unit {
+        "m" => 60,
+        "h" => 3600,
+        "d" => 86400,
+        "w" => 604800,
+        _ => return Err(AppError::BadRequest("Invalid expiry value".into())),
     };
-    Some(Utc::now() + chrono::Duration::seconds(seconds))
+    let seconds = num
+        .checked_mul(multiplier)
+        .filter(|seconds| i64::try_from(*seconds).is_ok())
+        .ok_or_else(|| AppError::BadRequest("Expiry value is too large".into()))?;
+    Ok(Some(seconds))
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const MIB: u64 = 1024 * 1024;
+    if bytes >= MIB && bytes % MIB == 0 {
+        format!("{} MiB", bytes / MIB)
+    } else {
+        format!("{} bytes", bytes)
+    }
 }
 
 // ── List screenshots ──
@@ -611,7 +711,15 @@ pub async fn update_screenshot(
         }
     }
 
-    let expires_at = req.expires_in.as_deref().map(|s| parse_expires_in(Some(s)));
+    let expires_at = match req.expires_in.as_deref() {
+        Some(value) => Some(resolve_expires_at(
+            Some(value),
+            state.config.auth.default_expiry_seconds,
+            effective_max_expiry_seconds(&state, &user),
+            screenshot.created_at,
+        )?),
+        None => None,
+    };
     let source_url = req.source_url.as_ref().map(|url| {
         let trimmed = url.trim();
         if trimmed.is_empty() {
