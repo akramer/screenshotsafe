@@ -90,6 +90,7 @@
             const image = await loadImage(response.draft.dataUrl);
             draft = {
                 image,
+                dataUrl: response.draft.dataUrl,
                 title: response.draft.title || 'Screenshot',
                 sourceUrl: response.draft.sourceUrl || '',
                 imageDpi: inferImageDpi(image, response.draft),
@@ -154,18 +155,18 @@
         return resp.json();
     }
 
-    function renderEditedBlob() {
-        const crop = draft.cropRect || {
-            x: 0,
-            y: 0,
-            width: draft.image.naturalWidth,
-            height: draft.image.naturalHeight,
-        };
+    async function renderEditedBlob() {
+        if (!draft.cropRect && draft.redactions.length === 0) {
+            return dataUrlToBlob(draft.dataUrl);
+        }
+
+        const crop = pixelAlignedCrop(draft.cropRect);
 
         const output = document.createElement('canvas');
-        output.width = Math.max(1, Math.round(crop.width));
-        output.height = Math.max(1, Math.round(crop.height));
+        output.width = crop.width;
+        output.height = crop.height;
         const outputCtx = output.getContext('2d');
+        outputCtx.imageSmoothingEnabled = false;
 
         outputCtx.drawImage(
             draft.image,
@@ -183,13 +184,12 @@
         draft.redactions.forEach((rect) => {
             const intersection = intersectRects(rect, crop);
             if (!intersection) return;
-            const scaleX = output.width / crop.width;
-            const scaleY = output.height / crop.height;
+            const redaction = pixelAlignedRect(intersection, crop);
             outputCtx.fillRect(
-                (intersection.x - crop.x) * scaleX,
-                (intersection.y - crop.y) * scaleY,
-                intersection.width * scaleX,
-                intersection.height * scaleY,
+                redaction.x,
+                redaction.y,
+                redaction.width,
+                redaction.height,
             );
         });
 
@@ -380,6 +380,56 @@
         const bottom = Math.min(a.y + a.height, b.y + b.height);
         if (right <= x || bottom <= y) return null;
         return { x, y, width: right - x, height: bottom - y };
+    }
+
+    function pixelAlignedCrop(rect) {
+        if (!rect) {
+            return {
+                x: 0,
+                y: 0,
+                width: draft.image.naturalWidth,
+                height: draft.image.naturalHeight,
+            };
+        }
+
+        const x = Math.floor(clamp(rect.x, 0, draft.image.naturalWidth));
+        const y = Math.floor(clamp(rect.y, 0, draft.image.naturalHeight));
+        const right = Math.ceil(clamp(rect.x + rect.width, 0, draft.image.naturalWidth));
+        const bottom = Math.ceil(clamp(rect.y + rect.height, 0, draft.image.naturalHeight));
+        return {
+            x,
+            y,
+            width: Math.max(1, right - x),
+            height: Math.max(1, bottom - y),
+        };
+    }
+
+    function pixelAlignedRect(rect, origin) {
+        const x = Math.floor(rect.x - origin.x);
+        const y = Math.floor(rect.y - origin.y);
+        const right = Math.ceil(rect.x + rect.width - origin.x);
+        const bottom = Math.ceil(rect.y + rect.height - origin.y);
+        return {
+            x,
+            y,
+            width: Math.max(1, right - x),
+            height: Math.max(1, bottom - y),
+        };
+    }
+
+    function dataUrlToBlob(dataUrl) {
+        const match = /^data:([^;,]+)?(;base64)?,(.*)$/.exec(dataUrl);
+        if (!match) {
+            throw new Error('Could not read captured screenshot data.');
+        }
+
+        const mimeType = match[1] || 'application/octet-stream';
+        const rawData = match[2] ? atob(match[3]) : decodeURIComponent(match[3]);
+        const bytes = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; i += 1) {
+            bytes[i] = rawData.charCodeAt(i);
+        }
+        return new Blob([bytes], { type: mimeType });
     }
 
     function pushHistory() {
