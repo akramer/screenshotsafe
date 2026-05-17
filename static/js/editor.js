@@ -582,9 +582,14 @@
         document.getElementById('stroke-width').addEventListener('input', function(e) {
             const width = parseInt(e.target.value);
             const activeObjects = getEditableSelection();
+            const activeObject = canvas.getActiveObject();
             let modified = false;
 
             clearHandles();
+            if (activeObject && activeObject.type === 'activeSelection') {
+                canvas.discardActiveObject();
+            }
+
             selectedAnnotationObjects = activeObjects.map(function(obj) {
                 const updated = applyStrokeWidthToObject(obj, width);
                 if (updated) modified = true;
