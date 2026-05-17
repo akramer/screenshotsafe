@@ -447,7 +447,8 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
                 </button>
                 <button class="tool-btn" data-tool="text" title="Text" aria-label="Text">
                     <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M5 6h14M12 6v12M9 18h6" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M5 5h14M12 5v14M9 19h6" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M7 8h3M14 8h3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity=".6"/>
                     </svg>
                 </button>
                 <button class="tool-btn" data-tool="crop" title="Crop" aria-label="Crop">
