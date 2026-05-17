@@ -43,11 +43,6 @@ pub async fn dashboard(
                 let share_url = format!("{}/s/{}", base_url, s.share_id);
                 let raw_url = format!("{}/s/{}.png", base_url, s.share_id);
                 let expired_class = if s.is_expired() { " expired" } else { "" };
-                let source_link = s
-                    .source_url
-                    .as_deref()
-                    .and_then(source_url_link)
-                    .unwrap_or_default();
                 let expires_info = s.expires_at
                     .map(|e| format!("<span class=\"meta-item\">Expires: {}</span>", e.format("%b %d, %Y")))
                     .unwrap_or_default();
@@ -62,7 +57,6 @@ pub async fn dashboard(
                                 <span class="meta-item">{}</span>
                                 {}
                             </div>
-                            {}
                             <div class="card-actions">
                                 <a href="{}" class="btn btn-sm" target="_blank">Share</a>
                                 <button class="btn btn-sm btn-outline copy-btn" data-url="{}">Copy Link</button>
@@ -77,7 +71,6 @@ pub async fn dashboard(
                     html_escape(title),
                     s.created_at.format("%b %d, %Y %H:%M"),
                     expires_info,
-                    source_link,
                     share_url,
                     share_url,
                     s.id,
@@ -393,7 +386,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Edit — {{TITLE}}</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/editor.css?v=autosave-1">
+    <link rel="stylesheet" href="/static/css/editor.css?v=source-url-1">
 </head>
 <body>
     <nav class="navbar">
@@ -507,7 +500,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
         window.ANNOTATIONS = {{ANNOTATIONS}};
         window.CROP_RECT = {{CROP}};
     </script>
-    <script src="/static/js/editor.js?v=autosave-1"></script>
+    <script src="/static/js/editor.js?v=source-url-1"></script>
 </body>
 </html>"##;
 
@@ -722,15 +715,4 @@ fn html_escape(s: &str) -> String {
 fn is_safe_external_url(url: &str) -> bool {
     let url = url.trim();
     !url.is_empty() && (url.starts_with("http://") || url.starts_with("https://"))
-}
-
-fn source_url_link(url: &str) -> Option<String> {
-    if !is_safe_external_url(url) {
-        return None;
-    }
-
-    Some(format!(
-        r#"<a href="{}" class="source-link" target="_blank" rel="noopener noreferrer">Source page</a>"#,
-        html_escape(url.trim())
-    ))
 }
