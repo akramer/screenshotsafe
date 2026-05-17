@@ -58,6 +58,10 @@
     font-weight: 600;
 }
 
+.save-btn-compat {
+    display: none !important;
+}
+
 .save-status {
     min-width: 4.5rem;
     font-size: 0.8rem;
