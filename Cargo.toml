@@ -27,6 +27,7 @@ argon2 = "0.5"
 jsonwebtoken = "9"
 sha2 = "0.10"
 hex = "0.4"
+urlencoding = "2"
 
 # Image processing
 image = "0.25"
@@ -48,7 +49,7 @@ chrono = { version = "0.4", features = ["serde"] }
 thiserror = "2"
 anyhow = "1"
 mime_guess = "2"
+reqwest = { version = "0.12", features = ["json"] }
 
 [dev-dependencies]
-reqwest = { version = "0.12", features = ["multipart", "json"] }
 tempfile = "3"

@@ -1,15 +1,19 @@
 use axum::{
     extract::{Multipart, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
-    response::IntoResponse,
+    response::{IntoResponse, Redirect, Response},
     Json,
 };
 use chrono::Utc;
+use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::auth::middleware::{AdminUser, ApiOrSessionUser, AuthUser};
-use crate::models::{Annotation, ApiToken, CropRect, Screenshot, User};
+use crate::auth::middleware::{AdminUser, ApiOrSessionUser, AuthUser, MaybeAuthUser};
+use crate::config::OAuthAccountMode;
+use crate::models::{
+    AccountStatus, Annotation, ApiToken, CropRect, OAuthIdentity, Screenshot, User,
+};
 use crate::{auth, image_processing, share_id, AppError, SharedState};
 
 // ── Setup (first-run) ──
@@ -50,6 +54,7 @@ pub async fn setup(
             .filter(|name| !name.is_empty())
             .unwrap_or_else(|| username.to_string()),
         is_admin: true,
+        account_status: AccountStatus::Enabled,
         max_screenshot_size_bytes: None,
         max_expiry_seconds: None,
         created_at: Utc::now(),
@@ -101,6 +106,9 @@ pub async fn login(
         .db
         .get_user_by_username(&req.username)?
         .ok_or(AppError::Unauthorized)?;
+    if !user.account_status.is_enabled() {
+        return Err(AppError::Forbidden);
+    }
 
     let hash = user
         .password_hash
@@ -135,6 +143,470 @@ pub async fn login(
     ))
 }
 
+// ── OAuth login/link ──
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OAuthStateClaims {
+    sub: Option<String>,
+    nonce: String,
+    exp: usize,
+}
+
+#[derive(Deserialize)]
+pub struct OAuthStartQuery {
+    link: Option<bool>,
+}
+
+#[derive(Deserialize)]
+pub struct OAuthCallbackQuery {
+    code: Option<String>,
+    state: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct OAuthTokenResponse {
+    access_token: String,
+}
+
+#[derive(Deserialize)]
+struct OAuthUserInfo {
+    sub: Option<String>,
+    id: Option<serde_json::Value>,
+    email: Option<String>,
+    email_verified: Option<bool>,
+    name: Option<String>,
+    preferred_username: Option<String>,
+    login: Option<String>,
+}
+
+pub async fn oauth_start(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    user: MaybeAuthUser,
+    Query(params): Query<OAuthStartQuery>,
+) -> crate::Result<impl IntoResponse> {
+    let oauth = &state.config.auth.oauth;
+    validate_oauth_config(oauth)?;
+
+    let link_user_id = if params.link.unwrap_or(false) {
+        Some(
+            user.0
+                .as_ref()
+                .ok_or(AppError::Unauthorized)?
+                .id
+                .to_string(),
+        )
+    } else {
+        None
+    };
+
+    let oauth_state = OAuthStateClaims {
+        sub: link_user_id,
+        nonce: Uuid::new_v4().to_string(),
+        exp: chrono::Utc::now().timestamp() as usize + 10 * 60,
+    };
+    let state_token = encode(
+        &Header::default(),
+        &oauth_state,
+        &EncodingKey::from_secret(state.jwt_secret.as_bytes()),
+    )
+    .map_err(|e| AppError::Internal(format!("OAuth state failed: {}", e)))?;
+
+    let redirect_uri = oauth_redirect_uri(&state, &headers);
+    let mut authorize_url = format!(
+        "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}",
+        oauth.authorize_url,
+        urlencoding::encode(&oauth.client_id),
+        urlencoding::encode(&redirect_uri),
+        urlencoding::encode(&oauth.scope),
+        urlencoding::encode(&state_token),
+    );
+    if oauth
+        .scope
+        .split_whitespace()
+        .any(|scope| scope == "openid")
+    {
+        authorize_url.push_str("&nonce=");
+        authorize_url.push_str(&urlencoding::encode(&oauth_state.nonce));
+    }
+
+    let cookie = format!(
+        "oauth_state={}; HttpOnly; SameSite=Lax; Path=/api/auth/oauth; Max-Age=600",
+        state_token
+    );
+
+    Ok((
+        [(header::SET_COOKIE, cookie)],
+        Redirect::temporary(&authorize_url),
+    ))
+}
+
+pub async fn oauth_callback(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    Query(params): Query<OAuthCallbackQuery>,
+) -> crate::Result<Response> {
+    let oauth = &state.config.auth.oauth;
+    validate_oauth_config(oauth)?;
+
+    if params.error.is_some() {
+        return Ok(Redirect::to("/login?oauth=error").into_response());
+    }
+    let code = params
+        .code
+        .as_deref()
+        .ok_or_else(|| AppError::BadRequest("Missing OAuth code".into()))?;
+    let state_token = params
+        .state
+        .as_deref()
+        .ok_or_else(|| AppError::BadRequest("Missing OAuth state".into()))?;
+    if !oauth_state_cookie_matches(&headers, state_token) {
+        return Err(AppError::BadRequest("Invalid OAuth state".into()));
+    }
+
+    let state_claims = decode::<OAuthStateClaims>(
+        state_token,
+        &DecodingKey::from_secret(state.jwt_secret.as_bytes()),
+        &Validation::default(),
+    )
+    .map_err(|_| AppError::BadRequest("Invalid OAuth state".into()))?
+    .claims;
+
+    let redirect_uri = oauth_redirect_uri(&state, &headers);
+    let client = reqwest::Client::new();
+    let token_resp = client
+        .post(&oauth.token_url)
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", code),
+            ("redirect_uri", &redirect_uri),
+            ("client_id", &oauth.client_id),
+            ("client_secret", &oauth.client_secret),
+        ])
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("OAuth token request failed: {}", e)))?;
+    if !token_resp.status().is_success() {
+        return Ok(Redirect::to("/login?oauth=error").into_response());
+    }
+    let token: OAuthTokenResponse = token_resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("OAuth token response failed: {}", e)))?;
+
+    let userinfo_resp = client
+        .get(&oauth.userinfo_url)
+        .bearer_auth(&token.access_token)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("OAuth userinfo request failed: {}", e)))?;
+    if !userinfo_resp.status().is_success() {
+        return Ok(Redirect::to("/login?oauth=error").into_response());
+    }
+    let userinfo: OAuthUserInfo = userinfo_resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("OAuth userinfo response failed: {}", e)))?;
+    let subject_value = userinfo
+        .sub
+        .clone()
+        .or_else(|| userinfo.id.as_ref().and_then(json_value_to_string))
+        .ok_or_else(|| AppError::BadRequest("OAuth userinfo is missing a subject".into()))?;
+    let subject = subject_value.as_str();
+    let email = userinfo
+        .email
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if !oauth_email_allowed(oauth, email, userinfo.email_verified) {
+        return Ok(Redirect::to("/login?oauth=denied").into_response());
+    }
+    let display_name = oauth_display_name(&userinfo, email);
+
+    if let Some(link_user_id) = state_claims.sub {
+        let user_id = link_user_id
+            .parse::<Uuid>()
+            .map_err(|_| AppError::BadRequest("Invalid OAuth state".into()))?;
+        let user = state
+            .db
+            .get_user_by_id(&user_id)?
+            .ok_or(AppError::Unauthorized)?;
+        if !user.account_status.is_enabled() {
+            return Err(AppError::Forbidden);
+        }
+        if let Some((linked_user, _)) = state
+            .db
+            .get_user_by_oauth_identity(&oauth.provider, subject)?
+        {
+            if linked_user.id != user.id {
+                return Ok(Redirect::to("/settings?oauth=already_linked").into_response());
+            }
+        } else {
+            let identity = OAuthIdentity {
+                id: Uuid::new_v4(),
+                user_id: user.id,
+                provider: oauth.provider.clone(),
+                subject: subject.to_string(),
+                email: email.map(str::to_string),
+                display_name: display_name.clone(),
+                created_at: Utc::now(),
+                last_login_at: Some(Utc::now()),
+            };
+            state.db.create_oauth_identity(&identity)?;
+        }
+        return Ok(with_session_cookie(
+            Redirect::to("/settings?oauth=linked").into_response(),
+            &state,
+            &user.id,
+        ));
+    }
+
+    if let Some((user, _identity)) = state
+        .db
+        .get_user_by_oauth_identity(&oauth.provider, subject)?
+    {
+        state.db.update_oauth_identity_login(
+            &oauth.provider,
+            subject,
+            email,
+            display_name.as_deref(),
+        )?;
+        if !user.account_status.is_enabled() {
+            return Ok(Redirect::to("/login?oauth=pending").into_response());
+        }
+        return Ok(with_session_cookie(
+            Redirect::to("/").into_response(),
+            &state,
+            &user.id,
+        ));
+    }
+
+    match oauth.account_mode {
+        OAuthAccountMode::LinkOnly => Ok(Redirect::to("/login?oauth=not_linked").into_response()),
+        OAuthAccountMode::Pending | OAuthAccountMode::AutoEnabled => {
+            let account_status = if oauth.account_mode == OAuthAccountMode::AutoEnabled {
+                AccountStatus::Enabled
+            } else {
+                AccountStatus::Pending
+            };
+            let username = unique_oauth_username(&state, &oauth.provider, &userinfo, email)?;
+            let user = User {
+                id: Uuid::new_v4(),
+                username,
+                password_hash: None,
+                display_name: display_name.unwrap_or_else(|| "OAuth User".to_string()),
+                is_admin: false,
+                account_status,
+                max_screenshot_size_bytes: None,
+                max_expiry_seconds: None,
+                created_at: Utc::now(),
+            };
+            let identity = OAuthIdentity {
+                id: Uuid::new_v4(),
+                user_id: user.id,
+                provider: oauth.provider.clone(),
+                subject: subject.to_string(),
+                email: email.map(str::to_string),
+                display_name: Some(user.display_name.clone()),
+                created_at: Utc::now(),
+                last_login_at: Some(Utc::now()),
+            };
+            state.db.create_user_with_oauth_identity(&user, &identity)?;
+
+            if account_status.is_enabled() {
+                Ok(with_session_cookie(
+                    Redirect::to("/").into_response(),
+                    &state,
+                    &user.id,
+                ))
+            } else {
+                Ok(Redirect::to("/login?oauth=pending").into_response())
+            }
+        }
+    }
+}
+
+fn validate_oauth_config(oauth: &crate::config::OAuthConfig) -> crate::Result<()> {
+    if !oauth.enabled {
+        return Err(AppError::NotFound);
+    }
+    if oauth.provider.is_empty()
+        || oauth.client_id.is_empty()
+        || oauth.client_secret.is_empty()
+        || oauth.authorize_url.is_empty()
+        || oauth.token_url.is_empty()
+        || oauth.userinfo_url.is_empty()
+    {
+        return Err(AppError::Internal("OAuth is not fully configured".into()));
+    }
+    Ok(())
+}
+
+fn oauth_redirect_uri(state: &SharedState, headers: &HeaderMap) -> String {
+    let oauth = &state.config.auth.oauth;
+    if !oauth.redirect_url.is_empty() {
+        oauth.redirect_url.clone()
+    } else {
+        format!(
+            "{}/api/auth/oauth/callback",
+            crate::routes::get_base_url(&state.config.server.public_url, headers)
+        )
+    }
+}
+
+fn oauth_state_cookie_matches(headers: &HeaderMap, state_token: &str) -> bool {
+    headers
+        .get(header::COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .map(|cookies| {
+            cookies.split(';').any(|cookie| {
+                cookie
+                    .trim()
+                    .strip_prefix("oauth_state=")
+                    .map(|value| value == state_token)
+                    .unwrap_or(false)
+            })
+        })
+        .unwrap_or(false)
+}
+
+fn oauth_email_allowed(
+    oauth: &crate::config::OAuthConfig,
+    email: Option<&str>,
+    email_verified: Option<bool>,
+) -> bool {
+    if oauth.allowed_email_domains.is_empty() {
+        return true;
+    }
+    if email_verified == Some(false) {
+        return false;
+    }
+    let Some(email) = email else {
+        return false;
+    };
+    let Some((_, domain)) = email.rsplit_once('@') else {
+        return false;
+    };
+    oauth
+        .allowed_email_domains
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(domain))
+}
+
+fn oauth_display_name(userinfo: &OAuthUserInfo, email: Option<&str>) -> Option<String> {
+    userinfo
+        .name
+        .as_ref()
+        .or(userinfo.preferred_username.as_ref())
+        .or(userinfo.login.as_ref())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| email.map(|email| email.to_string()))
+}
+
+fn json_value_to_string(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::String(s) if !s.trim().is_empty() => Some(s.clone()),
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
+fn unique_oauth_username(
+    state: &SharedState,
+    provider: &str,
+    userinfo: &OAuthUserInfo,
+    email: Option<&str>,
+) -> crate::Result<String> {
+    let base = email.map(sanitize_email_username).unwrap_or_else(|| {
+        let fallback = userinfo
+            .preferred_username
+            .as_deref()
+            .or(userinfo.login.as_deref())
+            .or(userinfo.name.as_deref())
+            .unwrap_or(provider);
+        sanitize_username(fallback)
+    });
+    for suffix in 0..1000 {
+        let candidate = if suffix == 0 {
+            base.clone()
+        } else {
+            format!("{}{}", base, suffix + 1)
+        };
+        if state.db.get_user_by_username(&candidate)?.is_none() {
+            return Ok(candidate);
+        }
+    }
+    Err(AppError::Internal(
+        "Unable to generate a unique OAuth username".into(),
+    ))
+}
+
+fn sanitize_email_username(value: &str) -> String {
+    let email = value.trim().to_ascii_lowercase();
+    if email.contains('@') && !email.starts_with('@') && !email.ends_with('@') {
+        email
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || matches!(c, '@' | '-' | '_' | '.') {
+                    c
+                } else {
+                    '-'
+                }
+            })
+            .filter(|c| !c.is_ascii_control())
+            .collect()
+    } else {
+        sanitize_username(value)
+    }
+}
+
+fn sanitize_username(value: &str) -> String {
+    let username: String = value
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .filter(|c| !c.is_ascii_control())
+        .collect();
+    let username = username.trim_matches('-').to_string();
+    if username.is_empty() {
+        "oauth-user".to_string()
+    } else {
+        username
+    }
+}
+
+fn with_session_cookie(mut response: Response, state: &SharedState, user_id: &Uuid) -> Response {
+    let token = auth::middleware::create_session_token(
+        user_id,
+        &state.jwt_secret,
+        state.config.auth.session_ttl_seconds,
+    );
+    let cookie = format!(
+        "session={}; HttpOnly; SameSite=Lax; Path=/; Max-Age={}",
+        token, state.config.auth.session_ttl_seconds
+    );
+    response.headers_mut().append(
+        header::SET_COOKIE,
+        cookie.parse().expect("session cookie should be valid"),
+    );
+    response.headers_mut().append(
+        header::SET_COOKIE,
+        "oauth_state=; HttpOnly; SameSite=Lax; Path=/api/auth/oauth; Max-Age=0"
+            .parse()
+            .expect("OAuth state clearing cookie should be valid"),
+    );
+    response
+}
+
 // ── Admin users ──
 
 #[derive(Deserialize)]
@@ -152,6 +624,7 @@ pub struct UpdateUserRequest {
     pub max_screenshot_size_bytes: Option<Option<u64>>,
     pub max_expiry_seconds: Option<Option<u64>>,
     pub password: Option<String>,
+    pub account_status: Option<AccountStatus>,
 }
 
 pub async fn admin_list_users(
@@ -167,6 +640,7 @@ pub async fn admin_list_users(
                 "username": user.username,
                 "display_name": user.display_name,
                 "is_admin": user.is_admin,
+                "account_status": user.account_status,
                 "max_screenshot_size_bytes": user.max_screenshot_size_bytes,
                 "max_expiry_seconds": user.max_expiry_seconds,
                 "created_at": user.created_at,
@@ -204,6 +678,7 @@ pub async fn admin_create_user(
             .filter(|name| !name.is_empty())
             .unwrap_or_else(|| username.to_string()),
         is_admin: req.is_admin.unwrap_or(false),
+        account_status: AccountStatus::Enabled,
         max_screenshot_size_bytes: normalize_user_limit(req.max_screenshot_size_bytes),
         max_expiry_seconds: normalize_user_limit(req.max_expiry_seconds),
         created_at: Utc::now(),
@@ -218,6 +693,7 @@ pub async fn admin_create_user(
             "username": user.username,
             "display_name": user.display_name,
             "is_admin": user.is_admin,
+            "account_status": user.account_status,
             "max_screenshot_size_bytes": user.max_screenshot_size_bytes,
             "max_expiry_seconds": user.max_expiry_seconds,
             "created_at": user.created_at,
@@ -227,7 +703,7 @@ pub async fn admin_create_user(
 
 pub async fn admin_update_user_limits(
     State(state): State<SharedState>,
-    AdminUser(_admin): AdminUser,
+    AdminUser(admin): AdminUser,
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateUserRequest>,
 ) -> crate::Result<Json<serde_json::Value>> {
@@ -258,9 +734,23 @@ pub async fn admin_update_user_limits(
             .map_err(|e| AppError::Internal(format!("Password hashing failed: {}", e)))?;
         state.db.update_user_password_hash(&id, &password_hash)?;
     }
+    if let Some(account_status) = req.account_status {
+        if id == admin.id && !account_status.is_enabled() {
+            return Err(AppError::BadRequest(
+                "You cannot disable your own user account".into(),
+            ));
+        }
+        if user.is_admin && !account_status.is_enabled() && state.db.admin_count()? <= 1 {
+            return Err(AppError::BadRequest(
+                "Cannot disable the last admin user".into(),
+            ));
+        }
+        state.db.update_user_account_status(&id, account_status)?;
+    }
 
     Ok(Json(serde_json::json!({
         "ok": true,
+        "account_status": req.account_status.unwrap_or(user.account_status),
         "max_screenshot_size_bytes": max_screenshot_size_bytes,
         "max_expiry_seconds": max_expiry_seconds,
     })))
@@ -278,7 +768,7 @@ pub async fn admin_delete_user(
     }
 
     let user = state.db.get_user_by_id(&id)?.ok_or(AppError::NotFound)?;
-    if user.is_admin && state.db.admin_count()? <= 1 {
+    if user.is_admin && user.account_status.is_enabled() && state.db.admin_count()? <= 1 {
         return Err(AppError::BadRequest(
             "Cannot delete the last admin user".into(),
         ));
@@ -623,6 +1113,25 @@ fn format_bytes(bytes: u64) -> String {
         format!("{} MiB", bytes / MIB)
     } else {
         format!("{} bytes", bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{sanitize_email_username, sanitize_username};
+
+    #[test]
+    fn oauth_email_username_keeps_full_email_address() {
+        assert_eq!(
+            sanitize_email_username("Alice.Example+tag@Example.COM"),
+            "alice.example-tag@example.com"
+        );
+    }
+
+    #[test]
+    fn oauth_non_email_username_uses_regular_sanitizer() {
+        assert_eq!(sanitize_email_username("Not An Email"), "not-an-email");
+        assert_eq!(sanitize_username("Display Name"), "display-name");
     }
 }
 

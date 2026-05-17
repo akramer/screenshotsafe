@@ -45,6 +45,42 @@ pub struct AuthConfig {
     #[serde(default = "default_expiry_seconds")]
     pub default_expiry_seconds: Option<u64>,
     pub jwt_secret: Option<String>,
+    #[serde(default)]
+    pub oauth: OAuthConfig,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct OAuthConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_oauth_provider")]
+    pub provider: String,
+    #[serde(default)]
+    pub client_id: String,
+    #[serde(default)]
+    pub client_secret: String,
+    #[serde(default)]
+    pub authorize_url: String,
+    #[serde(default)]
+    pub token_url: String,
+    #[serde(default)]
+    pub userinfo_url: String,
+    #[serde(default = "default_oauth_scope")]
+    pub scope: String,
+    #[serde(default)]
+    pub redirect_url: String,
+    #[serde(default)]
+    pub allowed_email_domains: Vec<String>,
+    #[serde(default)]
+    pub account_mode: OAuthAccountMode,
+}
+
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuthAccountMode {
+    LinkOnly,
+    Pending,
+    AutoEnabled,
 }
 
 fn default_bind() -> String {
@@ -67,6 +103,12 @@ fn default_expiry_seconds() -> Option<u64> {
 }
 fn default_max_screenshot_size_bytes() -> u64 {
     25 * 1024 * 1024 // 25 MiB
+}
+fn default_oauth_provider() -> String {
+    "oauth".to_string()
+}
+fn default_oauth_scope() -> String {
+    "openid email profile".to_string()
 }
 
 impl Default for ServerConfig {
@@ -102,7 +144,32 @@ impl Default for AuthConfig {
             session_ttl_seconds: default_session_ttl(),
             default_expiry_seconds: default_expiry_seconds(),
             jwt_secret: None,
+            oauth: OAuthConfig::default(),
         }
+    }
+}
+
+impl Default for OAuthConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: default_oauth_provider(),
+            client_id: String::new(),
+            client_secret: String::new(),
+            authorize_url: String::new(),
+            token_url: String::new(),
+            userinfo_url: String::new(),
+            scope: default_oauth_scope(),
+            redirect_url: String::new(),
+            allowed_email_domains: Vec::new(),
+            account_mode: OAuthAccountMode::LinkOnly,
+        }
+    }
+}
+
+impl Default for OAuthAccountMode {
+    fn default() -> Self {
+        Self::LinkOnly
     }
 }
 
@@ -165,6 +232,43 @@ impl Config {
         if let Ok(val) = std::env::var("SSS_JWT_SECRET") {
             config.auth.jwt_secret = Some(val);
         }
+        if let Ok(val) = std::env::var("SSS_OAUTH_ENABLED") {
+            config.auth.oauth.enabled = parse_bool(&val);
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_PROVIDER") {
+            config.auth.oauth.provider = val;
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_CLIENT_ID") {
+            config.auth.oauth.client_id = val;
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_CLIENT_SECRET") {
+            config.auth.oauth.client_secret = val;
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_AUTHORIZE_URL") {
+            config.auth.oauth.authorize_url = val;
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_TOKEN_URL") {
+            config.auth.oauth.token_url = val;
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_USERINFO_URL") {
+            config.auth.oauth.userinfo_url = val;
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_SCOPE") {
+            config.auth.oauth.scope = val;
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_REDIRECT_URL") {
+            config.auth.oauth.redirect_url = val;
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_ALLOWED_EMAIL_DOMAINS") {
+            config.auth.oauth.allowed_email_domains = val
+                .split(',')
+                .map(|domain| domain.trim().to_ascii_lowercase())
+                .filter(|domain| !domain.is_empty())
+                .collect();
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_ACCOUNT_MODE") {
+            config.auth.oauth.account_mode = parse_oauth_account_mode(&val);
+        }
         config
     }
 
@@ -176,6 +280,15 @@ impl Config {
             .server
             .max_expiry_seconds
             .filter(|seconds| *seconds > 0 && i64::try_from(*seconds).is_ok());
+        config.auth.oauth.provider = config.auth.oauth.provider.trim().to_string();
+        config.auth.oauth.allowed_email_domains = config
+            .auth
+            .oauth
+            .allowed_email_domains
+            .into_iter()
+            .map(|domain| domain.trim().trim_start_matches('@').to_ascii_lowercase())
+            .filter(|domain| !domain.is_empty())
+            .collect();
         config
     }
 }
@@ -186,6 +299,21 @@ fn parse_optional_u64(value: &str) -> Option<u64> {
         None
     } else {
         value.parse::<u64>().ok()
+    }
+}
+
+fn parse_bool(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+fn parse_oauth_account_mode(value: &str) -> OAuthAccountMode {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "pending" => OAuthAccountMode::Pending,
+        "auto_enabled" | "auto-enabled" | "auto" => OAuthAccountMode::AutoEnabled,
+        _ => OAuthAccountMode::LinkOnly,
     }
 }
 

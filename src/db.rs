@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::sync::Mutex;
 
-use crate::models::{ApiToken, Screenshot, User};
+use crate::models::{AccountStatus, ApiToken, OAuthIdentity, Screenshot, User};
 use crate::Result;
 
 /// Parse a datetime string that may be RFC3339 or SQLite's `datetime()` format.
@@ -71,9 +71,22 @@ impl Database {
                 password_hash TEXT,
                 display_name TEXT NOT NULL,
                 is_admin INTEGER NOT NULL DEFAULT 0,
+                account_status TEXT NOT NULL DEFAULT 'enabled',
                 max_screenshot_size_bytes INTEGER,
                 max_expiry_seconds INTEGER,
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS oauth_identities (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                provider TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                email TEXT,
+                display_name TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                last_login_at TEXT,
+                UNIQUE(provider, subject)
             );
 
             CREATE TABLE IF NOT EXISTS api_tokens (
@@ -107,9 +120,16 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_screenshots_user_id ON screenshots(user_id);
             CREATE INDEX IF NOT EXISTS idx_screenshots_expires_at ON screenshots(expires_at);
             CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON api_tokens(token_hash);
+            CREATE INDEX IF NOT EXISTS idx_oauth_identities_user_id ON oauth_identities(user_id);
             ",
         )?;
         add_column_if_missing(&conn, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")?;
+        add_column_if_missing(
+            &conn,
+            "users",
+            "account_status",
+            "TEXT NOT NULL DEFAULT 'enabled'",
+        )?;
         add_column_if_missing(&conn, "users", "max_screenshot_size_bytes", "INTEGER")?;
         add_column_if_missing(&conn, "users", "max_expiry_seconds", "INTEGER")?;
         conn.execute(
@@ -137,24 +157,26 @@ impl Database {
 
     pub fn admin_count(&self) -> Result<usize> {
         let conn = self.conn.lock().unwrap();
-        let count: usize =
-            conn.query_row("SELECT COUNT(*) FROM users WHERE is_admin = 1", [], |row| {
-                row.get(0)
-            })?;
+        let count: usize = conn.query_row(
+            "SELECT COUNT(*) FROM users WHERE is_admin = 1 AND account_status = 'enabled'",
+            [],
+            |row| row.get(0),
+        )?;
         Ok(count)
     }
 
     pub fn create_user(&self, user: &User) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO users (id, username, password_hash, display_name, is_admin, max_screenshot_size_bytes, max_expiry_seconds, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO users (id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 user.id.to_string(),
                 user.username,
                 user.password_hash,
                 user.display_name,
                 user.is_admin,
+                user.account_status.as_str(),
                 user.max_screenshot_size_bytes.map(|v| v as i64),
                 user.max_expiry_seconds.map(|v| v as i64),
                 user.created_at.to_rfc3339(),
@@ -166,7 +188,7 @@ impl Database {
     pub fn list_users(&self) -> Result<Vec<User>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, username, password_hash, display_name, is_admin, max_screenshot_size_bytes, max_expiry_seconds, created_at
+            "SELECT id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at
              FROM users ORDER BY created_at ASC",
         )?;
         let rows = stmt.query_map([], Self::user_from_row)?;
@@ -181,7 +203,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT id, username, password_hash, display_name, is_admin, max_screenshot_size_bytes, max_expiry_seconds, created_at FROM users WHERE username = ?1",
+                "SELECT id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at FROM users WHERE username = ?1",
                 params![username],
                 Self::user_from_row,
             )
@@ -193,7 +215,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT id, username, password_hash, display_name, is_admin, max_screenshot_size_bytes, max_expiry_seconds, created_at FROM users WHERE id = ?1",
+                "SELECT id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at FROM users WHERE id = ?1",
                 params![id.to_string()],
                 Self::user_from_row,
             )
@@ -228,6 +250,139 @@ impl Database {
         Ok(rows > 0)
     }
 
+    pub fn update_user_account_status(
+        &self,
+        id: &uuid::Uuid,
+        account_status: AccountStatus,
+    ) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let rows = conn.execute(
+            "UPDATE users SET account_status = ?1 WHERE id = ?2",
+            params![account_status.as_str(), id.to_string()],
+        )?;
+        Ok(rows > 0)
+    }
+
+    pub fn get_user_by_oauth_identity(
+        &self,
+        provider: &str,
+        subject: &str,
+    ) -> Result<Option<(User, OAuthIdentity)>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn
+            .query_row(
+                "SELECT u.id, u.username, u.password_hash, u.display_name, u.is_admin, u.account_status, u.max_screenshot_size_bytes, u.max_expiry_seconds, u.created_at,
+                        oi.id, oi.user_id, oi.provider, oi.subject, oi.email, oi.display_name, oi.created_at, oi.last_login_at
+                 FROM oauth_identities oi JOIN users u ON oi.user_id = u.id
+                 WHERE oi.provider = ?1 AND oi.subject = ?2",
+                params![provider, subject],
+                |row| Ok((Self::user_from_oauth_join_row(row)?, Self::oauth_identity_from_join_row(row)?)),
+            )
+            .optional()?;
+        Ok(result)
+    }
+
+    pub fn list_oauth_identities_for_user(
+        &self,
+        user_id: &uuid::Uuid,
+    ) -> Result<Vec<OAuthIdentity>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, user_id, provider, subject, email, display_name, created_at, last_login_at
+             FROM oauth_identities WHERE user_id = ?1 ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map(params![user_id.to_string()], Self::oauth_identity_from_row)?;
+        let mut identities = Vec::new();
+        for row in rows {
+            identities.push(row?);
+        }
+        Ok(identities)
+    }
+
+    pub fn create_oauth_identity(&self, identity: &OAuthIdentity) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO oauth_identities (id, user_id, provider, subject, email, display_name, created_at, last_login_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                identity.id.to_string(),
+                identity.user_id.to_string(),
+                identity.provider,
+                identity.subject,
+                identity.email,
+                identity.display_name,
+                identity.created_at.to_rfc3339(),
+                identity.last_login_at.map(|t| t.to_rfc3339()),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn create_user_with_oauth_identity(
+        &self,
+        user: &User,
+        identity: &OAuthIdentity,
+    ) -> Result<()> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT INTO users (id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                user.id.to_string(),
+                user.username,
+                user.password_hash,
+                user.display_name,
+                user.is_admin,
+                user.account_status.as_str(),
+                user.max_screenshot_size_bytes.map(|v| v as i64),
+                user.max_expiry_seconds.map(|v| v as i64),
+                user.created_at.to_rfc3339(),
+            ],
+        )?;
+        tx.execute(
+            "INSERT INTO oauth_identities (id, user_id, provider, subject, email, display_name, created_at, last_login_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                identity.id.to_string(),
+                identity.user_id.to_string(),
+                identity.provider,
+                identity.subject,
+                identity.email,
+                identity.display_name,
+                identity.created_at.to_rfc3339(),
+                identity.last_login_at.map(|t| t.to_rfc3339()),
+            ],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn update_oauth_identity_login(
+        &self,
+        provider: &str,
+        subject: &str,
+        email: Option<&str>,
+        display_name: Option<&str>,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "UPDATE oauth_identities
+             SET email = COALESCE(?1, email),
+                 display_name = COALESCE(?2, display_name),
+                 last_login_at = ?3
+             WHERE provider = ?4 AND subject = ?5",
+            params![
+                email,
+                display_name,
+                Utc::now().to_rfc3339(),
+                provider,
+                subject
+            ],
+        )?;
+        Ok(())
+    }
+
     pub fn delete_user(&self, id: &uuid::Uuid) -> Result<Option<Vec<(String, Option<String>)>>> {
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction()?;
@@ -257,9 +412,52 @@ impl Database {
             password_hash: row.get(2)?,
             display_name: row.get(3)?,
             is_admin: row.get(4)?,
-            max_screenshot_size_bytes: optional_u64(row.get(5)?),
-            max_expiry_seconds: optional_u64(row.get(6)?),
-            created_at: parse_datetime(&row.get::<_, String>(7)?),
+            account_status: AccountStatus::from_str(&row.get::<_, String>(5)?),
+            max_screenshot_size_bytes: optional_u64(row.get(6)?),
+            max_expiry_seconds: optional_u64(row.get(7)?),
+            created_at: parse_datetime(&row.get::<_, String>(8)?),
+        })
+    }
+
+    fn user_from_oauth_join_row(row: &Row<'_>) -> rusqlite::Result<User> {
+        Ok(User {
+            id: row.get::<_, String>(0)?.parse().unwrap(),
+            username: row.get(1)?,
+            password_hash: row.get(2)?,
+            display_name: row.get(3)?,
+            is_admin: row.get(4)?,
+            account_status: AccountStatus::from_str(&row.get::<_, String>(5)?),
+            max_screenshot_size_bytes: optional_u64(row.get(6)?),
+            max_expiry_seconds: optional_u64(row.get(7)?),
+            created_at: parse_datetime(&row.get::<_, String>(8)?),
+        })
+    }
+
+    fn oauth_identity_from_join_row(row: &Row<'_>) -> rusqlite::Result<OAuthIdentity> {
+        let last_login_at: Option<String> = row.get(16)?;
+        Ok(OAuthIdentity {
+            id: row.get::<_, String>(9)?.parse().unwrap(),
+            user_id: row.get::<_, String>(10)?.parse().unwrap(),
+            provider: row.get(11)?,
+            subject: row.get(12)?,
+            email: row.get(13)?,
+            display_name: row.get(14)?,
+            created_at: parse_datetime(&row.get::<_, String>(15)?),
+            last_login_at: last_login_at.and_then(|s| parse_datetime_opt(&s)),
+        })
+    }
+
+    fn oauth_identity_from_row(row: &Row<'_>) -> rusqlite::Result<OAuthIdentity> {
+        let last_login_at: Option<String> = row.get(7)?;
+        Ok(OAuthIdentity {
+            id: row.get::<_, String>(0)?.parse().unwrap(),
+            user_id: row.get::<_, String>(1)?.parse().unwrap(),
+            provider: row.get(2)?,
+            subject: row.get(3)?,
+            email: row.get(4)?,
+            display_name: row.get(5)?,
+            created_at: parse_datetime(&row.get::<_, String>(6)?),
+            last_login_at: last_login_at.and_then(|s| parse_datetime_opt(&s)),
         })
     }
 
@@ -499,7 +697,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT u.id, u.username, u.password_hash, u.display_name, u.is_admin, u.max_screenshot_size_bytes, u.max_expiry_seconds, u.created_at, t.id
+                "SELECT u.id, u.username, u.password_hash, u.display_name, u.is_admin, u.account_status, u.max_screenshot_size_bytes, u.max_expiry_seconds, u.created_at, t.id
                  FROM api_tokens t JOIN users u ON t.user_id = u.id
                  WHERE t.token_hash = ?1 AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))",
                 params![token_hash],
@@ -511,11 +709,12 @@ impl Database {
                             password_hash: row.get(2)?,
                             display_name: row.get(3)?,
                             is_admin: row.get(4)?,
-                            max_screenshot_size_bytes: optional_u64(row.get(5)?),
-                            max_expiry_seconds: optional_u64(row.get(6)?),
-                            created_at: parse_datetime(&row.get::<_, String>(7)?),
+                            account_status: AccountStatus::from_str(&row.get::<_, String>(5)?),
+                            max_screenshot_size_bytes: optional_u64(row.get(6)?),
+                            max_expiry_seconds: optional_u64(row.get(7)?),
+                            created_at: parse_datetime(&row.get::<_, String>(8)?),
                         },
-                        row.get::<_, String>(8)?.parse::<uuid::Uuid>().unwrap(),
+                        row.get::<_, String>(9)?.parse::<uuid::Uuid>().unwrap(),
                     ))
                 },
             )

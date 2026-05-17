@@ -68,6 +68,19 @@ path = "./data/screenshotsafe.db"
 session_ttl_seconds = 604800
 default_expiry_seconds = 2592000
 jwt_secret = "replace-with-a-long-random-secret"
+
+[auth.oauth]
+enabled = false
+provider = "example"
+client_id = ""
+client_secret = ""
+authorize_url = "https://provider.example/oauth/authorize"
+token_url = "https://provider.example/oauth/token"
+userinfo_url = "https://provider.example/oauth/userinfo"
+scope = "openid email profile"
+redirect_url = "https://screenshots.example.com/api/auth/oauth/callback"
+account_mode = "link_only" # link_only, pending, or auto_enabled
+allowed_email_domains = ["example.com"]
 ```
 
 Environment variable overrides:
@@ -80,11 +93,90 @@ SSS_MAX_EXPIRY_SECONDS=7776000
 SSS_STORAGE_PATH=/data/storage
 SSS_DATABASE_PATH=/data/screenshotsafe.db
 SSS_JWT_SECRET=replace-with-a-long-random-secret
+SSS_OAUTH_ENABLED=true
+SSS_OAUTH_PROVIDER=example
+SSS_OAUTH_CLIENT_ID=client-id
+SSS_OAUTH_CLIENT_SECRET=client-secret
+SSS_OAUTH_AUTHORIZE_URL=https://provider.example/oauth/authorize
+SSS_OAUTH_TOKEN_URL=https://provider.example/oauth/token
+SSS_OAUTH_USERINFO_URL=https://provider.example/oauth/userinfo
+SSS_OAUTH_REDIRECT_URL=https://screenshots.example.com/api/auth/oauth/callback
+SSS_OAUTH_ACCOUNT_MODE=pending
+SSS_OAUTH_ALLOWED_EMAIL_DOMAINS=example.com,example.org
 ```
 
 If `jwt_secret` is omitted, ScreenshotSafe generates one and stores it next to the storage directory as `.jwt_secret`.
 
 `max_screenshot_size_bytes` defaults to 25 MiB. `default_expiry_seconds` controls the default retention window for newly uploaded screenshots, and `max_expiry_seconds` optionally caps requested expiry windows. Admins can set per-user overrides for both limits from the Admin page; blank or `0` means the user follows the server setting.
+
+OAuth uses the configured authorization, token, and userinfo endpoints. `account_mode = "link_only"` only allows OAuth identities that users have linked from Settings. `account_mode = "pending"` creates disabled-by-default pending accounts for admins to enable. `account_mode = "auto_enabled"` creates enabled non-admin accounts immediately. When `allowed_email_domains` is set, the OAuth userinfo response must include an allowed verified email domain.
+
+## OAuth Authentication
+
+ScreenshotSafe can add OAuth sign-in alongside the built-in password login. Password login remains available for accounts with a password, and OAuth identities are stored separately from local users so a single local account can be linked to a provider identity.
+
+OAuth is configured under `[auth.oauth]`. The implementation expects a provider with an authorization endpoint, token endpoint, and userinfo endpoint. OIDC providers work well because their userinfo response normally includes a stable `sub` field. For non-OIDC providers, ScreenshotSafe can also use an `id` field from userinfo.
+
+Example:
+
+```toml
+[auth.oauth]
+enabled = true
+provider = "google"
+client_id = "..."
+client_secret = "..."
+authorize_url = "https://accounts.google.com/o/oauth2/v2/auth"
+token_url = "https://oauth2.googleapis.com/token"
+userinfo_url = "https://openidconnect.googleapis.com/v1/userinfo"
+scope = "openid email profile"
+redirect_url = "https://screenshots.example.com/api/auth/oauth/callback"
+account_mode = "pending"
+allowed_email_domains = ["example.com"]
+```
+
+Register this redirect URI with your OAuth provider:
+
+```text
+https://screenshots.example.com/api/auth/oauth/callback
+```
+
+If `redirect_url` is omitted, ScreenshotSafe builds it from `server.public_url` or the request host. For production, set both `server.public_url` and `auth.oauth.redirect_url` explicitly so provider callbacks are stable.
+
+### Account Modes
+
+`link_only` is the safest default. OAuth can only be used after a signed-in user links a provider identity from Settings. Unknown OAuth identities are rejected at login. Use this for private installs where admins create accounts manually.
+
+`pending` allows self-service OAuth requests without granting immediate access. When an unknown OAuth identity signs in, ScreenshotSafe creates a local non-admin account with `account_status = "pending"` and does not issue a session. An admin must enable the account from the Admin page before the user can sign in.
+
+`auto_enabled` creates a local enabled non-admin account the first time an unknown OAuth identity signs in. Use this only when your provider and `allowed_email_domains` setting already define the trusted user population.
+
+### Linking Existing Accounts
+
+When OAuth is enabled, signed-in users see an OAuth section in Settings. The Connect OAuth button starts a provider login and links the returned provider identity to the current local account. Future OAuth logins with that provider identity sign in as the linked user.
+
+OAuth identities are matched by:
+
+```text
+provider + subject
+```
+
+The subject comes from the userinfo `sub` field, or from `id` if `sub` is unavailable. Email is stored for display and optional domain filtering, but it is not used as the primary identity key.
+
+For OAuth-created accounts in `pending` or `auto_enabled` mode, ScreenshotSafe uses the full userinfo email address as the local username when one is available. If that username already exists, it appends a numeric suffix such as `alice@example.com2`. If the provider does not return an email address, ScreenshotSafe falls back to `preferred_username`, `login`, `name`, and finally the configured provider name.
+
+### Admin Approval And Disabling
+
+Admins can enable, disable, or leave accounts pending from the Admin UI. Disabled and pending users cannot use password login, session-cookie auth, or API-token auth. ScreenshotSafe also prevents an admin from disabling their own account and prevents disabling or deleting the last enabled admin.
+
+### Email Domain Restrictions
+
+Set `allowed_email_domains` to restrict OAuth sign-in to specific email domains:
+
+```toml
+allowed_email_domains = ["example.com", "example.org"]
+```
+
+With this setting enabled, userinfo must include an allowed email address. If the provider sends `email_verified = false`, ScreenshotSafe denies access. If your provider does not expose `email_verified`, configure domain restrictions only when you trust that provider's email claims.
 
 ## Browser Extension
 

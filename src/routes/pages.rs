@@ -1,8 +1,9 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::HeaderMap,
     response::{Html, IntoResponse, Redirect},
 };
+use std::collections::HashMap;
 
 use crate::auth::middleware::{AdminUser, AuthUser, MaybeAuthUser};
 use crate::{AppError, SharedState};
@@ -225,6 +226,7 @@ pub async fn setup_page(State(state): State<SharedState>) -> crate::Result<impl 
 /// Login page.
 pub async fn login_page(
     State(state): State<SharedState>,
+    Query(params): Query<HashMap<String, String>>,
     user: MaybeAuthUser,
 ) -> crate::Result<impl IntoResponse> {
     if state.db.user_count()? == 0 {
@@ -233,6 +235,27 @@ pub async fn login_page(
     if user.0.is_some() {
         return Ok(Redirect::to("/").into_response());
     }
+
+    let oauth_message = match params.get("oauth").map(String::as_str) {
+        Some("pending") => {
+            r#"<div class="settings-message settings-message-success">Your OAuth account is pending admin approval.</div>"#
+        }
+        Some("not_linked") => {
+            r#"<div class="settings-message settings-message-error">No local account is linked to that OAuth identity.</div>"#
+        }
+        Some("denied") => {
+            r#"<div class="settings-message settings-message-error">That OAuth account is not allowed to access this server.</div>"#
+        }
+        Some("error") => {
+            r#"<div class="settings-message settings-message-error">OAuth sign-in failed. Please try again.</div>"#
+        }
+        _ => "",
+    };
+    let oauth_button = if state.config.auth.oauth.enabled {
+        r#"<a class="btn btn-outline btn-full oauth-login-btn" href="/api/auth/oauth/start">Sign in with OAuth</a>"#
+    } else {
+        ""
+    };
 
     let html = r#"<!DOCTYPE html>
 <html lang="en">
@@ -250,6 +273,7 @@ pub async fn login_page(
                 <h1>📸 ScreenshotSafe</h1>
                 <p>Sign in to manage your screenshots.</p>
             </div>
+            {{OAUTH_MESSAGE}}
             <form id="login-form">
                 <div class="form-group">
                     <label for="username">Username</label>
@@ -262,6 +286,7 @@ pub async fn login_page(
                 <div id="error-msg" class="error-msg" style="display:none"></div>
                 <button type="submit" class="btn btn-primary btn-full">Sign In</button>
             </form>
+            {{OAUTH_BUTTON}}
         </div>
     </div>
     <script>
@@ -290,7 +315,9 @@ pub async fn login_page(
         });
     </script>
 </body>
-</html>"#;
+</html>"#
+    .replace("{{OAUTH_MESSAGE}}", oauth_message)
+    .replace("{{OAUTH_BUTTON}}", oauth_button);
 
     Ok(Html(html).into_response())
 }
@@ -559,9 +586,11 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
 /// Settings page for API tokens.
 pub async fn settings_page(
     State(state): State<SharedState>,
+    Query(params): Query<HashMap<String, String>>,
     AuthUser(user): AuthUser,
 ) -> crate::Result<impl IntoResponse> {
     let tokens = state.db.list_tokens_for_user(&user.id)?;
+    let oauth_identities = state.db.list_oauth_identities_for_user(&user.id)?;
 
     let token_rows: String = if tokens.is_empty() {
         "<tr><td colspan=\"4\" class=\"empty-cell\">No API tokens yet.</td></tr>".to_string()
@@ -588,6 +617,67 @@ pub async fn settings_page(
             })
             .collect::<Vec<_>>()
             .join("\n")
+    };
+    let oauth_message = match params.get("oauth").map(String::as_str) {
+        Some("linked") => {
+            r#"<div class="settings-message settings-message-success">OAuth identity linked.</div>"#
+        }
+        Some("already_linked") => {
+            r#"<div class="settings-message settings-message-error">That OAuth identity is already linked to another account.</div>"#
+        }
+        _ => "",
+    };
+    let oauth_section = if state.config.auth.oauth.enabled {
+        let rows = if oauth_identities.is_empty() {
+            "<tr><td colspan=\"4\" class=\"empty-cell\">No OAuth identities linked.</td></tr>"
+                .to_string()
+        } else {
+            oauth_identities
+                .iter()
+                .map(|identity| {
+                    let last_login = identity
+                        .last_login_at
+                        .map(|d| d.format("%b %d, %Y %H:%M").to_string())
+                        .unwrap_or_else(|| "Never".to_string());
+                    format!(
+                        r#"<tr>
+                            <td>{}</td>
+                            <td>{}</td>
+                            <td>{}</td>
+                            <td>{}</td>
+                        </tr>"#,
+                        html_escape(&identity.provider),
+                        html_escape(identity.email.as_deref().unwrap_or(&identity.subject)),
+                        identity.created_at.format("%b %d, %Y"),
+                        last_login,
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        format!(
+            r#"<section class="settings-section">
+                <h2>OAuth</h2>
+                {oauth_message}
+                <p>Link an OAuth identity so you can sign in without a password.</p>
+                <a class="btn btn-primary" href="/api/auth/oauth/start?link=true">Connect OAuth</a>
+                <table class="tokens-table">
+                    <thead>
+                        <tr>
+                            <th>Provider</th>
+                            <th>Identity</th>
+                            <th>Linked</th>
+                            <th>Last Login</th>
+                        </tr>
+                    </thead>
+                    <tbody>{rows}</tbody>
+                </table>
+            </section>"#,
+            oauth_message = oauth_message,
+            rows = rows,
+        )
+    } else {
+        String::new()
     };
 
     let html = format!(
@@ -630,6 +720,8 @@ pub async fn settings_page(
                 <button class="btn btn-primary" type="submit">Change Password</button>
             </form>
         </section>
+
+        {oauth_section}
 
         <section class="settings-section">
             <h2>API Tokens</h2>
@@ -753,6 +845,7 @@ pub async fn settings_page(
 </html>"#,
         favicon = FAVICON_LINK,
         token_rows = token_rows,
+        oauth_section = oauth_section,
     );
 
     Ok(Html(html).into_response())
@@ -768,6 +861,7 @@ pub async fn admin_page(
         .iter()
         .map(|user| {
             let role = if user.is_admin { "Admin" } else { "User" };
+            let status = user.account_status.as_str();
             let delete_button = if user.id == admin.id {
                 "<span class=\"admin-muted\">Current user</span>".to_string()
             } else {
@@ -777,14 +871,29 @@ pub async fn admin_page(
                     html_escape(&user.username),
                 )
             };
+            let status_button = if user.id == admin.id {
+                String::new()
+            } else if user.account_status.is_enabled() {
+                format!(
+                    r#"<button class="btn btn-sm btn-outline status-user-btn" data-id="{}" data-status="disabled">Disable</button>"#,
+                    user.id,
+                )
+            } else {
+                format!(
+                    r#"<button class="btn btn-sm btn-primary status-user-btn" data-id="{}" data-status="enabled">Enable</button>"#,
+                    user.id,
+                )
+            };
             format!(
                 r#"<tr>
                     <td>{}</td>
                     <td>{}</td>
                     <td><span class="role-pill{}">{}</span></td>
                     <td>{}</td>
+                    <td>{}</td>
                     <td>
                         <a class="btn btn-sm btn-outline" href="/admin/users/{}">Edit</a>
+                        {}
                         {}
                     </td>
                 </tr>"#,
@@ -792,8 +901,10 @@ pub async fn admin_page(
                 html_escape(&user.display_name),
                 if user.is_admin { " role-pill-admin" } else { "" },
                 role,
+                status,
                 user.created_at.format("%b %d, %Y"),
                 user.id,
+                status_button,
                 delete_button,
             )
         })
@@ -857,6 +968,7 @@ pub async fn admin_page(
                         <th>Username</th>
                         <th>Display Name</th>
                         <th>Role</th>
+                        <th>Status</th>
                         <th>Created</th>
                         <th></th>
                     </tr>
@@ -910,6 +1022,26 @@ pub async fn admin_page(
                     window.location.reload();
                 }} else {{
                     let text = 'Unable to delete user.';
+                    try {{
+                        const data = await resp.json();
+                        if (data.error) text = data.error;
+                    }} catch (_) {{}}
+                    alert(text);
+                }}
+            }});
+        }});
+
+        document.querySelectorAll('.status-user-btn').forEach((btn) => {{
+            btn.addEventListener('click', async () => {{
+                const resp = await fetch(`/api/admin/users/${{btn.dataset.id}}`, {{
+                    method: 'PATCH',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ account_status: btn.dataset.status }}),
+                }});
+                if (resp.ok) {{
+                    window.location.reload();
+                }} else {{
+                    let text = 'Unable to update user.';
                     try {{
                         const data = await resp.json();
                         if (data.error) text = data.error;
@@ -975,7 +1107,7 @@ pub async fn admin_edit_user_page(
 
         <section class="settings-section">
             <h2>{username}</h2>
-            <p>{display_name} · {role} · Created {created_at}</p>
+            <p>{display_name} · {role} · {account_status} · Created {created_at}</p>
             <div id="user-message" class="settings-message" style="display:none"></div>
             <form id="limits-form" class="admin-user-form">
                 <div class="admin-form-grid">
@@ -989,6 +1121,21 @@ pub async fn admin_edit_user_page(
                     </div>
                 </div>
                 <button class="btn btn-primary" type="submit">Save Limits</button>
+            </form>
+        </section>
+
+        <section class="settings-section">
+            <h2>Access</h2>
+            <form id="status-form" class="admin-user-form">
+                <div class="form-group">
+                    <label for="account-status">Account Status</label>
+                    <select id="account-status">
+                        <option value="pending" {pending_selected}>Pending</option>
+                        <option value="enabled" {enabled_selected}>Enabled</option>
+                        <option value="disabled" {disabled_selected}>Disabled</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" type="submit">Save Access</button>
             </form>
         </section>
 
@@ -1051,6 +1198,16 @@ pub async fn admin_edit_user_page(
             }}
         }});
 
+        document.getElementById('status-form').addEventListener('submit', async (event) => {{
+            event.preventDefault();
+            try {{
+                await patchUser({{ account_status: document.getElementById('account-status').value }});
+                showMessage('Account access saved.', false);
+            }} catch (error) {{
+                showMessage(error.message, true);
+            }}
+        }});
+
         document.getElementById('password-reset-form').addEventListener('submit', async (event) => {{
             event.preventDefault();
             const password = document.getElementById('new-password').value;
@@ -1075,6 +1232,22 @@ pub async fn admin_edit_user_page(
         username = html_escape(&user.username),
         display_name = html_escape(&user.display_name),
         role = if user.is_admin { "Admin" } else { "User" },
+        account_status = user.account_status.as_str(),
+        pending_selected = if user.account_status.as_str() == "pending" {
+            "selected"
+        } else {
+            ""
+        },
+        enabled_selected = if user.account_status.as_str() == "enabled" {
+            "selected"
+        } else {
+            ""
+        },
+        disabled_selected = if user.account_status.as_str() == "disabled" {
+            "selected"
+        } else {
+            ""
+        },
         created_at = user.created_at.format("%b %d, %Y"),
         size_limit = size_limit,
         expiry_limit = expiry_limit,

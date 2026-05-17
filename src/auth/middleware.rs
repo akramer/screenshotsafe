@@ -62,6 +62,9 @@ impl FromRequestParts<SharedState> for AuthUser {
                                     .parse()
                                     .map_err(|_| AppError::Unauthorized)?;
                                 if let Some(user) = state.db.get_user_by_id(&user_id)? {
+                                    if !user.account_status.is_enabled() {
+                                        return Err(AppError::Forbidden);
+                                    }
                                     return Ok(AuthUser(user));
                                 }
                             }
@@ -142,6 +145,9 @@ impl FromRequestParts<SharedState> for ApiOrSessionUser {
                     if let Some(token) = auth_str.strip_prefix("Bearer ") {
                         let token_hash = crate::auth::hash_token(token);
                         if let Some((user, _)) = state.db.get_user_by_token_hash(&token_hash)? {
+                            if !user.account_status.is_enabled() {
+                                return Err(AppError::Forbidden);
+                            }
                             return Ok(ApiOrSessionUser(user));
                         }
                     }

@@ -9,6 +9,7 @@ mod tests {
 
     use screenshotsafe::config::Config;
     use screenshotsafe::db::Database;
+    use screenshotsafe::models::AccountStatus;
     use screenshotsafe::*;
 
     /// Create a test app with an in-memory database and temp storage.
@@ -544,6 +545,84 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
         assert!(state.db.get_user_by_username("admin").unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_pending_user_cannot_login_until_enabled() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let admin_cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "POST",
+            "/api/admin/users",
+            &admin_cookie,
+            serde_json::json!({
+                "username": "pending-user",
+                "password": "testpassword456",
+                "is_admin": false
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+
+        let user = state
+            .db
+            .get_user_by_username("pending-user")
+            .unwrap()
+            .unwrap();
+        state
+            .db
+            .update_user_account_status(&user.id, AccountStatus::Pending)
+            .unwrap();
+
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "pending-user",
+                "password": "testpassword456"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/admin/users/{}", user.id),
+            &admin_cookie,
+            serde_json::json!({ "account_status": "enabled" }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "pending-user",
+                "password": "testpassword456"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_admin_cannot_disable_self() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/admin/users/{}", admin.id),
+            &cookie,
+            serde_json::json!({ "account_status": "disabled" }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     // ── Screenshot Tests ──

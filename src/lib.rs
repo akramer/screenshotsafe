@@ -94,6 +94,8 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/api/auth/setup", post(routes::api::setup))
         .route("/api/auth/login", post(routes::api::login))
         .route("/api/auth/logout", post(routes::api::logout))
+        .route("/api/auth/oauth/start", get(routes::api::oauth_start))
+        .route("/api/auth/oauth/callback", get(routes::api::oauth_callback))
         .route("/api/auth/password", put(routes::api::change_password))
         .route("/api/admin/users", get(routes::api::admin_list_users))
         .route("/api/admin/users", post(routes::api::admin_create_user))

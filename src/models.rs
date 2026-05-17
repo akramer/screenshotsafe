@@ -2,6 +2,36 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AccountStatus {
+    Pending,
+    Enabled,
+    Disabled,
+}
+
+impl AccountStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Enabled => "enabled",
+            Self::Disabled => "disabled",
+        }
+    }
+
+    pub fn from_str(value: &str) -> Self {
+        match value {
+            "pending" => Self::Pending,
+            "disabled" => Self::Disabled,
+            _ => Self::Enabled,
+        }
+    }
+
+    pub fn is_enabled(self) -> bool {
+        self == Self::Enabled
+    }
+}
+
 /// A registered user.
 #[derive(Debug, Clone, Serialize)]
 pub struct User {
@@ -11,9 +41,23 @@ pub struct User {
     pub password_hash: Option<String>,
     pub display_name: String,
     pub is_admin: bool,
+    pub account_status: AccountStatus,
     pub max_screenshot_size_bytes: Option<u64>,
     pub max_expiry_seconds: Option<u64>,
     pub created_at: DateTime<Utc>,
+}
+
+/// A federated login identity linked to a local user.
+#[derive(Debug, Clone, Serialize)]
+pub struct OAuthIdentity {
+    pub id: Uuid,
+    pub user_id: Uuid,
+    pub provider: String,
+    pub subject: String,
+    pub email: Option<String>,
+    pub display_name: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub last_login_at: Option<DateTime<Utc>>,
 }
 
 /// An API token for client authentication.
