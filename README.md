@@ -95,6 +95,8 @@ For Chrome or another Chromium browser:
 
 The extension verifies the connection with `/api/ping`, captures the visible tab, opens a local editor, and uploads the finalized screenshot to your server.
 
+The privacy policy for store listings or public installs is available in [docs/privacy-policy.md](docs/privacy-policy.md).
+
 ## Safari Extension
 
 Safari uses the same extension payload plus a native wrapper.
