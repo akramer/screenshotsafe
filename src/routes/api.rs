@@ -396,6 +396,7 @@ pub async fn list_screenshots(
 #[derive(Deserialize)]
 pub struct UpdateRequest {
     pub title: Option<String>,
+    pub source_url: Option<String>,
     pub visibility: Option<String>,
     pub expires_in: Option<String>,
 }
@@ -422,10 +423,19 @@ pub async fn update_screenshot(
     }
 
     let expires_at = req.expires_in.as_deref().map(|s| parse_expires_in(Some(s)));
+    let source_url = req.source_url.as_ref().map(|url| {
+        let trimmed = url.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
+    });
 
     state.db.update_screenshot_metadata(
         &id,
         req.title.as_deref(),
+        source_url,
         req.visibility.as_deref(),
         expires_at,
     )?;

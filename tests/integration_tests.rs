@@ -416,6 +416,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_update_screenshot_source_url() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let upload_body = upload_screenshot(&app, &cookie).await;
+        let id = upload_body["id"].as_str().unwrap();
+        let parsed_id: uuid::Uuid = id.parse().unwrap();
+
+        let req = axum::http::Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/screenshots/{}", id))
+            .header(header::COOKIE, &cookie)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"source_url":" https://example.com/page "}"#))
+            .unwrap();
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
+        assert_eq!(
+            screenshot.source_url.as_deref(),
+            Some("https://example.com/page")
+        );
+
+        let req = axum::http::Request::builder()
+            .method("PATCH")
+            .uri(format!("/api/screenshots/{}", id))
+            .header(header::COOKIE, &cookie)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"source_url":""}"#))
+            .unwrap();
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
+        assert_eq!(screenshot.source_url, None);
+    }
+
+    #[tokio::test]
     async fn test_editor_page_uses_autosave_assets() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app(dir.path());
@@ -604,6 +646,7 @@ mod tests {
             .db
             .update_screenshot_metadata(
                 &id,
+                None,
                 None,
                 None,
                 Some(Some(Utc::now() - Duration::seconds(1))),

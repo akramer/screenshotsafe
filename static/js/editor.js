@@ -868,9 +868,10 @@
 
     function getSavePayload() {
         const title = document.getElementById('screenshot-title').value;
+        const sourceUrl = document.getElementById('screenshot-source-url').value;
         const visibility = document.getElementById('screenshot-visibility').value;
         const expiresIn = document.getElementById('screenshot-expires-in').value;
-        const metadata = { title, visibility };
+        const metadata = { title, source_url: sourceUrl, visibility };
         if (expiresIn) {
             metadata.expires_in = expiresIn;
         }
@@ -884,6 +885,26 @@
 
     function getSaveSnapshot() {
         return JSON.stringify(getSavePayload());
+    }
+
+    function isSafeSourceUrl(url) {
+        const trimmed = url.trim();
+        return trimmed.startsWith('http://') || trimmed.startsWith('https://');
+    }
+
+    function updateSourceUrlLink() {
+        const input = document.getElementById('screenshot-source-url');
+        const link = document.getElementById('source-url-link');
+        if (!input || !link) return;
+
+        const url = input.value.trim();
+        if (isSafeSourceUrl(url)) {
+            link.href = url;
+            link.hidden = false;
+        } else {
+            link.removeAttribute('href');
+            link.hidden = true;
+        }
     }
 
     function scheduleAutosave(delay = 500) {
@@ -957,6 +978,10 @@
         document.getElementById('screenshot-title').addEventListener('input', function () {
             scheduleAutosave();
         });
+        document.getElementById('screenshot-source-url').addEventListener('input', function () {
+            updateSourceUrlLink();
+            scheduleAutosave();
+        });
         document.getElementById('screenshot-visibility').addEventListener('change', function () {
             scheduleAutosave();
         });
@@ -975,6 +1000,8 @@
             this.textContent = 'Copied!';
             setTimeout(() => { this.textContent = 'Copy'; }, 2000);
         });
+
+        updateSourceUrlLink();
     }
 
     // ── Keyboard shortcuts ──

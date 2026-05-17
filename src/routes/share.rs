@@ -52,6 +52,12 @@ pub async fn share_page(
         .map(|e| format!("Expires {}", e.format("%B %d, %Y")))
         .unwrap_or_else(|| "Does not expire".to_string());
     let title_html = render_title_markdown_links(&title);
+    let source_link = screenshot
+        .source_url
+        .as_deref()
+        .and_then(source_url_link)
+        .map(|link| format!(" · {}", link))
+        .unwrap_or_default();
 
     let html = format!(
         r#"<!DOCTYPE html>
@@ -98,6 +104,13 @@ pub async fn share_page(
             font-size: 0.85rem;
             color: #888;
         }}
+        .share-meta a {{
+            color: #8ea8ff;
+            text-decoration: none;
+        }}
+        .share-meta a:hover {{
+            text-decoration: underline;
+        }}
         .share-body {{
             flex: 1;
             display: flex;
@@ -133,7 +146,7 @@ pub async fn share_page(
     <header class="share-header">
         <h1 class="share-title">{title_html}</h1>
         <div class="share-meta">
-            Shared on {created} · {expires_info}
+            Shared on {created} · {expires_info}{source_link}
         </div>
     </header>
     <main class="share-body">
@@ -149,6 +162,7 @@ pub async fn share_page(
         image_url = image_url,
         created = created,
         expires_info = expires_info,
+        source_link = source_link,
     );
 
     Ok(Html(html))
@@ -232,7 +246,7 @@ fn render_title_markdown_links(input: &str) -> String {
         };
 
         let url_end = url_start + close_offset;
-        let url = candidate[url_start..url_end].trim();
+        let url = &candidate[url_start..url_end];
         let markdown = &candidate[..=url_end];
 
         if is_safe_title_url(url) {
@@ -256,6 +270,18 @@ fn is_safe_title_url(url: &str) -> bool {
     let url = url.trim();
     !url.is_empty()
         && (url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:"))
+}
+
+fn source_url_link(url: &str) -> Option<String> {
+    let url = url.trim();
+    if url.is_empty() || !(url.starts_with("http://") || url.starts_with("https://")) {
+        return None;
+    }
+
+    Some(format!(
+        r#"<a href="{}" target="_blank" rel="noopener noreferrer">Source page</a>"#,
+        html_escape(url)
+    ))
 }
 
 #[cfg(test)]

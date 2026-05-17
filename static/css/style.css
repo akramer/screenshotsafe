@@ -305,6 +305,13 @@ body {
     gap: 1rem;
 }
 
+.source-link {
+    display: inline-block;
+    max-width: 100%;
+    margin-bottom: 0.75rem;
+    font-size: 0.8rem;
+}
+
 .card-actions {
     display: flex;
     gap: 0.5rem;

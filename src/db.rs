@@ -331,6 +331,7 @@ impl Database {
         &self,
         id: &uuid::Uuid,
         title: Option<&str>,
+        source_url: Option<Option<&str>>,
         visibility: Option<&str>,
         expires_at: Option<Option<chrono::DateTime<chrono::Utc>>>,
     ) -> Result<()> {
@@ -339,6 +340,12 @@ impl Database {
             conn.execute(
                 "UPDATE screenshots SET title = ?1, updated_at = datetime('now') WHERE id = ?2",
                 params![title, id.to_string()],
+            )?;
+        }
+        if let Some(source_url) = source_url {
+            conn.execute(
+                "UPDATE screenshots SET source_url = ?1, updated_at = datetime('now') WHERE id = ?2",
+                params![source_url, id.to_string()],
             )?;
         }
         if let Some(visibility) = visibility {

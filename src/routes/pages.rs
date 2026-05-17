@@ -43,6 +43,11 @@ pub async fn dashboard(
                 let share_url = format!("{}/s/{}", base_url, s.share_id);
                 let raw_url = format!("{}/s/{}.png", base_url, s.share_id);
                 let expired_class = if s.is_expired() { " expired" } else { "" };
+                let source_link = s
+                    .source_url
+                    .as_deref()
+                    .and_then(source_url_link)
+                    .unwrap_or_default();
                 let expires_info = s.expires_at
                     .map(|e| format!("<span class=\"meta-item\">Expires: {}</span>", e.format("%b %d, %Y")))
                     .unwrap_or_default();
@@ -57,6 +62,7 @@ pub async fn dashboard(
                                 <span class="meta-item">{}</span>
                                 {}
                             </div>
+                            {}
                             <div class="card-actions">
                                 <a href="{}" class="btn btn-sm" target="_blank">Share</a>
                                 <button class="btn btn-sm btn-outline copy-btn" data-url="{}">Copy Link</button>
@@ -71,6 +77,7 @@ pub async fn dashboard(
                     html_escape(title),
                     s.created_at.format("%b %d, %Y %H:%M"),
                     expires_info,
+                    source_link,
                     share_url,
                     share_url,
                     s.id,
@@ -324,6 +331,32 @@ pub async fn editor_page(
             &html_escape(screenshot.title.as_deref().unwrap_or("")),
         )
         .replace(
+            "{{SOURCE_URL}}",
+            &html_escape(screenshot.source_url.as_deref().unwrap_or("")),
+        )
+        .replace(
+            "{{SOURCE_URL_HREF}}",
+            &screenshot
+                .source_url
+                .as_deref()
+                .filter(|url| is_safe_external_url(url))
+                .map(|url| html_escape(url.trim()))
+                .unwrap_or_default(),
+        )
+        .replace(
+            "{{SOURCE_LINK_HIDDEN}}",
+            if screenshot
+                .source_url
+                .as_deref()
+                .map(is_safe_external_url)
+                .unwrap_or(false)
+            {
+                ""
+            } else {
+                " hidden"
+            },
+        )
+        .replace(
             "{{VIS_UNLISTED}}",
             if screenshot.visibility == "unlisted" || screenshot.visibility == "public" {
                 "selected"
@@ -427,6 +460,11 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
             <div class="form-group">
                 <label for="screenshot-title">Title</label>
                 <input type="text" id="screenshot-title" value="{{TITLE_ESCAPED}}">
+            </div>
+            <div class="form-group">
+                <label for="screenshot-source-url">Source URL</label>
+                <input type="text" id="screenshot-source-url" value="{{SOURCE_URL}}" placeholder="https://example.com/page">
+                <a href="{{SOURCE_URL_HREF}}" class="editor-source-link" id="source-url-link" target="_blank" rel="noopener noreferrer"{{SOURCE_LINK_HIDDEN}}>Open source URL</a>
             </div>
             <div class="form-group">
                 <label for="screenshot-visibility">Visibility</label>
@@ -679,4 +717,20 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#x27;")
+}
+
+fn is_safe_external_url(url: &str) -> bool {
+    let url = url.trim();
+    !url.is_empty() && (url.starts_with("http://") || url.starts_with("https://"))
+}
+
+fn source_url_link(url: &str) -> Option<String> {
+    if !is_safe_external_url(url) {
+        return None;
+    }
+
+    Some(format!(
+        r#"<a href="{}" class="source-link" target="_blank" rel="noopener noreferrer">Source page</a>"#,
+        html_escape(url.trim())
+    ))
 }
