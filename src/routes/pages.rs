@@ -7,7 +7,7 @@ use axum::{
 use crate::auth::middleware::{AdminUser, AuthUser, MaybeAuthUser};
 use crate::{AppError, SharedState};
 
-const FAVICON_LINK: &str = r#"<link rel="icon" type="image/png" href="/favicon.ico">"#;
+const FAVICON_LINK: &str = r#"<link rel="icon" type="image/x-icon" href="/favicon.ico">"#;
 
 /// Dashboard page — lists all screenshots for the logged-in user.
 /// Redirects to /setup if no users exist, or /login if not authenticated.
@@ -160,7 +160,7 @@ pub async fn setup_page(State(state): State<SharedState>) -> crate::Result<impl 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ScreenshotSafe — Setup</title>
-    <link rel="icon" type="image/png" href="/favicon.ico">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -240,7 +240,7 @@ pub async fn login_page(
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ScreenshotSafe — Login</title>
-    <link rel="icon" type="image/png" href="/favicon.ico">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -404,7 +404,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Edit — {{TITLE}}</title>
-    <link rel="icon" type="image/png" href="/favicon.ico">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/editor.css?v=toolbar-icons-1">
 </head>

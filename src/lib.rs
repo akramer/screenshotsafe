@@ -21,7 +21,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
-const FAVICON_PNG: &[u8] = include_bytes!("../extension/icons/icon128.png");
+const FAVICON_ICO: &[u8] = include_bytes!("../extension/icons/favicon.ico");
 
 /// Shared application state accessible from all route handlers.
 pub struct AppState {
@@ -144,9 +144,10 @@ pub fn build_router(state: SharedState) -> Router {
 }
 
 async fn favicon() -> Response {
-    let mut response = FAVICON_PNG.into_response();
-    response
-        .headers_mut()
-        .insert(header::CONTENT_TYPE, HeaderValue::from_static("image/png"));
+    let mut response = FAVICON_ICO.into_response();
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("image/x-icon"),
+    );
     response
 }

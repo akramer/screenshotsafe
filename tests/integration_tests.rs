@@ -804,7 +804,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_favicon_serves_extension_icon() {
+    async fn test_favicon_serves_ico_icon() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app(dir.path());
 
@@ -818,13 +818,13 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         assert_eq!(
             resp.headers().get(header::CONTENT_TYPE).unwrap(),
-            "image/png"
+            "image/x-icon"
         );
 
         let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
             .await
             .unwrap();
-        let expected = std::fs::read("extension/icons/icon128.png").unwrap();
+        let expected = std::fs::read("extension/icons/favicon.ico").unwrap();
         assert_eq!(bytes.as_ref(), expected.as_slice());
     }
 
