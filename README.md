@@ -74,6 +74,9 @@ enabled = false
 provider = "example"
 client_id = ""
 client_secret = ""
+issuer_url = "https://provider.example"
+# Optional override. If omitted, this is derived from issuer_url.
+discovery_url = "https://provider.example/.well-known/openid-configuration"
 authorize_url = "https://provider.example/oauth/authorize"
 token_url = "https://provider.example/oauth/token"
 userinfo_url = "https://provider.example/oauth/userinfo"
@@ -97,6 +100,8 @@ SSS_OAUTH_ENABLED=true
 SSS_OAUTH_PROVIDER=example
 SSS_OAUTH_CLIENT_ID=client-id
 SSS_OAUTH_CLIENT_SECRET=client-secret
+SSS_OAUTH_ISSUER_URL=https://provider.example
+SSS_OAUTH_DISCOVERY_URL=https://provider.example/.well-known/openid-configuration
 SSS_OAUTH_AUTHORIZE_URL=https://provider.example/oauth/authorize
 SSS_OAUTH_TOKEN_URL=https://provider.example/oauth/token
 SSS_OAUTH_USERINFO_URL=https://provider.example/oauth/userinfo
@@ -109,7 +114,7 @@ If `jwt_secret` is omitted, ScreenshotSafe generates one and stores it next to t
 
 `max_screenshot_size_bytes` defaults to 25 MiB. `default_expiry_seconds` controls the default retention window for newly uploaded screenshots, and `max_expiry_seconds` optionally caps requested expiry windows. Admins can set per-user overrides for both limits from the Admin page; blank or `0` means the user follows the server setting.
 
-OAuth uses the configured authorization, token, and userinfo endpoints. `account_mode = "link_only"` only allows OAuth identities that users have linked from Settings. `account_mode = "pending"` creates disabled-by-default pending accounts for admins to enable. `account_mode = "auto_enabled"` creates enabled non-admin accounts immediately. When `allowed_email_domains` is set, the OAuth userinfo response must include an allowed verified email domain.
+OAuth uses the configured authorization, token, and userinfo endpoints. If `issuer_url` or `discovery_url` is set, ScreenshotSafe reads the OpenID discovery document and uses the discovered endpoints unless explicit endpoint URLs are configured. `account_mode = "link_only"` only allows OAuth identities that users have linked from Settings. `account_mode = "pending"` creates disabled-by-default pending accounts for admins to enable. `account_mode = "auto_enabled"` creates enabled non-admin accounts immediately. When `allowed_email_domains` is set, the OAuth userinfo response must include an allowed verified email domain.
 
 ## OAuth Authentication
 
@@ -125,9 +130,7 @@ enabled = true
 provider = "google"
 client_id = "..."
 client_secret = "..."
-authorize_url = "https://accounts.google.com/o/oauth2/v2/auth"
-token_url = "https://oauth2.googleapis.com/token"
-userinfo_url = "https://openidconnect.googleapis.com/v1/userinfo"
+issuer_url = "https://accounts.google.com"
 scope = "openid email profile"
 redirect_url = "https://screenshots.example.com/api/auth/oauth/callback"
 account_mode = "pending"
@@ -141,6 +144,14 @@ https://screenshots.example.com/api/auth/oauth/callback
 ```
 
 If `redirect_url` is omitted, ScreenshotSafe builds it from `server.public_url` or the request host. For production, set both `server.public_url` and `auth.oauth.redirect_url` explicitly so provider callbacks are stable.
+
+When `issuer_url` is set, ScreenshotSafe reads:
+
+```text
+{issuer_url}/.well-known/openid-configuration
+```
+
+You can set `discovery_url` directly for providers that publish the document somewhere else. If `authorize_url`, `token_url`, or `userinfo_url` are configured explicitly, those values override the discovery document for that specific endpoint.
 
 ### Account Modes
 

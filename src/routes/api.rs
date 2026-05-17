@@ -169,6 +169,20 @@ struct OAuthTokenResponse {
     access_token: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct OpenIdDiscoveryDocument {
+    authorization_endpoint: Option<String>,
+    token_endpoint: Option<String>,
+    userinfo_endpoint: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct OAuthEndpoints {
+    authorize_url: String,
+    token_url: String,
+    userinfo_url: String,
+}
+
 #[derive(Deserialize)]
 struct OAuthUserInfo {
     sub: Option<String>,
@@ -188,6 +202,7 @@ pub async fn oauth_start(
 ) -> crate::Result<impl IntoResponse> {
     let oauth = &state.config.auth.oauth;
     validate_oauth_config(oauth)?;
+    let endpoints = resolve_oauth_endpoints(oauth).await?;
 
     let link_user_id = if params.link.unwrap_or(false) {
         Some(
@@ -216,7 +231,7 @@ pub async fn oauth_start(
     let redirect_uri = oauth_redirect_uri(&state, &headers);
     let mut authorize_url = format!(
         "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}",
-        oauth.authorize_url,
+        endpoints.authorize_url,
         urlencoding::encode(&oauth.client_id),
         urlencoding::encode(&redirect_uri),
         urlencoding::encode(&oauth.scope),
@@ -249,6 +264,7 @@ pub async fn oauth_callback(
 ) -> crate::Result<Response> {
     let oauth = &state.config.auth.oauth;
     validate_oauth_config(oauth)?;
+    let endpoints = resolve_oauth_endpoints(oauth).await?;
 
     if params.error.is_some() {
         return Ok(Redirect::to("/login?oauth=error").into_response());
@@ -276,7 +292,7 @@ pub async fn oauth_callback(
     let redirect_uri = oauth_redirect_uri(&state, &headers);
     let client = reqwest::Client::new();
     let token_resp = client
-        .post(&oauth.token_url)
+        .post(&endpoints.token_url)
         .form(&[
             ("grant_type", "authorization_code"),
             ("code", code),
@@ -296,7 +312,7 @@ pub async fn oauth_callback(
         .map_err(|e| AppError::Internal(format!("OAuth token response failed: {}", e)))?;
 
     let userinfo_resp = client
-        .get(&oauth.userinfo_url)
+        .get(&endpoints.userinfo_url)
         .bearer_auth(&token.access_token)
         .send()
         .await
@@ -431,16 +447,97 @@ fn validate_oauth_config(oauth: &crate::config::OAuthConfig) -> crate::Result<()
     if !oauth.enabled {
         return Err(AppError::NotFound);
     }
-    if oauth.provider.is_empty()
-        || oauth.client_id.is_empty()
-        || oauth.client_secret.is_empty()
-        || oauth.authorize_url.is_empty()
-        || oauth.token_url.is_empty()
-        || oauth.userinfo_url.is_empty()
-    {
+    if oauth.provider.is_empty() || oauth.client_id.is_empty() || oauth.client_secret.is_empty() {
         return Err(AppError::Internal("OAuth is not fully configured".into()));
     }
     Ok(())
+}
+
+async fn resolve_oauth_endpoints(
+    oauth: &crate::config::OAuthConfig,
+) -> crate::Result<OAuthEndpoints> {
+    let discovery = if oauth.discovery_url.is_empty() && oauth.issuer_url.is_empty() {
+        None
+    } else {
+        Some(fetch_openid_discovery(oauth).await?)
+    };
+
+    let authorize_url = non_empty(&oauth.authorize_url)
+        .or_else(|| {
+            discovery
+                .as_ref()
+                .and_then(|doc| non_empty_opt(&doc.authorization_endpoint))
+        })
+        .ok_or_else(|| {
+            AppError::Internal("OAuth authorization endpoint is not configured".into())
+        })?;
+    let token_url = non_empty(&oauth.token_url)
+        .or_else(|| {
+            discovery
+                .as_ref()
+                .and_then(|doc| non_empty_opt(&doc.token_endpoint))
+        })
+        .ok_or_else(|| AppError::Internal("OAuth token endpoint is not configured".into()))?;
+    let userinfo_url = non_empty(&oauth.userinfo_url)
+        .or_else(|| {
+            discovery
+                .as_ref()
+                .and_then(|doc| non_empty_opt(&doc.userinfo_endpoint))
+        })
+        .ok_or_else(|| AppError::Internal("OAuth userinfo endpoint is not configured".into()))?;
+
+    Ok(OAuthEndpoints {
+        authorize_url,
+        token_url,
+        userinfo_url,
+    })
+}
+
+async fn fetch_openid_discovery(
+    oauth: &crate::config::OAuthConfig,
+) -> crate::Result<OpenIdDiscoveryDocument> {
+    let discovery_url = openid_discovery_url(oauth).ok_or_else(|| {
+        AppError::Internal("OAuth discovery URL or issuer URL is not configured".into())
+    })?;
+    let response = reqwest::Client::new()
+        .get(&discovery_url)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(format!("OpenID discovery request failed: {}", e)))?;
+    if !response.status().is_success() {
+        return Err(AppError::Internal(format!(
+            "OpenID discovery request failed with status {}",
+            response.status()
+        )));
+    }
+    response
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(format!("OpenID discovery response failed: {}", e)))
+}
+
+fn openid_discovery_url(oauth: &crate::config::OAuthConfig) -> Option<String> {
+    non_empty(&oauth.discovery_url).or_else(|| {
+        non_empty(&oauth.issuer_url).map(|issuer| {
+            format!(
+                "{}/.well-known/openid-configuration",
+                issuer.trim_end_matches('/')
+            )
+        })
+    })
+}
+
+fn non_empty(value: &str) -> Option<String> {
+    let value = value.trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
+fn non_empty_opt(value: &Option<String>) -> Option<String> {
+    value.as_deref().and_then(non_empty)
 }
 
 fn oauth_redirect_uri(state: &SharedState, headers: &HeaderMap) -> String {
@@ -1118,7 +1215,8 @@ fn format_bytes(bytes: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{sanitize_email_username, sanitize_username};
+    use super::{openid_discovery_url, sanitize_email_username, sanitize_username};
+    use crate::config::OAuthConfig;
 
     #[test]
     fn oauth_email_username_keeps_full_email_address() {
@@ -1132,6 +1230,33 @@ mod tests {
     fn oauth_non_email_username_uses_regular_sanitizer() {
         assert_eq!(sanitize_email_username("Not An Email"), "not-an-email");
         assert_eq!(sanitize_username("Display Name"), "display-name");
+    }
+
+    #[test]
+    fn openid_discovery_url_prefers_explicit_discovery_url() {
+        let oauth = OAuthConfig {
+            issuer_url: "https://issuer.example".to_string(),
+            discovery_url: "https://issuer.example/custom-discovery".to_string(),
+            ..OAuthConfig::default()
+        };
+
+        assert_eq!(
+            openid_discovery_url(&oauth),
+            Some("https://issuer.example/custom-discovery".to_string())
+        );
+    }
+
+    #[test]
+    fn openid_discovery_url_uses_issuer_url() {
+        let oauth = OAuthConfig {
+            issuer_url: "https://issuer.example/tenant/".to_string(),
+            ..OAuthConfig::default()
+        };
+
+        assert_eq!(
+            openid_discovery_url(&oauth),
+            Some("https://issuer.example/tenant/.well-known/openid-configuration".to_string())
+        );
     }
 }
 

@@ -60,6 +60,10 @@ pub struct OAuthConfig {
     #[serde(default)]
     pub client_secret: String,
     #[serde(default)]
+    pub issuer_url: String,
+    #[serde(default)]
+    pub discovery_url: String,
+    #[serde(default)]
     pub authorize_url: String,
     #[serde(default)]
     pub token_url: String,
@@ -156,6 +160,8 @@ impl Default for OAuthConfig {
             provider: default_oauth_provider(),
             client_id: String::new(),
             client_secret: String::new(),
+            issuer_url: String::new(),
+            discovery_url: String::new(),
             authorize_url: String::new(),
             token_url: String::new(),
             userinfo_url: String::new(),
@@ -244,6 +250,12 @@ impl Config {
         if let Ok(val) = std::env::var("SSS_OAUTH_CLIENT_SECRET") {
             config.auth.oauth.client_secret = val;
         }
+        if let Ok(val) = std::env::var("SSS_OAUTH_ISSUER_URL") {
+            config.auth.oauth.issuer_url = val;
+        }
+        if let Ok(val) = std::env::var("SSS_OAUTH_DISCOVERY_URL") {
+            config.auth.oauth.discovery_url = val;
+        }
         if let Ok(val) = std::env::var("SSS_OAUTH_AUTHORIZE_URL") {
             config.auth.oauth.authorize_url = val;
         }
@@ -281,6 +293,16 @@ impl Config {
             .max_expiry_seconds
             .filter(|seconds| *seconds > 0 && i64::try_from(*seconds).is_ok());
         config.auth.oauth.provider = config.auth.oauth.provider.trim().to_string();
+        config.auth.oauth.issuer_url = config
+            .auth
+            .oauth
+            .issuer_url
+            .trim_end_matches('/')
+            .to_string();
+        config.auth.oauth.discovery_url = config.auth.oauth.discovery_url.trim().to_string();
+        config.auth.oauth.authorize_url = config.auth.oauth.authorize_url.trim().to_string();
+        config.auth.oauth.token_url = config.auth.oauth.token_url.trim().to_string();
+        config.auth.oauth.userinfo_url = config.auth.oauth.userinfo_url.trim().to_string();
         config.auth.oauth.allowed_email_domains = config
             .auth
             .oauth
