@@ -19,6 +19,8 @@
     let canvas;
     let backgroundImage;
     let lineHandles = [];
+    let selectedAnnotationObjects = [];
+    let lastToolbarInteractionAt = 0;
     let autosaveTimer = null;
     let saveInFlight = false;
     let saveAgainAfterCurrent = false;
@@ -388,6 +390,69 @@
         lineHandles = [];
     }
 
+    function isEditableAnnotation(obj) {
+        return obj && (
+            obj.annotationType === 'rect' ||
+            obj.annotationType === 'line' ||
+            obj.annotationType === 'arrow' ||
+            obj.annotationType === 'text'
+        );
+    }
+
+    function getEditableSelection() {
+        const activeObjects = canvas.getActiveObjects().filter(function(obj) {
+            return isEditableAnnotation(obj);
+        });
+
+        if (activeObjects.length > 0) {
+            selectedAnnotationObjects = activeObjects;
+            return activeObjects;
+        }
+
+        selectedAnnotationObjects = selectedAnnotationObjects.filter(function(obj) {
+            return obj && canvas.contains(obj) && isEditableAnnotation(obj);
+        });
+        return selectedAnnotationObjects;
+    }
+
+    function getLogicalStrokeControlValue(obj) {
+        if (!obj) return null;
+        if (obj.annotationType === 'arrow' && obj._arrowData) {
+            return obj._arrowData.strokeWidth;
+        }
+        if (obj.annotationType === 'text') {
+            return Math.round(toLogicalPixels(obj.fontSize || 24) / 8);
+        }
+        if (obj.annotationType === 'rect' || obj.annotationType === 'line') {
+            return Math.round(toLogicalPixels(obj.strokeWidth || toImagePixels(3)));
+        }
+        return null;
+    }
+
+    function syncToolbarToSelection() {
+        const selected = getEditableSelection();
+        if (selected.length !== 1) return;
+
+        const strokeWidthInput = document.getElementById('stroke-width');
+        const width = getLogicalStrokeControlValue(selected[0]);
+        if (strokeWidthInput && width !== null) {
+            strokeWidthInput.value = Math.max(
+                Number(strokeWidthInput.min),
+                Math.min(Number(strokeWidthInput.max), width)
+            );
+        }
+
+        const colorInput = document.getElementById('annotation-color');
+        if (!colorInput) return;
+        const obj = selected[0];
+        const color = obj.annotationType === 'arrow' && obj._arrowData
+            ? obj._arrowData.color
+            : (obj.stroke || obj.fill);
+        if (typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)) {
+            colorInput.value = color;
+        }
+    }
+
     function getAbsoluteLinePoints(obj) {
         if (obj.annotationType === 'arrow' && obj._arrowData) {
             return {
@@ -434,6 +499,11 @@
 
     // ── Toolbar setup ──
     function setupToolbar() {
+        document.getElementById('toolbar').addEventListener('pointerdown', function() {
+            selectedAnnotationObjects = getEditableSelection();
+            lastToolbarInteractionAt = Date.now();
+        }, true);
+
         document.querySelectorAll('.tool-btn[data-tool]').forEach(function (btn) {
             btn.addEventListener('click', function () {
                 currentTool = btn.dataset.tool;
@@ -455,53 +525,117 @@
             });
         });
 
+        function applyStrokeWidthToObject(obj, width) {
+            if (!obj) return null;
+
+            if (obj.annotationType === 'arrow' && obj._arrowData) {
+                const pts = getAbsoluteLinePoints(obj);
+                if (!pts) return obj;
+
+                const replacement = createArrow(
+                    pts.p1.x,
+                    pts.p1.y,
+                    pts.p2.x,
+                    pts.p2.y,
+                    obj._arrowData.color,
+                    width
+                );
+                replacement.hasControls = false;
+
+                const idx = canvas.getObjects().indexOf(obj);
+                canvas.remove(obj);
+                canvas.add(replacement);
+                replacement.moveTo(idx);
+                return replacement;
+            }
+
+            if (obj.annotationType === 'rect' || obj.annotationType === 'line') {
+                obj.set('strokeWidth', toImagePixels(width));
+                obj.dirty = true;
+                obj.setCoords();
+                return obj;
+            }
+
+            if (obj.annotationType === 'text') {
+                obj.set('fontSize', toImagePixels(width * 8));
+                obj.dirty = true;
+                obj.setCoords();
+                return obj;
+            }
+
+            return obj;
+        }
+
         document.getElementById('stroke-width').addEventListener('input', function(e) {
             const width = parseInt(e.target.value);
+            const activeObjects = getEditableSelection();
             let modified = false;
-            canvas.getActiveObjects().forEach(function(obj) {
-                if (obj.annotationType === 'rect' || obj.annotationType === 'line' || obj.annotationType === 'arrow') {
-                    if (obj.annotationType === 'arrow') {
-                        obj._arrowData.strokeWidth = width;
-                        obj.getObjects().forEach(function(o) { o.set('strokeWidth', toImagePixels(width)); });
-                    } else {
-                        obj.set('strokeWidth', toImagePixels(width));
+
+            clearHandles();
+            selectedAnnotationObjects = activeObjects.map(function(obj) {
+                const updated = applyStrokeWidthToObject(obj, width);
+                if (updated) modified = true;
+                return updated;
+            }).filter(Boolean);
+
+            if (modified) {
+                if (selectedAnnotationObjects.length === 1) {
+                    canvas.setActiveObject(selectedAnnotationObjects[0]);
+                    if (selectedAnnotationObjects[0].annotationType === 'line' || selectedAnnotationObjects[0].annotationType === 'arrow') {
+                        setupHandles(selectedAnnotationObjects[0]);
                     }
-                    modified = true;
-                } else if (obj.annotationType === 'text') {
-                    obj.set('fontSize', toImagePixels(width * 8));
-                    modified = true;
+                } else if (selectedAnnotationObjects.length > 1) {
+                    const selection = new fabric.ActiveSelection(selectedAnnotationObjects, { canvas: canvas });
+                    canvas.setActiveObject(selection);
                 }
-            });
-            if (modified) canvas.requestRenderAll();
+                canvas.requestRenderAll();
+                scheduleAutosave();
+            }
         });
-        document.getElementById('stroke-width').addEventListener('change', function(e) {
-            if (canvas.getActiveObjects().length > 0) saveUndoState();
+        document.getElementById('stroke-width').addEventListener('change', function() {
+            if (getEditableSelection().length > 0) saveUndoState();
         });
+
+        function applyColorToObject(obj, color) {
+            if (obj.annotationType === 'rect') {
+                obj.set('stroke', color);
+                if (obj.fill !== 'transparent' && obj.fill !== '#000000') obj.set('fill', color);
+                obj.dirty = true;
+                return true;
+            }
+            if (obj.annotationType === 'line') {
+                obj.set('stroke', color);
+                obj.dirty = true;
+                return true;
+            }
+            if (obj.annotationType === 'arrow') {
+                obj._arrowData.color = color;
+                obj.getObjects().forEach(function(o) {
+                    o.set('stroke', color);
+                    if (o.type === 'polygon') o.set('fill', color);
+                    o.dirty = true;
+                });
+                obj.dirty = true;
+                return true;
+            }
+            if (obj.annotationType === 'text') {
+                obj.set('fill', color);
+                obj.dirty = true;
+                return true;
+            }
+            return false;
+        }
 
         document.getElementById('annotation-color').addEventListener('input', function(e) {
             const color = e.target.value;
             let modified = false;
-            canvas.getActiveObjects().forEach(function(obj) {
-                if (obj.annotationType === 'rect') {
-                    obj.set('stroke', color);
-                    if (obj.fill !== 'transparent' && obj.fill !== '#000000') obj.set('fill', color);
-                    modified = true;
-                } else if (obj.annotationType === 'line') {
-                    obj.set('stroke', color);
-                    modified = true;
-                } else if (obj.annotationType === 'arrow') {
-                    obj._arrowData.color = color;
-                    obj.getObjects().forEach(function(o) { o.set('stroke', color); });
-                    modified = true;
-                } else if (obj.annotationType === 'text') {
-                    obj.set('fill', color);
-                    modified = true;
-                }
+            getEditableSelection().forEach(function(obj) {
+                if (applyColorToObject(obj, color)) modified = true;
             });
             if (modified) canvas.requestRenderAll();
         });
-        document.getElementById('annotation-color').addEventListener('change', function(e) {
-            if (canvas.getActiveObjects().length > 0) saveUndoState();
+        document.getElementById('annotation-color').addEventListener('change', function() {
+            if (getEditableSelection().length > 0) saveUndoState();
         });
 
         document.getElementById('zoom-in-btn').addEventListener('click', function() {
@@ -536,6 +670,12 @@
             }
 
             clearHandles();
+            if (activeObjs.length > 0 || Date.now() - lastToolbarInteractionAt > 250) {
+                selectedAnnotationObjects = activeObjs.filter(function(obj) {
+                    return isEditableAnnotation(obj);
+                });
+            }
+            syncToolbarToSelection();
 
             if (activeObjs.length === 1) {
                 let obj = activeObjs[0];
