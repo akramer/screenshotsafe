@@ -23,13 +23,59 @@
     let saveInFlight = false;
     let saveAgainAfterCurrent = false;
     let lastSavedSnapshot = null;
+    let imageDpi = getImageDpi();
+    let visualScale = dpiToVisualScale(imageDpi);
 
     const dropShadowConfig = {
         color: 'rgba(0,0,0,0.3)',
-        blur: 4,
-        offsetX: 2,
-        offsetY: 2
+        blur: 4 * visualScale,
+        offsetX: 2 * visualScale,
+        offsetY: 2 * visualScale
     };
+
+    function getImageDpi() {
+        const dpi = Number(window.IMAGE_DPI);
+        return Number.isFinite(dpi) && dpi > 0 ? dpi : 100;
+    }
+
+    function dpiToVisualScale(dpi) {
+        return Math.max(0.1, Math.min(10, dpi / 100));
+    }
+
+    function toImagePixels(value) {
+        return value * visualScale;
+    }
+
+    function toLogicalPixels(value) {
+        return value / visualScale;
+    }
+
+    function normalizeDpi(value) {
+        const dpi = Number(value);
+        if (!Number.isFinite(dpi) || dpi <= 0) return 100;
+        return Math.max(1, Math.min(2400, dpi));
+    }
+
+    function setEditorDpi(nextDpi) {
+        nextDpi = normalizeDpi(nextDpi);
+        if (Math.abs(nextDpi - imageDpi) < Number.EPSILON) return;
+
+        const annotations = serializeAnnotations();
+        imageDpi = nextDpi;
+        visualScale = dpiToVisualScale(imageDpi);
+        window.IMAGE_DPI = imageDpi;
+        dropShadowConfig.blur = 4 * visualScale;
+        dropShadowConfig.offsetX = 2 * visualScale;
+        dropShadowConfig.offsetY = 2 * visualScale;
+
+        clearHandles();
+        canvas.getObjects().slice().forEach(function (obj) {
+            canvas.remove(obj);
+        });
+        loadAnnotations(annotations);
+        showCropIndicator();
+        canvas.requestRenderAll();
+    }
 
     // ── Initialize ──
     function init() {
@@ -136,7 +182,7 @@
                         height: ann.h,
                         fill: ann.filled ? ann.color : 'transparent',
                         stroke: ann.color,
-                        strokeWidth: ann.strokeWidth || 3,
+                        strokeWidth: toImagePixels(ann.strokeWidth || 3),
                         strokeUniform: true,
                         annotationType: 'rect',
                         shadow: dropShadowConfig,
@@ -150,7 +196,7 @@
                 case 'line':
                     obj = new fabric.Line([ann.x1, ann.y1, ann.x2, ann.y2], {
                         stroke: ann.color,
-                        strokeWidth: ann.strokeWidth || 3,
+                        strokeWidth: toImagePixels(ann.strokeWidth || 3),
                         annotationType: 'line',
                         _lineData: { x1: ann.x1, y1: ann.y1, x2: ann.x2, y2: ann.y2 },
                         perPixelTargetFind: true,
@@ -164,7 +210,7 @@
                     obj = new fabric.IText(ann.text, {
                         left: ann.x,
                         top: ann.y,
-                        fontSize: ann.fontSize || 24,
+                        fontSize: toImagePixels(ann.fontSize || 24),
                         fill: ann.color,
                         fontFamily: 'Arial, sans-serif',
                         annotationType: 'text',
@@ -225,7 +271,7 @@
                         type: 'rect', x: r2.x, y: r2.y, w: r2.w, h: r2.h,
                         color: obj.stroke || obj.fill,
                         filled: obj.fill !== 'transparent',
-                        strokeWidth: obj.strokeWidth,
+                        strokeWidth: Math.round(toLogicalPixels(obj.strokeWidth || 3)),
                     });
                     break;
                 case 'arrow':
@@ -248,7 +294,7 @@
                             type: 'line',
                             x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
                             color: obj.stroke,
-                            strokeWidth: obj.strokeWidth,
+                            strokeWidth: Math.round(toLogicalPixels(obj.strokeWidth || 3)),
                         });
                     }
                     break;
@@ -258,7 +304,7 @@
                         x: Math.round(obj.left),
                         y: Math.round(obj.top),
                         text: obj.text,
-                        fontSize: Math.round(obj.fontSize * Math.max(Math.abs(obj.scaleX || 1), Math.abs(obj.scaleY || 1))),
+                        fontSize: Math.round(toLogicalPixels(obj.fontSize * Math.max(Math.abs(obj.scaleX || 1), Math.abs(obj.scaleY || 1)))),
                         color: obj.fill,
                     });
                     break;
@@ -269,11 +315,12 @@
 
     // ── Arrow creation helper ──
     function createArrow(x1, y1, x2, y2, color, strokeWidth) {
+        const renderStrokeWidth = toImagePixels(strokeWidth);
         const dx = x2 - x1;
         const dy = y2 - y1;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const angle = Math.atan2(dy, dx);
-        const headLen = Math.max(strokeWidth * 5, 15);
+        const headLen = Math.max(strokeWidth * 5, 15) * visualScale;
 
         const p0x = x2;
         const p0y = y2;
@@ -290,7 +337,7 @@
 
         const line = new fabric.Line([x1, y1, lx2, ly2], {
             stroke: color,
-            strokeWidth: strokeWidth,
+            strokeWidth: renderStrokeWidth,
         });
 
         const head = new fabric.Polygon([
@@ -301,7 +348,7 @@
         ], {
             fill: color,
             stroke: color,
-            strokeWidth: 1,
+            strokeWidth: Math.max(1, visualScale),
             strokeLineJoin: 'miter'
         });
 
@@ -415,13 +462,13 @@
                 if (obj.annotationType === 'rect' || obj.annotationType === 'line' || obj.annotationType === 'arrow') {
                     if (obj.annotationType === 'arrow') {
                         obj._arrowData.strokeWidth = width;
-                        obj.getObjects().forEach(function(o) { o.set('strokeWidth', width); });
+                        obj.getObjects().forEach(function(o) { o.set('strokeWidth', toImagePixels(width)); });
                     } else {
-                        obj.set('strokeWidth', width);
+                        obj.set('strokeWidth', toImagePixels(width));
                     }
                     modified = true;
                 } else if (obj.annotationType === 'text') {
-                    obj.set('fontSize', width * 8);
+                    obj.set('fontSize', toImagePixels(width * 8));
                     modified = true;
                 }
             });
@@ -587,7 +634,7 @@
                 const text = new fabric.IText('Text', {
                     left: pointer.x,
                     top: pointer.y,
-                    fontSize: Math.max(fontSize, 16),
+                    fontSize: toImagePixels(Math.max(fontSize, 16)),
                     fill: color,
                     fontFamily: 'Arial, sans-serif',
                     annotationType: 'text',
@@ -645,7 +692,7 @@
                     previewObj = new fabric.Rect({
                         left: Math.min(x1, x2), top: Math.min(y1, y2),
                         width: Math.abs(x2 - x1), height: Math.abs(y2 - y1),
-                        fill: 'transparent', stroke: color, strokeWidth: strokeWidth, strokeUniform: true, selectable: false, evented: false,
+                        fill: 'transparent', stroke: color, strokeWidth: toImagePixels(strokeWidth), strokeUniform: true, selectable: false, evented: false,
                         shadow: dropShadowConfig,
                     });
                     break;
@@ -655,7 +702,7 @@
                     break;
                 case 'line':
                     previewObj = new fabric.Line([x1, y1, x2, y2], {
-                        stroke: color, strokeWidth: strokeWidth, selectable: false, evented: false,
+                        stroke: color, strokeWidth: toImagePixels(strokeWidth), selectable: false, evented: false,
                         shadow: dropShadowConfig,
                     });
                     break;
@@ -733,7 +780,7 @@
                         height: dy,
                         fill: 'transparent',
                         stroke: color,
-                        strokeWidth: strokeWidth,
+                        strokeWidth: toImagePixels(strokeWidth),
                         strokeUniform: true,
                         annotationType: 'rect',
                         shadow: dropShadowConfig,
@@ -747,7 +794,7 @@
                 case 'line':
                     obj = new fabric.Line([x1, y1, x2, y2], {
                         stroke: color,
-                        strokeWidth: strokeWidth,
+                        strokeWidth: toImagePixels(strokeWidth),
                         annotationType: 'line',
                         _lineData: { x1, y1, x2, y2 },
                         perPixelTargetFind: true,
@@ -871,7 +918,12 @@
         const sourceUrl = document.getElementById('screenshot-source-url').value;
         const visibility = document.getElementById('screenshot-visibility').value;
         const expiresIn = document.getElementById('screenshot-expires-in').value;
-        const metadata = { title, source_url: sourceUrl, visibility };
+        const metadata = {
+            title,
+            source_url: sourceUrl,
+            visibility,
+            image_dpi: normalizeDpi(document.getElementById('screenshot-image-dpi').value),
+        };
         if (expiresIn) {
             metadata.expires_in = expiresIn;
         }
@@ -980,6 +1032,12 @@
         });
         document.getElementById('screenshot-source-url').addEventListener('input', function () {
             updateSourceUrlLink();
+            scheduleAutosave();
+        });
+        document.getElementById('screenshot-image-dpi').addEventListener('change', function () {
+            const dpi = normalizeDpi(this.value);
+            this.value = Math.round(dpi);
+            setEditorDpi(dpi);
             scheduleAutosave();
         });
         document.getElementById('screenshot-visibility').addEventListener('change', function () {

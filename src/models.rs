@@ -39,6 +39,7 @@ pub struct Screenshot {
     pub rendered_path: Option<String>,
     pub annotations: Vec<Annotation>,
     pub crop_rect: Option<CropRect>,
+    pub image_dpi: f64,
     pub visibility: String,
     pub expires_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,

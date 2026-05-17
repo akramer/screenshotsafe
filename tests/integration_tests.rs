@@ -482,7 +482,7 @@ mod tests {
         let html = String::from_utf8(bytes.to_vec()).unwrap();
         assert!(html.contains(r#"id="save-status""#));
         assert!(html.contains(r#"id="save-btn""#));
-        assert!(html.contains(r#"/static/js/editor.js?v=source-url-1"#));
+        assert!(html.contains(r#"/static/js/editor.js?v=dpi-edit-1"#));
     }
 
     #[tokio::test]
@@ -650,6 +650,7 @@ mod tests {
                 None,
                 None,
                 Some(Some(Utc::now() - Duration::seconds(1))),
+                None,
             )
             .unwrap();
 

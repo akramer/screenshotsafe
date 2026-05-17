@@ -92,6 +92,7 @@
                 image,
                 title: response.draft.title || 'Screenshot',
                 sourceUrl: response.draft.sourceUrl || '',
+                imageDpi: inferImageDpi(image, response.draft),
                 cropRect: null,
                 redactions: [],
             };
@@ -134,6 +135,7 @@
         formData.append('image', blob, 'screenshot.png');
         formData.append('title', draft.title);
         formData.append('source_url', draft.sourceUrl);
+        formData.append('image_dpi', String(draft.imageDpi || 100));
         if (expiresInSelect.value) {
             formData.append('expires_in', expiresInSelect.value);
         }
@@ -397,6 +399,14 @@
             image.onerror = () => reject(new Error('Could not load captured screenshot'));
             image.src = src;
         });
+    }
+
+    function inferImageDpi(image, draftData) {
+        const viewportWidth = Number(draftData && draftData.viewportWidth);
+        if (Number.isFinite(viewportWidth) && viewportWidth > 0 && image.naturalWidth > 0) {
+            return Math.max(1, Math.min(2400, (image.naturalWidth / viewportWidth) * 100));
+        }
+        return 100;
     }
 
     function hideError() {

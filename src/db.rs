@@ -106,6 +106,12 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON api_tokens(token_hash);
             ",
         )?;
+        add_column_if_missing(
+            &conn,
+            "screenshots",
+            "image_dpi",
+            "REAL NOT NULL DEFAULT 100.0",
+        )?;
         Ok(())
     }
 
@@ -187,8 +193,8 @@ impl Database {
     pub fn create_screenshot(&self, s: &Screenshot) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO screenshots (id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, visibility, expires_at, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            "INSERT INTO screenshots (id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, image_dpi, visibility, expires_at, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 s.id.to_string(),
                 s.user_id.to_string(),
@@ -200,6 +206,7 @@ impl Database {
                 s.rendered_path,
                 serde_json::to_string(&s.annotations).unwrap(),
                 s.crop_rect.as_ref().map(|c| serde_json::to_string(c).unwrap()),
+                s.image_dpi,
                 s.visibility,
                 s.expires_at.map(|t| t.to_rfc3339()),
                 s.created_at.to_rfc3339(),
@@ -225,14 +232,14 @@ impl Database {
         params: impl rusqlite::Params,
     ) -> Result<Option<Screenshot>> {
         let sql = format!(
-            "SELECT id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, visibility, expires_at, created_at, updated_at FROM screenshots {}",
+            "SELECT id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, image_dpi, visibility, expires_at, created_at, updated_at FROM screenshots {}",
             where_clause
         );
         let result = conn
             .query_row(&sql, params, |row| {
                 let annotations_str: String = row.get(8)?;
                 let crop_str: Option<String> = row.get(9)?;
-                let expires_str: Option<String> = row.get(11)?;
+                let expires_str: Option<String> = row.get(12)?;
                 Ok(Screenshot {
                     id: row.get::<_, String>(0)?.parse().unwrap(),
                     user_id: row.get::<_, String>(1)?.parse().unwrap(),
@@ -244,10 +251,11 @@ impl Database {
                     rendered_path: row.get(7)?,
                     annotations: serde_json::from_str(&annotations_str).unwrap_or_default(),
                     crop_rect: crop_str.and_then(|s| serde_json::from_str(&s).ok()),
-                    visibility: row.get(10)?,
+                    image_dpi: row.get(10)?,
+                    visibility: row.get(11)?,
                     expires_at: expires_str.and_then(|s| parse_datetime_opt(&s)),
-                    created_at: parse_datetime(&row.get::<_, String>(12)?),
-                    updated_at: parse_datetime(&row.get::<_, String>(13)?),
+                    created_at: parse_datetime(&row.get::<_, String>(13)?),
+                    updated_at: parse_datetime(&row.get::<_, String>(14)?),
                 })
             })
             .optional()?;
@@ -262,7 +270,7 @@ impl Database {
     ) -> Result<Vec<Screenshot>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, visibility, expires_at, created_at, updated_at
+            "SELECT id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, image_dpi, visibility, expires_at, created_at, updated_at
              FROM screenshots WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3",
         )?;
         let rows = stmt.query_map(
@@ -270,7 +278,7 @@ impl Database {
             |row| {
                 let annotations_str: String = row.get(8)?;
                 let crop_str: Option<String> = row.get(9)?;
-                let expires_str: Option<String> = row.get(11)?;
+                let expires_str: Option<String> = row.get(12)?;
                 Ok(Screenshot {
                     id: row.get::<_, String>(0)?.parse().unwrap(),
                     user_id: row.get::<_, String>(1)?.parse().unwrap(),
@@ -282,10 +290,11 @@ impl Database {
                     rendered_path: row.get(7)?,
                     annotations: serde_json::from_str(&annotations_str).unwrap_or_default(),
                     crop_rect: crop_str.and_then(|s| serde_json::from_str(&s).ok()),
-                    visibility: row.get(10)?,
+                    image_dpi: row.get(10)?,
+                    visibility: row.get(11)?,
                     expires_at: expires_str.and_then(|s| parse_datetime_opt(&s)),
-                    created_at: parse_datetime(&row.get::<_, String>(12)?),
-                    updated_at: parse_datetime(&row.get::<_, String>(13)?),
+                    created_at: parse_datetime(&row.get::<_, String>(13)?),
+                    updated_at: parse_datetime(&row.get::<_, String>(14)?),
                 })
             },
         )?;
@@ -334,6 +343,7 @@ impl Database {
         source_url: Option<Option<&str>>,
         visibility: Option<&str>,
         expires_at: Option<Option<chrono::DateTime<chrono::Utc>>>,
+        image_dpi: Option<f64>,
     ) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         if let Some(title) = title {
@@ -361,6 +371,12 @@ impl Database {
                     expires_at.map(|t| t.to_rfc3339()),
                     id.to_string(),
                 ],
+            )?;
+        }
+        if let Some(image_dpi) = image_dpi {
+            conn.execute(
+                "UPDATE screenshots SET image_dpi = ?1, updated_at = datetime('now') WHERE id = ?2",
+                params![image_dpi, id.to_string()],
             )?;
         }
         Ok(())
@@ -489,4 +505,24 @@ impl Database {
         )?;
         Ok(paths)
     }
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> anyhow::Result<()> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({})", table))?;
+    let columns = stmt.query_map([], |row| row.get::<_, String>(1))?;
+    for existing in columns {
+        if existing? == column {
+            return Ok(());
+        }
+    }
+    conn.execute(
+        &format!("ALTER TABLE {} ADD COLUMN {} {}", table, column, definition),
+        [],
+    )?;
+    Ok(())
 }

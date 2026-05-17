@@ -307,6 +307,11 @@ pub async fn editor_page(
     let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
     let share_url = format!("{}/s/{}", base_url, screenshot.share_id);
     let raw_url = format!("{}/s/{}.png", base_url, screenshot.share_id);
+    let image_dpi = if screenshot.image_dpi.fract().abs() < f64::EPSILON {
+        format!("{:.0}", screenshot.image_dpi)
+    } else {
+        format!("{:.1}", screenshot.image_dpi)
+    };
     let expiration_keep_label = screenshot
         .expires_at
         .map(|d| format!("Keep current ({})", d.format("%b %d, %Y %H:%M UTC")))
@@ -374,7 +379,8 @@ pub async fn editor_page(
         .replace("{{RAW_URL}}", &raw_url)
         .replace("{{ID}}", &screenshot.id.to_string())
         .replace("{{ANNOTATIONS}}", &annotations_json)
-        .replace("{{CROP}}", &crop_json);
+        .replace("{{CROP}}", &crop_json)
+        .replace("{{IMAGE_DPI}}", &image_dpi);
 
     Ok(Html(html).into_response())
 }
@@ -386,7 +392,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Edit — {{TITLE}}</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/editor.css?v=source-url-1">
+    <link rel="stylesheet" href="/static/css/editor.css?v=dpi-edit-1">
 </head>
 <body>
     <nav class="navbar">
@@ -460,6 +466,10 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
                 <a href="{{SOURCE_URL_HREF}}" class="editor-source-link" id="source-url-link" target="_blank" rel="noopener noreferrer"{{SOURCE_LINK_HIDDEN}}>Open source URL</a>
             </div>
             <div class="form-group">
+                <label for="screenshot-image-dpi">DPI</label>
+                <input type="number" id="screenshot-image-dpi" value="{{IMAGE_DPI}}" min="1" max="2400" step="1">
+            </div>
+            <div class="form-group">
                 <label for="screenshot-visibility">Visibility</label>
                 <select id="screenshot-visibility">
                     <option value="unlisted" {{VIS_UNLISTED}}>Shared with private link</option>
@@ -499,8 +509,9 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
         window.ORIGINAL_IMAGE_URL = "/api/screenshots/{{ID}}/original";
         window.ANNOTATIONS = {{ANNOTATIONS}};
         window.CROP_RECT = {{CROP}};
+        window.IMAGE_DPI = {{IMAGE_DPI}};
     </script>
-    <script src="/static/js/editor.js?v=source-url-1"></script>
+    <script src="/static/js/editor.js?v=dpi-edit-1"></script>
 </body>
 </html>"##;
 

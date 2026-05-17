@@ -182,6 +182,7 @@ pub async fn upload_screenshot(
     let mut title: Option<String> = None;
     let mut source_url: Option<String> = None;
     let mut expires_in: Option<String> = None;
+    let mut image_dpi: Option<f64> = None;
 
     while let Some(field) = multipart
         .next_field()
@@ -226,6 +227,13 @@ pub async fn upload_screenshot(
                         .map_err(|e| AppError::BadRequest(format!("Read error: {}", e)))?,
                 );
             }
+            "image_dpi" => {
+                let value = field
+                    .text()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("Read error: {}", e)))?;
+                image_dpi = parse_image_dpi(&value);
+            }
             _ => {}
         }
     }
@@ -235,6 +243,9 @@ pub async fn upload_screenshot(
     // Validate it's actually an image
     image::load_from_memory(&image_data)
         .map_err(|_| AppError::BadRequest("Invalid image data".into()))?;
+    let image_dpi = image_dpi
+        .or_else(|| png_dpi_from_phys_chunk(&image_data))
+        .unwrap_or(100.0);
 
     let id = Uuid::new_v4();
     let sid = share_id::generate();
@@ -275,6 +286,7 @@ pub async fn upload_screenshot(
         rendered_path: Some(rendered_path.to_string_lossy().to_string()),
         annotations: vec![],
         crop_rect: None,
+        image_dpi,
         visibility: "unlisted".to_string(),
         expires_at,
         created_at: Utc::now(),
@@ -294,9 +306,61 @@ pub async fn upload_screenshot(
             "share_id": sid,
             "share_url": share_url,
             "raw_url": raw_url,
+            "image_dpi": screenshot.image_dpi,
             "created_at": screenshot.created_at,
         })),
     ))
+}
+
+fn parse_image_dpi(value: &str) -> Option<f64> {
+    value
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|dpi| dpi.is_finite() && *dpi > 0.0)
+        .map(normalize_image_dpi)
+}
+
+fn normalize_image_dpi(dpi: f64) -> f64 {
+    if dpi.is_finite() && dpi > 0.0 {
+        dpi.clamp(1.0, 2400.0)
+    } else {
+        100.0
+    }
+}
+
+fn png_dpi_from_phys_chunk(data: &[u8]) -> Option<f64> {
+    const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1a\n";
+    if data.len() < 8 || &data[..8] != PNG_SIGNATURE {
+        return None;
+    }
+
+    let mut offset = 8usize;
+    while offset.checked_add(12)? <= data.len() {
+        let length = u32::from_be_bytes(data[offset..offset + 4].try_into().ok()?) as usize;
+        let chunk_type = &data[offset + 4..offset + 8];
+        let data_start = offset + 8;
+        let data_end = data_start.checked_add(length)?;
+        let next = data_end.checked_add(4)?;
+        if next > data.len() {
+            return None;
+        }
+
+        if chunk_type == b"pHYs" && length == 9 {
+            let x_ppu = u32::from_be_bytes(data[data_start..data_start + 4].try_into().ok()?);
+            let y_ppu = u32::from_be_bytes(data[data_start + 4..data_start + 8].try_into().ok()?);
+            let unit = data[data_start + 8];
+            if unit == 1 && x_ppu > 0 && y_ppu > 0 {
+                let avg_pixels_per_meter = (x_ppu as f64 + y_ppu as f64) / 2.0;
+                return Some((avg_pixels_per_meter * 0.0254).clamp(1.0, 2400.0));
+            }
+            return None;
+        }
+
+        offset = next;
+    }
+
+    None
 }
 
 fn parse_expires_in(s: Option<&str>) -> Option<chrono::DateTime<Utc>> {
@@ -399,6 +463,7 @@ pub struct UpdateRequest {
     pub source_url: Option<String>,
     pub visibility: Option<String>,
     pub expires_in: Option<String>,
+    pub image_dpi: Option<f64>,
 }
 
 pub async fn update_screenshot(
@@ -431,6 +496,10 @@ pub async fn update_screenshot(
             Some(trimmed)
         }
     });
+    let image_dpi = req.image_dpi.map(normalize_image_dpi);
+    let dpi_changed = image_dpi
+        .map(|dpi| (dpi - screenshot.image_dpi).abs() > f64::EPSILON)
+        .unwrap_or(false);
 
     state.db.update_screenshot_metadata(
         &id,
@@ -438,7 +507,29 @@ pub async fn update_screenshot(
         source_url,
         req.visibility.as_deref(),
         expires_at,
+        image_dpi,
     )?;
+
+    if let Some(image_dpi) = image_dpi.filter(|_| dpi_changed) {
+        let rendered_path = state
+            .config
+            .storage
+            .rendered_path()
+            .join(format!("{}.png", screenshot.share_id));
+        let rendered_path_str = rendered_path.to_string_lossy().to_string();
+
+        image_processing::render_screenshot(
+            &screenshot.original_path,
+            &rendered_path_str,
+            &screenshot.annotations,
+            &screenshot.crop_rect,
+            image_dpi,
+        )?;
+
+        state
+            .db
+            .update_screenshot_rendered_path(&id, &rendered_path_str)?;
+    }
 
     Ok(Json(serde_json::json!({ "ok": true })))
 }
@@ -513,6 +604,7 @@ pub async fn save_annotations(
         &rendered_path_str,
         &req.annotations,
         &req.crop,
+        screenshot.image_dpi,
     )?;
 
     state

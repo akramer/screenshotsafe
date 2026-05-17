@@ -16,6 +16,7 @@ pub fn render_screenshot(
     output_path: &str,
     annotations: &[Annotation],
     crop_rect: &Option<CropRect>,
+    image_dpi: f64,
 ) -> crate::Result<()> {
     let img = image::open(original_path)?;
 
@@ -31,7 +32,7 @@ pub fn render_screenshot(
 
     // If there are annotations, render them as SVG and composite
     if !annotations.is_empty() {
-        let svg_str = build_svg(width, height, annotations, crop_rect);
+        let svg_str = build_svg(width, height, annotations, crop_rect, image_dpi);
         let overlay = render_svg_to_pixmap(&svg_str, width, height)?;
         composite_overlay(&mut canvas, &overlay);
     }
@@ -52,7 +53,9 @@ fn build_svg(
     height: u32,
     annotations: &[Annotation],
     crop: &Option<CropRect>,
+    image_dpi: f64,
 ) -> String {
+    let visual_scale = (image_dpi / 100.0).clamp(0.1, 10.0);
     let (ox, oy) = crop
         .as_ref()
         .map(|c| (c.x as f64, c.y as f64))
@@ -60,13 +63,15 @@ fn build_svg(
 
     let mut elements = String::new();
 
-    elements.push_str(
+    let shadow_offset = 2.0 * visual_scale;
+    let shadow_blur = 2.0 * visual_scale;
+    elements.push_str(&format!(
         "<defs>\n\
             <filter id=\"shadow\" x=\"-20%\" y=\"-20%\" width=\"140%\" height=\"140%\">\n\
-                <feDropShadow dx=\"2\" dy=\"2\" stdDeviation=\"2\" flood-color=\"#000000\" flood-opacity=\"0.3\"/>\n\
+                <feDropShadow dx=\"{shadow_offset}\" dy=\"{shadow_offset}\" stdDeviation=\"{shadow_blur}\" flood-color=\"#000000\" flood-opacity=\"0.3\"/>\n\
             </filter>\n\
         </defs>"
-    );
+    ));
 
     for annotation in annotations {
         match annotation {
@@ -87,12 +92,13 @@ fn build_svg(
                 filled,
                 stroke_width,
             } => {
-                let rx = *x - ox + stroke_width / 2.0;
-                let ry = *y - oy + stroke_width / 2.0;
+                let render_stroke_width = stroke_width * visual_scale;
+                let rx = *x - ox + render_stroke_width / 2.0;
+                let ry = *y - oy + render_stroke_width / 2.0;
                 let escaped_color = svg_escape_attr(color);
                 let fill_val = if *filled { &escaped_color } else { "none" };
                 elements.push_str(&format!(
-                    r#"<rect x="{rx}" y="{ry}" width="{w}" height="{h}" fill="{fill_val}" stroke="{escaped_color}" stroke-width="{stroke_width}" filter="url(#shadow)" />"#,
+                    r#"<rect x="{rx}" y="{ry}" width="{w}" height="{h}" fill="{fill_val}" stroke="{escaped_color}" stroke-width="{render_stroke_width}" filter="url(#shadow)" />"#,
                 ));
             }
             Annotation::Line {
@@ -103,13 +109,14 @@ fn build_svg(
                 color,
                 stroke_width,
             } => {
+                let render_stroke_width = stroke_width * visual_scale;
                 let lx1 = *x1 - ox;
                 let ly1 = *y1 - oy;
                 let lx2 = *x2 - ox;
                 let ly2 = *y2 - oy;
                 let escaped_color = svg_escape_attr(color);
                 elements.push_str(&format!(
-                    r#"<line x1="{lx1}" y1="{ly1}" x2="{lx2}" y2="{ly2}" stroke="{escaped_color}" stroke-width="{stroke_width}" filter="url(#shadow)" />"#,
+                    r#"<line x1="{lx1}" y1="{ly1}" x2="{lx2}" y2="{ly2}" stroke="{escaped_color}" stroke-width="{render_stroke_width}" filter="url(#shadow)" />"#,
                 ));
             }
             Annotation::Arrow {
@@ -120,6 +127,7 @@ fn build_svg(
                 color,
                 stroke_width,
             } => {
+                let render_stroke_width = stroke_width * visual_scale;
                 let ax1 = *x1 - ox;
                 let ay1 = *y1 - oy;
                 let ax2 = *x2 - ox;
@@ -131,7 +139,7 @@ fn build_svg(
                 let len = (dx * dx + dy * dy).sqrt();
 
                 if len > 0.001 {
-                    let head_len = (*stroke_width * 5.0).max(15.0);
+                    let head_len = (*stroke_width * 5.0).max(15.0) * visual_scale;
                     let angle = dy.atan2(dx);
                     let spread = std::f64::consts::PI / 6.0; // 30 degrees
 
@@ -151,7 +159,7 @@ fn build_svg(
                     // Draw arrow grouped with shadow filter
                     elements.push_str(&format!(
                         r#"<g filter="url(#shadow)">
-                            <line x1="{ax1}" y1="{ay1}" x2="{lx2}" y2="{ly2}" stroke="{escaped_color}" stroke-width="{stroke_width}" />
+                            <line x1="{ax1}" y1="{ay1}" x2="{lx2}" y2="{ly2}" stroke="{escaped_color}" stroke-width="{render_stroke_width}" />
                             <polygon points="{p0x},{p0y} {p1x},{p1y} {p2x},{p2y} {p3x},{p3y}" fill="{escaped_color}" stroke="{escaped_color}" stroke-width="1" stroke-linejoin="miter" />
                         </g>"#
                     ));
@@ -164,25 +172,26 @@ fn build_svg(
                 font_size,
                 color,
             } => {
+                let render_font_size = font_size * visual_scale;
                 let tx = *x - ox;
                 let ty = *y - oy;
                 let escaped_color = svg_escape_attr(color);
 
                 // SVG <text> y is the baseline; offset by ~0.90em to approximate top-left origin
                 // matching Fabric.js IText positioning (incorporating its 1.16 default line height padding).
-                let baseline_y = ty + font_size * 0.90;
+                let baseline_y = ty + render_font_size * 0.90;
 
                 let mut tspans = String::new();
                 for (i, line) in text.split('\n').enumerate() {
                     let escaped_line = svg_escape_text(line);
-                    let dy = if i == 0 { 0.0 } else { font_size * 1.16 };
+                    let dy = if i == 0 { 0.0 } else { render_font_size * 1.16 };
                     tspans.push_str(&format!(
                         r#"<tspan x="{tx}" dy="{dy}">{escaped_line}</tspan>"#
                     ));
                 }
 
                 elements.push_str(&format!(
-                    r#"<text x="{tx}" y="{baseline_y}" font-family="Liberation Sans, Arial, sans-serif" font-size="{font_size}" fill="{escaped_color}" filter="url(#shadow)">{tspans}</text>"#,
+                    r#"<text x="{tx}" y="{baseline_y}" font-family="Liberation Sans, Arial, sans-serif" font-size="{render_font_size}" fill="{escaped_color}" filter="url(#shadow)">{tspans}</text>"#,
                 ));
             }
         }

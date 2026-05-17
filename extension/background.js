@@ -103,6 +103,7 @@ async function captureAndOpenEditor(tab) {
         dataUrl,
         title: activeTab.title || 'Screenshot',
         sourceUrl: activeTab.url || '',
+        viewportWidth: activeTab.width || null,
     });
 
     await call(api.tabs, 'create', [{

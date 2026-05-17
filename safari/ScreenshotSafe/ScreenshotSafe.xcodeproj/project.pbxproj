@@ -7,86 +7,86 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A25D8CC42FB9016700FF4D56 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25D8CC32FB9016700FF4D56 /* AppDelegate.swift */; };
-		A25D8CC62FB9016700FF4D56 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25D8CC52FB9016700FF4D56 /* SceneDelegate.swift */; };
-		A25D8CC92FB9016700FF4D56 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CC72FB9016700FF4D56 /* LaunchScreen.storyboard */; };
-		A25D8CCC2FB9016700FF4D56 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CCA2FB9016700FF4D56 /* Main.storyboard */; };
-		A25D8CD52FB9016700FF4D56 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25D8CD42FB9016700FF4D56 /* AppDelegate.swift */; };
-		A25D8CD82FB9016700FF4D56 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CD62FB9016700FF4D56 /* Main.storyboard */; };
-		A25D8CDF2FB9016700FF4D56 /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A25D8CDE2FB9016700FF4D56 /* ScreenshotSafe Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		A25D8CE92FB9016700FF4D56 /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A25D8CE82FB9016700FF4D56 /* ScreenshotSafe Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		A25D8CEE2FB9016700FF4D56 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CB32FB9016600FF4D56 /* Main.html */; };
-		A25D8CEF2FB9016700FF4D56 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CB32FB9016600FF4D56 /* Main.html */; };
-		A25D8CF02FB9016700FF4D56 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CB52FB9016600FF4D56 /* Icon.png */; };
-		A25D8CF12FB9016700FF4D56 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CB52FB9016600FF4D56 /* Icon.png */; };
-		A25D8CF22FB9016700FF4D56 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CB62FB9016600FF4D56 /* Style.css */; };
-		A25D8CF32FB9016700FF4D56 /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CB62FB9016600FF4D56 /* Style.css */; };
-		A25D8CF42FB9016700FF4D56 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CB72FB9016600FF4D56 /* Script.js */; };
-		A25D8CF52FB9016700FF4D56 /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CB72FB9016600FF4D56 /* Script.js */; };
-		A25D8CF62FB9016700FF4D56 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25D8CB82FB9016600FF4D56 /* ViewController.swift */; };
-		A25D8CF72FB9016700FF4D56 /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25D8CB82FB9016600FF4D56 /* ViewController.swift */; };
-		A25D8CF82FB9016700FF4D56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CB92FB9016700FF4D56 /* Assets.xcassets */; };
-		A25D8CF92FB9016700FF4D56 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A25D8CB92FB9016700FF4D56 /* Assets.xcassets */; };
-		A25D8CFA2FB9016700FF4D56 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25D8CBB2FB9016700FF4D56 /* SafariWebExtensionHandler.swift */; };
-		A25D8CFB2FB9016700FF4D56 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A25D8CBB2FB9016700FF4D56 /* SafariWebExtensionHandler.swift */; };
-		A25D8D172FB9016700FF4D56 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D0D2FB9016700FF4D56 /* popup.js */; };
-		A25D8D182FB9016700FF4D56 /* webext-api.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D0E2FB9016700FF4D56 /* webext-api.js */; };
-		A25D8D192FB9016700FF4D56 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D0F2FB9016700FF4D56 /* background.js */; };
-		A25D8D1A2FB9016700FF4D56 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D102FB9016700FF4D56 /* popup.html */; };
-		A25D8D1B2FB9016700FF4D56 /* options.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D112FB9016700FF4D56 /* options.js */; };
-		A25D8D1C2FB9016700FF4D56 /* editor.html in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D122FB9016700FF4D56 /* editor.html */; };
-		A25D8D1D2FB9016700FF4D56 /* editor.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D132FB9016700FF4D56 /* editor.js */; };
-		A25D8D1E2FB9016700FF4D56 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D142FB9016700FF4D56 /* icons */; };
-		A25D8D1F2FB9016700FF4D56 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D152FB9016700FF4D56 /* manifest.json */; };
-		A25D8D202FB9016700FF4D56 /* options.html in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D162FB9016700FF4D56 /* options.html */; };
-		A25D8D212FB9016700FF4D56 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D0D2FB9016700FF4D56 /* popup.js */; };
-		A25D8D222FB9016700FF4D56 /* webext-api.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D0E2FB9016700FF4D56 /* webext-api.js */; };
-		A25D8D232FB9016700FF4D56 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D0F2FB9016700FF4D56 /* background.js */; };
-		A25D8D242FB9016700FF4D56 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D102FB9016700FF4D56 /* popup.html */; };
-		A25D8D252FB9016700FF4D56 /* options.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D112FB9016700FF4D56 /* options.js */; };
-		A25D8D262FB9016700FF4D56 /* editor.html in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D122FB9016700FF4D56 /* editor.html */; };
-		A25D8D272FB9016700FF4D56 /* editor.js in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D132FB9016700FF4D56 /* editor.js */; };
-		A25D8D282FB9016700FF4D56 /* icons in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D142FB9016700FF4D56 /* icons */; };
-		A25D8D292FB9016700FF4D56 /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D152FB9016700FF4D56 /* manifest.json */; };
-		A25D8D2A2FB9016700FF4D56 /* options.html in Resources */ = {isa = PBXBuildFile; fileRef = A25D8D162FB9016700FF4D56 /* options.html */; };
+		A23A5CC92FB9804B0021101E /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A23A5CC82FB9804B0021101E /* AppDelegate.swift */; };
+		A23A5CCB2FB9804B0021101E /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A23A5CCA2FB9804B0021101E /* SceneDelegate.swift */; };
+		A23A5CCE2FB9804B0021101E /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CCC2FB9804B0021101E /* LaunchScreen.storyboard */; };
+		A23A5CD12FB9804B0021101E /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CCF2FB9804B0021101E /* Main.storyboard */; };
+		A23A5CDA2FB9804B0021101E /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A23A5CD92FB9804B0021101E /* AppDelegate.swift */; };
+		A23A5CDD2FB9804B0021101E /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CDB2FB9804B0021101E /* Main.storyboard */; };
+		A23A5CE42FB9804B0021101E /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A23A5CE32FB9804B0021101E /* ScreenshotSafe Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A23A5CEE2FB9804B0021101E /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A23A5CED2FB9804B0021101E /* ScreenshotSafe Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A23A5CF32FB9804B0021101E /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CB82FB9804A0021101E /* Main.html */; };
+		A23A5CF42FB9804B0021101E /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CB82FB9804A0021101E /* Main.html */; };
+		A23A5CF52FB9804B0021101E /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CBA2FB9804A0021101E /* Icon.png */; };
+		A23A5CF62FB9804B0021101E /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CBA2FB9804A0021101E /* Icon.png */; };
+		A23A5CF72FB9804B0021101E /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CBB2FB9804A0021101E /* Style.css */; };
+		A23A5CF82FB9804B0021101E /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CBB2FB9804A0021101E /* Style.css */; };
+		A23A5CF92FB9804B0021101E /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CBC2FB9804A0021101E /* Script.js */; };
+		A23A5CFA2FB9804B0021101E /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CBC2FB9804A0021101E /* Script.js */; };
+		A23A5CFB2FB9804B0021101E /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A23A5CBD2FB9804A0021101E /* ViewController.swift */; };
+		A23A5CFC2FB9804B0021101E /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A23A5CBD2FB9804A0021101E /* ViewController.swift */; };
+		A23A5CFD2FB9804B0021101E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CBE2FB9804B0021101E /* Assets.xcassets */; };
+		A23A5CFE2FB9804B0021101E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A23A5CBE2FB9804B0021101E /* Assets.xcassets */; };
+		A23A5CFF2FB9804B0021101E /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A23A5CC02FB9804B0021101E /* SafariWebExtensionHandler.swift */; };
+		A23A5D002FB9804B0021101E /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A23A5CC02FB9804B0021101E /* SafariWebExtensionHandler.swift */; };
+		A23A5D1C2FB9804B0021101E /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D122FB9804B0021101E /* popup.js */; };
+		A23A5D1D2FB9804B0021101E /* webext-api.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D132FB9804B0021101E /* webext-api.js */; };
+		A23A5D1E2FB9804B0021101E /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D142FB9804B0021101E /* background.js */; };
+		A23A5D1F2FB9804B0021101E /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D152FB9804B0021101E /* popup.html */; };
+		A23A5D202FB9804B0021101E /* options.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D162FB9804B0021101E /* options.js */; };
+		A23A5D212FB9804B0021101E /* editor.html in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D172FB9804B0021101E /* editor.html */; };
+		A23A5D222FB9804B0021101E /* editor.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D182FB9804B0021101E /* editor.js */; };
+		A23A5D232FB9804B0021101E /* icons in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D192FB9804B0021101E /* icons */; };
+		A23A5D242FB9804B0021101E /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D1A2FB9804B0021101E /* manifest.json */; };
+		A23A5D252FB9804B0021101E /* options.html in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D1B2FB9804B0021101E /* options.html */; };
+		A23A5D262FB9804B0021101E /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D122FB9804B0021101E /* popup.js */; };
+		A23A5D272FB9804B0021101E /* webext-api.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D132FB9804B0021101E /* webext-api.js */; };
+		A23A5D282FB9804B0021101E /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D142FB9804B0021101E /* background.js */; };
+		A23A5D292FB9804B0021101E /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D152FB9804B0021101E /* popup.html */; };
+		A23A5D2A2FB9804B0021101E /* options.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D162FB9804B0021101E /* options.js */; };
+		A23A5D2B2FB9804B0021101E /* editor.html in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D172FB9804B0021101E /* editor.html */; };
+		A23A5D2C2FB9804B0021101E /* editor.js in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D182FB9804B0021101E /* editor.js */; };
+		A23A5D2D2FB9804B0021101E /* icons in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D192FB9804B0021101E /* icons */; };
+		A23A5D2E2FB9804B0021101E /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D1A2FB9804B0021101E /* manifest.json */; };
+		A23A5D2F2FB9804B0021101E /* options.html in Resources */ = {isa = PBXBuildFile; fileRef = A23A5D1B2FB9804B0021101E /* options.html */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		A25D8CE02FB9016700FF4D56 /* PBXContainerItemProxy */ = {
+		A23A5CE52FB9804B0021101E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = A25D8CAD2FB9016500FF4D56 /* Project object */;
+			containerPortal = A23A5CB22FB9804A0021101E /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = A25D8CDD2FB9016700FF4D56;
+			remoteGlobalIDString = A23A5CE22FB9804B0021101E;
 			remoteInfo = "ScreenshotSafe Extension (iOS)";
 		};
-		A25D8CEA2FB9016700FF4D56 /* PBXContainerItemProxy */ = {
+		A23A5CEF2FB9804B0021101E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
-			containerPortal = A25D8CAD2FB9016500FF4D56 /* Project object */;
+			containerPortal = A23A5CB22FB9804A0021101E /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = A25D8CE72FB9016700FF4D56;
+			remoteGlobalIDString = A23A5CEC2FB9804B0021101E;
 			remoteInfo = "ScreenshotSafe Extension (macOS)";
 		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		A25D8D012FB9016700FF4D56 /* Embed Foundation Extensions */ = {
+		A23A5D062FB9804B0021101E /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				A25D8CDF2FB9016700FF4D56 /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */,
+				A23A5CE42FB9804B0021101E /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A25D8D082FB9016700FF4D56 /* Embed Foundation Extensions */ = {
+		A23A5D0D2FB9804B0021101E /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				A25D8CE92FB9016700FF4D56 /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */,
+				A23A5CEE2FB9804B0021101E /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -94,62 +94,62 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		A25D8CB42FB9016600FF4D56 /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
-		A25D8CB52FB9016600FF4D56 /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
-		A25D8CB62FB9016600FF4D56 /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
-		A25D8CB72FB9016600FF4D56 /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
-		A25D8CB82FB9016600FF4D56 /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
-		A25D8CB92FB9016700FF4D56 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A25D8CBB2FB9016700FF4D56 /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
-		A25D8CC02FB9016700FF4D56 /* ScreenshotSafe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScreenshotSafe.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A25D8CC32FB9016700FF4D56 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		A25D8CC52FB9016700FF4D56 /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
-		A25D8CC82FB9016700FF4D56 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
-		A25D8CCB2FB9016700FF4D56 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
-		A25D8CCD2FB9016700FF4D56 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A25D8CD22FB9016700FF4D56 /* ScreenshotSafe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScreenshotSafe.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		A25D8CD42FB9016700FF4D56 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		A25D8CD72FB9016700FF4D56 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
-		A25D8CD92FB9016700FF4D56 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A25D8CDE2FB9016700FF4D56 /* ScreenshotSafe Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A25D8CE32FB9016700FF4D56 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A25D8CE82FB9016700FF4D56 /* ScreenshotSafe Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
-		A25D8CED2FB9016700FF4D56 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A25D8D0D2FB9016700FF4D56 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup.js; path = Resources/popup.js; sourceTree = "<group>"; };
-		A25D8D0E2FB9016700FF4D56 /* webext-api.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "webext-api.js"; path = "Resources/webext-api.js"; sourceTree = "<group>"; };
-		A25D8D0F2FB9016700FF4D56 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = Resources/background.js; sourceTree = "<group>"; };
-		A25D8D102FB9016700FF4D56 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = Resources/popup.html; sourceTree = "<group>"; };
-		A25D8D112FB9016700FF4D56 /* options.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = options.js; path = Resources/options.js; sourceTree = "<group>"; };
-		A25D8D122FB9016700FF4D56 /* editor.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = editor.html; path = Resources/editor.html; sourceTree = "<group>"; };
-		A25D8D132FB9016700FF4D56 /* editor.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = editor.js; path = Resources/editor.js; sourceTree = "<group>"; };
-		A25D8D142FB9016700FF4D56 /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = Resources/icons; sourceTree = "<group>"; };
-		A25D8D152FB9016700FF4D56 /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = Resources/manifest.json; sourceTree = "<group>"; };
-		A25D8D162FB9016700FF4D56 /* options.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = options.html; path = Resources/options.html; sourceTree = "<group>"; };
+		A23A5CB92FB9804A0021101E /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		A23A5CBA2FB9804A0021101E /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		A23A5CBB2FB9804A0021101E /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		A23A5CBC2FB9804A0021101E /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
+		A23A5CBD2FB9804A0021101E /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		A23A5CBE2FB9804B0021101E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A23A5CC02FB9804B0021101E /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		A23A5CC52FB9804B0021101E /* ScreenshotSafe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScreenshotSafe.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A23A5CC82FB9804B0021101E /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A23A5CCA2FB9804B0021101E /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		A23A5CCD2FB9804B0021101E /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		A23A5CD02FB9804B0021101E /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		A23A5CD22FB9804B0021101E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A23A5CD72FB9804B0021101E /* ScreenshotSafe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScreenshotSafe.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A23A5CD92FB9804B0021101E /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A23A5CDC2FB9804B0021101E /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		A23A5CDE2FB9804B0021101E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A23A5CE32FB9804B0021101E /* ScreenshotSafe Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A23A5CE82FB9804B0021101E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A23A5CED2FB9804B0021101E /* ScreenshotSafe Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A23A5CF22FB9804B0021101E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A23A5D122FB9804B0021101E /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup.js; path = Resources/popup.js; sourceTree = "<group>"; };
+		A23A5D132FB9804B0021101E /* webext-api.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "webext-api.js"; path = "Resources/webext-api.js"; sourceTree = "<group>"; };
+		A23A5D142FB9804B0021101E /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = Resources/background.js; sourceTree = "<group>"; };
+		A23A5D152FB9804B0021101E /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = Resources/popup.html; sourceTree = "<group>"; };
+		A23A5D162FB9804B0021101E /* options.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = options.js; path = Resources/options.js; sourceTree = "<group>"; };
+		A23A5D172FB9804B0021101E /* editor.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = editor.html; path = Resources/editor.html; sourceTree = "<group>"; };
+		A23A5D182FB9804B0021101E /* editor.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = editor.js; path = Resources/editor.js; sourceTree = "<group>"; };
+		A23A5D192FB9804B0021101E /* icons */ = {isa = PBXFileReference; lastKnownFileType = folder; name = icons; path = Resources/icons; sourceTree = "<group>"; };
+		A23A5D1A2FB9804B0021101E /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = Resources/manifest.json; sourceTree = "<group>"; };
+		A23A5D1B2FB9804B0021101E /* options.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = options.html; path = Resources/options.html; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A25D8CBD2FB9016700FF4D56 /* Frameworks */ = {
+		A23A5CC22FB9804B0021101E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A25D8CCF2FB9016700FF4D56 /* Frameworks */ = {
+		A23A5CD42FB9804B0021101E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A25D8CDB2FB9016700FF4D56 /* Frameworks */ = {
+		A23A5CE02FB9804B0021101E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A25D8CE52FB9016700FF4D56 /* Frameworks */ = {
+		A23A5CEA2FB9804B0021101E /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -159,111 +159,111 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		A25D8CAC2FB9016500FF4D56 = {
+		A23A5CB12FB9804A0021101E = {
 			isa = PBXGroup;
 			children = (
-				A25D8CB12FB9016600FF4D56 /* Shared (App) */,
-				A25D8CBA2FB9016700FF4D56 /* Shared (Extension) */,
-				A25D8CC22FB9016700FF4D56 /* iOS (App) */,
-				A25D8CD32FB9016700FF4D56 /* macOS (App) */,
-				A25D8CE22FB9016700FF4D56 /* iOS (Extension) */,
-				A25D8CEC2FB9016700FF4D56 /* macOS (Extension) */,
-				A25D8CC12FB9016700FF4D56 /* Products */,
+				A23A5CB62FB9804A0021101E /* Shared (App) */,
+				A23A5CBF2FB9804B0021101E /* Shared (Extension) */,
+				A23A5CC72FB9804B0021101E /* iOS (App) */,
+				A23A5CD82FB9804B0021101E /* macOS (App) */,
+				A23A5CE72FB9804B0021101E /* iOS (Extension) */,
+				A23A5CF12FB9804B0021101E /* macOS (Extension) */,
+				A23A5CC62FB9804B0021101E /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		A25D8CB12FB9016600FF4D56 /* Shared (App) */ = {
+		A23A5CB62FB9804A0021101E /* Shared (App) */ = {
 			isa = PBXGroup;
 			children = (
-				A25D8CB82FB9016600FF4D56 /* ViewController.swift */,
-				A25D8CB92FB9016700FF4D56 /* Assets.xcassets */,
-				A25D8CB22FB9016600FF4D56 /* Resources */,
+				A23A5CBD2FB9804A0021101E /* ViewController.swift */,
+				A23A5CBE2FB9804B0021101E /* Assets.xcassets */,
+				A23A5CB72FB9804A0021101E /* Resources */,
 			);
 			path = "Shared (App)";
 			sourceTree = "<group>";
 		};
-		A25D8CB22FB9016600FF4D56 /* Resources */ = {
+		A23A5CB72FB9804A0021101E /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				A25D8CB32FB9016600FF4D56 /* Main.html */,
-				A25D8CB52FB9016600FF4D56 /* Icon.png */,
-				A25D8CB62FB9016600FF4D56 /* Style.css */,
-				A25D8CB72FB9016600FF4D56 /* Script.js */,
+				A23A5CB82FB9804A0021101E /* Main.html */,
+				A23A5CBA2FB9804A0021101E /* Icon.png */,
+				A23A5CBB2FB9804A0021101E /* Style.css */,
+				A23A5CBC2FB9804A0021101E /* Script.js */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
 		};
-		A25D8CBA2FB9016700FF4D56 /* Shared (Extension) */ = {
+		A23A5CBF2FB9804B0021101E /* Shared (Extension) */ = {
 			isa = PBXGroup;
 			children = (
-				A25D8D0C2FB9016700FF4D56 /* Resources */,
-				A25D8CBB2FB9016700FF4D56 /* SafariWebExtensionHandler.swift */,
+				A23A5D112FB9804B0021101E /* Resources */,
+				A23A5CC02FB9804B0021101E /* SafariWebExtensionHandler.swift */,
 			);
 			path = "Shared (Extension)";
 			sourceTree = "<group>";
 		};
-		A25D8CC12FB9016700FF4D56 /* Products */ = {
+		A23A5CC62FB9804B0021101E /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A25D8CC02FB9016700FF4D56 /* ScreenshotSafe.app */,
-				A25D8CD22FB9016700FF4D56 /* ScreenshotSafe.app */,
-				A25D8CDE2FB9016700FF4D56 /* ScreenshotSafe Extension.appex */,
-				A25D8CE82FB9016700FF4D56 /* ScreenshotSafe Extension.appex */,
+				A23A5CC52FB9804B0021101E /* ScreenshotSafe.app */,
+				A23A5CD72FB9804B0021101E /* ScreenshotSafe.app */,
+				A23A5CE32FB9804B0021101E /* ScreenshotSafe Extension.appex */,
+				A23A5CED2FB9804B0021101E /* ScreenshotSafe Extension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		A25D8CC22FB9016700FF4D56 /* iOS (App) */ = {
+		A23A5CC72FB9804B0021101E /* iOS (App) */ = {
 			isa = PBXGroup;
 			children = (
-				A25D8CC32FB9016700FF4D56 /* AppDelegate.swift */,
-				A25D8CC52FB9016700FF4D56 /* SceneDelegate.swift */,
-				A25D8CC72FB9016700FF4D56 /* LaunchScreen.storyboard */,
-				A25D8CCA2FB9016700FF4D56 /* Main.storyboard */,
-				A25D8CCD2FB9016700FF4D56 /* Info.plist */,
+				A23A5CC82FB9804B0021101E /* AppDelegate.swift */,
+				A23A5CCA2FB9804B0021101E /* SceneDelegate.swift */,
+				A23A5CCC2FB9804B0021101E /* LaunchScreen.storyboard */,
+				A23A5CCF2FB9804B0021101E /* Main.storyboard */,
+				A23A5CD22FB9804B0021101E /* Info.plist */,
 			);
 			path = "iOS (App)";
 			sourceTree = "<group>";
 		};
-		A25D8CD32FB9016700FF4D56 /* macOS (App) */ = {
+		A23A5CD82FB9804B0021101E /* macOS (App) */ = {
 			isa = PBXGroup;
 			children = (
-				A25D8CD42FB9016700FF4D56 /* AppDelegate.swift */,
-				A25D8CD62FB9016700FF4D56 /* Main.storyboard */,
-				A25D8CD92FB9016700FF4D56 /* Info.plist */,
+				A23A5CD92FB9804B0021101E /* AppDelegate.swift */,
+				A23A5CDB2FB9804B0021101E /* Main.storyboard */,
+				A23A5CDE2FB9804B0021101E /* Info.plist */,
 			);
 			path = "macOS (App)";
 			sourceTree = "<group>";
 		};
-		A25D8CE22FB9016700FF4D56 /* iOS (Extension) */ = {
+		A23A5CE72FB9804B0021101E /* iOS (Extension) */ = {
 			isa = PBXGroup;
 			children = (
-				A25D8CE32FB9016700FF4D56 /* Info.plist */,
+				A23A5CE82FB9804B0021101E /* Info.plist */,
 			);
 			path = "iOS (Extension)";
 			sourceTree = "<group>";
 		};
-		A25D8CEC2FB9016700FF4D56 /* macOS (Extension) */ = {
+		A23A5CF12FB9804B0021101E /* macOS (Extension) */ = {
 			isa = PBXGroup;
 			children = (
-				A25D8CED2FB9016700FF4D56 /* Info.plist */,
+				A23A5CF22FB9804B0021101E /* Info.plist */,
 			);
 			path = "macOS (Extension)";
 			sourceTree = "<group>";
 		};
-		A25D8D0C2FB9016700FF4D56 /* Resources */ = {
+		A23A5D112FB9804B0021101E /* Resources */ = {
 			isa = PBXGroup;
 			children = (
-				A25D8D0D2FB9016700FF4D56 /* popup.js */,
-				A25D8D0E2FB9016700FF4D56 /* webext-api.js */,
-				A25D8D0F2FB9016700FF4D56 /* background.js */,
-				A25D8D102FB9016700FF4D56 /* popup.html */,
-				A25D8D112FB9016700FF4D56 /* options.js */,
-				A25D8D122FB9016700FF4D56 /* editor.html */,
-				A25D8D132FB9016700FF4D56 /* editor.js */,
-				A25D8D142FB9016700FF4D56 /* icons */,
-				A25D8D152FB9016700FF4D56 /* manifest.json */,
-				A25D8D162FB9016700FF4D56 /* options.html */,
+				A23A5D122FB9804B0021101E /* popup.js */,
+				A23A5D132FB9804B0021101E /* webext-api.js */,
+				A23A5D142FB9804B0021101E /* background.js */,
+				A23A5D152FB9804B0021101E /* popup.html */,
+				A23A5D162FB9804B0021101E /* options.js */,
+				A23A5D172FB9804B0021101E /* editor.html */,
+				A23A5D182FB9804B0021101E /* editor.js */,
+				A23A5D192FB9804B0021101E /* icons */,
+				A23A5D1A2FB9804B0021101E /* manifest.json */,
+				A23A5D1B2FB9804B0021101E /* options.html */,
 			);
 			name = Resources;
 			path = "Shared (Extension)";
@@ -272,55 +272,55 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A25D8CBF2FB9016700FF4D56 /* ScreenshotSafe (iOS) */ = {
+		A23A5CC42FB9804B0021101E /* ScreenshotSafe (iOS) */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A25D8D022FB9016700FF4D56 /* Build configuration list for PBXNativeTarget "ScreenshotSafe (iOS)" */;
+			buildConfigurationList = A23A5D072FB9804B0021101E /* Build configuration list for PBXNativeTarget "ScreenshotSafe (iOS)" */;
 			buildPhases = (
-				A25D8CBC2FB9016700FF4D56 /* Sources */,
-				A25D8CBD2FB9016700FF4D56 /* Frameworks */,
-				A25D8CBE2FB9016700FF4D56 /* Resources */,
-				A25D8D012FB9016700FF4D56 /* Embed Foundation Extensions */,
+				A23A5CC12FB9804B0021101E /* Sources */,
+				A23A5CC22FB9804B0021101E /* Frameworks */,
+				A23A5CC32FB9804B0021101E /* Resources */,
+				A23A5D062FB9804B0021101E /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				A25D8CE12FB9016700FF4D56 /* PBXTargetDependency */,
+				A23A5CE62FB9804B0021101E /* PBXTargetDependency */,
 			);
 			name = "ScreenshotSafe (iOS)";
 			packageProductDependencies = (
 			);
 			productName = "ScreenshotSafe (iOS)";
-			productReference = A25D8CC02FB9016700FF4D56 /* ScreenshotSafe.app */;
+			productReference = A23A5CC52FB9804B0021101E /* ScreenshotSafe.app */;
 			productType = "com.apple.product-type.application";
 		};
-		A25D8CD12FB9016700FF4D56 /* ScreenshotSafe (macOS) */ = {
+		A23A5CD62FB9804B0021101E /* ScreenshotSafe (macOS) */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A25D8D092FB9016700FF4D56 /* Build configuration list for PBXNativeTarget "ScreenshotSafe (macOS)" */;
+			buildConfigurationList = A23A5D0E2FB9804B0021101E /* Build configuration list for PBXNativeTarget "ScreenshotSafe (macOS)" */;
 			buildPhases = (
-				A25D8CCE2FB9016700FF4D56 /* Sources */,
-				A25D8CCF2FB9016700FF4D56 /* Frameworks */,
-				A25D8CD02FB9016700FF4D56 /* Resources */,
-				A25D8D082FB9016700FF4D56 /* Embed Foundation Extensions */,
+				A23A5CD32FB9804B0021101E /* Sources */,
+				A23A5CD42FB9804B0021101E /* Frameworks */,
+				A23A5CD52FB9804B0021101E /* Resources */,
+				A23A5D0D2FB9804B0021101E /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				A25D8CEB2FB9016700FF4D56 /* PBXTargetDependency */,
+				A23A5CF02FB9804B0021101E /* PBXTargetDependency */,
 			);
 			name = "ScreenshotSafe (macOS)";
 			packageProductDependencies = (
 			);
 			productName = "ScreenshotSafe (macOS)";
-			productReference = A25D8CD22FB9016700FF4D56 /* ScreenshotSafe.app */;
+			productReference = A23A5CD72FB9804B0021101E /* ScreenshotSafe.app */;
 			productType = "com.apple.product-type.application";
 		};
-		A25D8CDD2FB9016700FF4D56 /* ScreenshotSafe Extension (iOS) */ = {
+		A23A5CE22FB9804B0021101E /* ScreenshotSafe Extension (iOS) */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A25D8CFE2FB9016700FF4D56 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (iOS)" */;
+			buildConfigurationList = A23A5D032FB9804B0021101E /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (iOS)" */;
 			buildPhases = (
-				A25D8CDA2FB9016700FF4D56 /* Sources */,
-				A25D8CDB2FB9016700FF4D56 /* Frameworks */,
-				A25D8CDC2FB9016700FF4D56 /* Resources */,
+				A23A5CDF2FB9804B0021101E /* Sources */,
+				A23A5CE02FB9804B0021101E /* Frameworks */,
+				A23A5CE12FB9804B0021101E /* Resources */,
 			);
 			buildRules = (
 			);
@@ -330,16 +330,16 @@
 			packageProductDependencies = (
 			);
 			productName = "ScreenshotSafe Extension (iOS)";
-			productReference = A25D8CDE2FB9016700FF4D56 /* ScreenshotSafe Extension.appex */;
+			productReference = A23A5CE32FB9804B0021101E /* ScreenshotSafe Extension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		A25D8CE72FB9016700FF4D56 /* ScreenshotSafe Extension (macOS) */ = {
+		A23A5CEC2FB9804B0021101E /* ScreenshotSafe Extension (macOS) */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A25D8D052FB9016700FF4D56 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (macOS)" */;
+			buildConfigurationList = A23A5D0A2FB9804B0021101E /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (macOS)" */;
 			buildPhases = (
-				A25D8CE42FB9016700FF4D56 /* Sources */,
-				A25D8CE52FB9016700FF4D56 /* Frameworks */,
-				A25D8CE62FB9016700FF4D56 /* Resources */,
+				A23A5CE92FB9804B0021101E /* Sources */,
+				A23A5CEA2FB9804B0021101E /* Frameworks */,
+				A23A5CEB2FB9804B0021101E /* Resources */,
 			);
 			buildRules = (
 			);
@@ -349,199 +349,199 @@
 			packageProductDependencies = (
 			);
 			productName = "ScreenshotSafe Extension (macOS)";
-			productReference = A25D8CE82FB9016700FF4D56 /* ScreenshotSafe Extension.appex */;
+			productReference = A23A5CED2FB9804B0021101E /* ScreenshotSafe Extension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		A25D8CAD2FB9016500FF4D56 /* Project object */ = {
+		A23A5CB22FB9804A0021101E /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
-					A25D8CBF2FB9016700FF4D56 = {
+					A23A5CC42FB9804B0021101E = {
 						CreatedOnToolsVersion = 26.5;
 					};
-					A25D8CD12FB9016700FF4D56 = {
+					A23A5CD62FB9804B0021101E = {
 						CreatedOnToolsVersion = 26.5;
 					};
-					A25D8CDD2FB9016700FF4D56 = {
+					A23A5CE22FB9804B0021101E = {
 						CreatedOnToolsVersion = 26.5;
 					};
-					A25D8CE72FB9016700FF4D56 = {
+					A23A5CEC2FB9804B0021101E = {
 						CreatedOnToolsVersion = 26.5;
 					};
 				};
 			};
-			buildConfigurationList = A25D8CB02FB9016500FF4D56 /* Build configuration list for PBXProject "ScreenshotSafe" */;
+			buildConfigurationList = A23A5CB52FB9804A0021101E /* Build configuration list for PBXProject "ScreenshotSafe" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 			);
-			mainGroup = A25D8CAC2FB9016500FF4D56;
+			mainGroup = A23A5CB12FB9804A0021101E;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = A25D8CC12FB9016700FF4D56 /* Products */;
+			productRefGroup = A23A5CC62FB9804B0021101E /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A25D8CBF2FB9016700FF4D56 /* ScreenshotSafe (iOS) */,
-				A25D8CD12FB9016700FF4D56 /* ScreenshotSafe (macOS) */,
-				A25D8CDD2FB9016700FF4D56 /* ScreenshotSafe Extension (iOS) */,
-				A25D8CE72FB9016700FF4D56 /* ScreenshotSafe Extension (macOS) */,
+				A23A5CC42FB9804B0021101E /* ScreenshotSafe (iOS) */,
+				A23A5CD62FB9804B0021101E /* ScreenshotSafe (macOS) */,
+				A23A5CE22FB9804B0021101E /* ScreenshotSafe Extension (iOS) */,
+				A23A5CEC2FB9804B0021101E /* ScreenshotSafe Extension (macOS) */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		A25D8CBE2FB9016700FF4D56 /* Resources */ = {
+		A23A5CC32FB9804B0021101E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A25D8CF02FB9016700FF4D56 /* Icon.png in Resources */,
-				A25D8CC92FB9016700FF4D56 /* LaunchScreen.storyboard in Resources */,
-				A25D8CEE2FB9016700FF4D56 /* Main.html in Resources */,
-				A25D8CF42FB9016700FF4D56 /* Script.js in Resources */,
-				A25D8CF82FB9016700FF4D56 /* Assets.xcassets in Resources */,
-				A25D8CCC2FB9016700FF4D56 /* Main.storyboard in Resources */,
-				A25D8CF22FB9016700FF4D56 /* Style.css in Resources */,
+				A23A5CF52FB9804B0021101E /* Icon.png in Resources */,
+				A23A5CCE2FB9804B0021101E /* LaunchScreen.storyboard in Resources */,
+				A23A5CF32FB9804B0021101E /* Main.html in Resources */,
+				A23A5CF92FB9804B0021101E /* Script.js in Resources */,
+				A23A5CFD2FB9804B0021101E /* Assets.xcassets in Resources */,
+				A23A5CD12FB9804B0021101E /* Main.storyboard in Resources */,
+				A23A5CF72FB9804B0021101E /* Style.css in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A25D8CD02FB9016700FF4D56 /* Resources */ = {
+		A23A5CD52FB9804B0021101E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A25D8CF12FB9016700FF4D56 /* Icon.png in Resources */,
-				A25D8CF32FB9016700FF4D56 /* Style.css in Resources */,
-				A25D8CD82FB9016700FF4D56 /* Main.storyboard in Resources */,
-				A25D8CF52FB9016700FF4D56 /* Script.js in Resources */,
-				A25D8CF92FB9016700FF4D56 /* Assets.xcassets in Resources */,
-				A25D8CEF2FB9016700FF4D56 /* Main.html in Resources */,
+				A23A5CF62FB9804B0021101E /* Icon.png in Resources */,
+				A23A5CF82FB9804B0021101E /* Style.css in Resources */,
+				A23A5CDD2FB9804B0021101E /* Main.storyboard in Resources */,
+				A23A5CFA2FB9804B0021101E /* Script.js in Resources */,
+				A23A5CFE2FB9804B0021101E /* Assets.xcassets in Resources */,
+				A23A5CF42FB9804B0021101E /* Main.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A25D8CDC2FB9016700FF4D56 /* Resources */ = {
+		A23A5CE12FB9804B0021101E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A25D8D222FB9016700FF4D56 /* webext-api.js in Resources */,
-				A25D8D282FB9016700FF4D56 /* icons in Resources */,
-				A25D8D262FB9016700FF4D56 /* editor.html in Resources */,
-				A25D8D242FB9016700FF4D56 /* popup.html in Resources */,
-				A25D8D292FB9016700FF4D56 /* manifest.json in Resources */,
-				A25D8D232FB9016700FF4D56 /* background.js in Resources */,
-				A25D8D272FB9016700FF4D56 /* editor.js in Resources */,
-				A25D8D2A2FB9016700FF4D56 /* options.html in Resources */,
-				A25D8D212FB9016700FF4D56 /* popup.js in Resources */,
-				A25D8D252FB9016700FF4D56 /* options.js in Resources */,
+				A23A5D272FB9804B0021101E /* webext-api.js in Resources */,
+				A23A5D2D2FB9804B0021101E /* icons in Resources */,
+				A23A5D2B2FB9804B0021101E /* editor.html in Resources */,
+				A23A5D292FB9804B0021101E /* popup.html in Resources */,
+				A23A5D2E2FB9804B0021101E /* manifest.json in Resources */,
+				A23A5D282FB9804B0021101E /* background.js in Resources */,
+				A23A5D2C2FB9804B0021101E /* editor.js in Resources */,
+				A23A5D2F2FB9804B0021101E /* options.html in Resources */,
+				A23A5D262FB9804B0021101E /* popup.js in Resources */,
+				A23A5D2A2FB9804B0021101E /* options.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A25D8CE62FB9016700FF4D56 /* Resources */ = {
+		A23A5CEB2FB9804B0021101E /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A25D8D182FB9016700FF4D56 /* webext-api.js in Resources */,
-				A25D8D1E2FB9016700FF4D56 /* icons in Resources */,
-				A25D8D1C2FB9016700FF4D56 /* editor.html in Resources */,
-				A25D8D1A2FB9016700FF4D56 /* popup.html in Resources */,
-				A25D8D1F2FB9016700FF4D56 /* manifest.json in Resources */,
-				A25D8D192FB9016700FF4D56 /* background.js in Resources */,
-				A25D8D1D2FB9016700FF4D56 /* editor.js in Resources */,
-				A25D8D202FB9016700FF4D56 /* options.html in Resources */,
-				A25D8D172FB9016700FF4D56 /* popup.js in Resources */,
-				A25D8D1B2FB9016700FF4D56 /* options.js in Resources */,
+				A23A5D1D2FB9804B0021101E /* webext-api.js in Resources */,
+				A23A5D232FB9804B0021101E /* icons in Resources */,
+				A23A5D212FB9804B0021101E /* editor.html in Resources */,
+				A23A5D1F2FB9804B0021101E /* popup.html in Resources */,
+				A23A5D242FB9804B0021101E /* manifest.json in Resources */,
+				A23A5D1E2FB9804B0021101E /* background.js in Resources */,
+				A23A5D222FB9804B0021101E /* editor.js in Resources */,
+				A23A5D252FB9804B0021101E /* options.html in Resources */,
+				A23A5D1C2FB9804B0021101E /* popup.js in Resources */,
+				A23A5D202FB9804B0021101E /* options.js in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A25D8CBC2FB9016700FF4D56 /* Sources */ = {
+		A23A5CC12FB9804B0021101E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A25D8CF62FB9016700FF4D56 /* ViewController.swift in Sources */,
-				A25D8CC42FB9016700FF4D56 /* AppDelegate.swift in Sources */,
-				A25D8CC62FB9016700FF4D56 /* SceneDelegate.swift in Sources */,
+				A23A5CFB2FB9804B0021101E /* ViewController.swift in Sources */,
+				A23A5CC92FB9804B0021101E /* AppDelegate.swift in Sources */,
+				A23A5CCB2FB9804B0021101E /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A25D8CCE2FB9016700FF4D56 /* Sources */ = {
+		A23A5CD32FB9804B0021101E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A25D8CF72FB9016700FF4D56 /* ViewController.swift in Sources */,
-				A25D8CD52FB9016700FF4D56 /* AppDelegate.swift in Sources */,
+				A23A5CFC2FB9804B0021101E /* ViewController.swift in Sources */,
+				A23A5CDA2FB9804B0021101E /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A25D8CDA2FB9016700FF4D56 /* Sources */ = {
+		A23A5CDF2FB9804B0021101E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A25D8CFA2FB9016700FF4D56 /* SafariWebExtensionHandler.swift in Sources */,
+				A23A5CFF2FB9804B0021101E /* SafariWebExtensionHandler.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A25D8CE42FB9016700FF4D56 /* Sources */ = {
+		A23A5CE92FB9804B0021101E /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A25D8CFB2FB9016700FF4D56 /* SafariWebExtensionHandler.swift in Sources */,
+				A23A5D002FB9804B0021101E /* SafariWebExtensionHandler.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		A25D8CE12FB9016700FF4D56 /* PBXTargetDependency */ = {
+		A23A5CE62FB9804B0021101E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = A25D8CDD2FB9016700FF4D56 /* ScreenshotSafe Extension (iOS) */;
-			targetProxy = A25D8CE02FB9016700FF4D56 /* PBXContainerItemProxy */;
+			target = A23A5CE22FB9804B0021101E /* ScreenshotSafe Extension (iOS) */;
+			targetProxy = A23A5CE52FB9804B0021101E /* PBXContainerItemProxy */;
 		};
-		A25D8CEB2FB9016700FF4D56 /* PBXTargetDependency */ = {
+		A23A5CF02FB9804B0021101E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = A25D8CE72FB9016700FF4D56 /* ScreenshotSafe Extension (macOS) */;
-			targetProxy = A25D8CEA2FB9016700FF4D56 /* PBXContainerItemProxy */;
+			target = A23A5CEC2FB9804B0021101E /* ScreenshotSafe Extension (macOS) */;
+			targetProxy = A23A5CEF2FB9804B0021101E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
-		A25D8CB32FB9016600FF4D56 /* Main.html */ = {
+		A23A5CB82FB9804A0021101E /* Main.html */ = {
 			isa = PBXVariantGroup;
 			children = (
-				A25D8CB42FB9016600FF4D56 /* Base */,
+				A23A5CB92FB9804A0021101E /* Base */,
 			);
 			name = Main.html;
 			sourceTree = "<group>";
 		};
-		A25D8CC72FB9016700FF4D56 /* LaunchScreen.storyboard */ = {
+		A23A5CCC2FB9804B0021101E /* LaunchScreen.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
-				A25D8CC82FB9016700FF4D56 /* Base */,
+				A23A5CCD2FB9804B0021101E /* Base */,
 			);
 			name = LaunchScreen.storyboard;
 			sourceTree = "<group>";
 		};
-		A25D8CCA2FB9016700FF4D56 /* Main.storyboard */ = {
+		A23A5CCF2FB9804B0021101E /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
-				A25D8CCB2FB9016700FF4D56 /* Base */,
+				A23A5CD02FB9804B0021101E /* Base */,
 			);
 			name = Main.storyboard;
 			sourceTree = "<group>";
 		};
-		A25D8CD62FB9016700FF4D56 /* Main.storyboard */ = {
+		A23A5CDB2FB9804B0021101E /* Main.storyboard */ = {
 			isa = PBXVariantGroup;
 			children = (
-				A25D8CD72FB9016700FF4D56 /* Base */,
+				A23A5CDC2FB9804B0021101E /* Base */,
 			);
 			name = Main.storyboard;
 			sourceTree = "<group>";
@@ -549,7 +549,7 @@
 /* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
-		A25D8CFC2FB9016700FF4D56 /* Debug */ = {
+		A23A5D012FB9804B0021101E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -610,7 +610,7 @@
 			};
 			name = Debug;
 		};
-		A25D8CFD2FB9016700FF4D56 /* Release */ = {
+		A23A5D022FB9804B0021101E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -663,7 +663,7 @@
 			};
 			name = Release;
 		};
-		A25D8CFF2FB9016700FF4D56 /* Debug */ = {
+		A23A5D042FB9804B0021101E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -696,7 +696,7 @@
 			};
 			name = Debug;
 		};
-		A25D8D002FB9016700FF4D56 /* Release */ = {
+		A23A5D052FB9804B0021101E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -730,7 +730,7 @@
 			};
 			name = Release;
 		};
-		A25D8D032FB9016700FF4D56 /* Debug */ = {
+		A23A5D082FB9804B0021101E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -770,7 +770,7 @@
 			};
 			name = Debug;
 		};
-		A25D8D042FB9016700FF4D56 /* Release */ = {
+		A23A5D092FB9804B0021101E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -811,7 +811,7 @@
 			};
 			name = Release;
 		};
-		A25D8D062FB9016700FF4D56 /* Debug */ = {
+		A23A5D0B2FB9804B0021101E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -846,7 +846,7 @@
 			};
 			name = Debug;
 		};
-		A25D8D072FB9016700FF4D56 /* Release */ = {
+		A23A5D0C2FB9804B0021101E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
@@ -881,7 +881,7 @@
 			};
 			name = Release;
 		};
-		A25D8D0A2FB9016700FF4D56 /* Debug */ = {
+		A23A5D0F2FB9804B0021101E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -922,7 +922,7 @@
 			};
 			name = Debug;
 		};
-		A25D8D0B2FB9016700FF4D56 /* Release */ = {
+		A23A5D102FB9804B0021101E /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
@@ -966,52 +966,52 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A25D8CB02FB9016500FF4D56 /* Build configuration list for PBXProject "ScreenshotSafe" */ = {
+		A23A5CB52FB9804A0021101E /* Build configuration list for PBXProject "ScreenshotSafe" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A25D8CFC2FB9016700FF4D56 /* Debug */,
-				A25D8CFD2FB9016700FF4D56 /* Release */,
+				A23A5D012FB9804B0021101E /* Debug */,
+				A23A5D022FB9804B0021101E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A25D8CFE2FB9016700FF4D56 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (iOS)" */ = {
+		A23A5D032FB9804B0021101E /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (iOS)" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A25D8CFF2FB9016700FF4D56 /* Debug */,
-				A25D8D002FB9016700FF4D56 /* Release */,
+				A23A5D042FB9804B0021101E /* Debug */,
+				A23A5D052FB9804B0021101E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A25D8D022FB9016700FF4D56 /* Build configuration list for PBXNativeTarget "ScreenshotSafe (iOS)" */ = {
+		A23A5D072FB9804B0021101E /* Build configuration list for PBXNativeTarget "ScreenshotSafe (iOS)" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A25D8D032FB9016700FF4D56 /* Debug */,
-				A25D8D042FB9016700FF4D56 /* Release */,
+				A23A5D082FB9804B0021101E /* Debug */,
+				A23A5D092FB9804B0021101E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A25D8D052FB9016700FF4D56 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (macOS)" */ = {
+		A23A5D0A2FB9804B0021101E /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (macOS)" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A25D8D062FB9016700FF4D56 /* Debug */,
-				A25D8D072FB9016700FF4D56 /* Release */,
+				A23A5D0B2FB9804B0021101E /* Debug */,
+				A23A5D0C2FB9804B0021101E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A25D8D092FB9016700FF4D56 /* Build configuration list for PBXNativeTarget "ScreenshotSafe (macOS)" */ = {
+		A23A5D0E2FB9804B0021101E /* Build configuration list for PBXNativeTarget "ScreenshotSafe (macOS)" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A25D8D0A2FB9016700FF4D56 /* Debug */,
-				A25D8D0B2FB9016700FF4D56 /* Release */,
+				A23A5D0F2FB9804B0021101E /* Debug */,
+				A23A5D102FB9804B0021101E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
-	rootObject = A25D8CAD2FB9016500FF4D56 /* Project object */;
+	rootObject = A23A5CB22FB9804A0021101E /* Project object */;
 }
