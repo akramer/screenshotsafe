@@ -51,6 +51,7 @@ pub async fn share_page(
         .expires_at
         .map(|e| format!("Expires {}", e.format("%B %d, %Y")))
         .unwrap_or_else(|| "Does not expire".to_string());
+    let title_html = render_title_markdown_links(&title);
 
     let html = format!(
         r#"<!DOCTYPE html>
@@ -86,6 +87,11 @@ pub async fn share_page(
             font-weight: 600;
             color: #f0f0f0;
             word-break: break-word;
+        }}
+        .share-title a {{
+            color: #8ea8ff;
+            text-decoration: underline;
+            text-underline-offset: 0.16em;
         }}
         .share-meta {{
             margin-top: 0.5rem;
@@ -125,7 +131,7 @@ pub async fn share_page(
 </head>
 <body>
     <header class="share-header">
-        <h1 class="share-title">{title}</h1>
+        <h1 class="share-title">{title_html}</h1>
         <div class="share-meta">
             Shared on {created} · {expires_info}
         </div>
@@ -139,6 +145,7 @@ pub async fn share_page(
 </body>
 </html>"#,
         title = html_escape(&title),
+        title_html = title_html,
         image_url = image_url,
         created = created,
         expires_info = expires_info,
@@ -202,4 +209,80 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#x27;")
+}
+
+fn render_title_markdown_links(input: &str) -> String {
+    let mut rendered = String::with_capacity(input.len());
+    let mut rest = input;
+
+    while let Some(open_index) = rest.find('[') {
+        rendered.push_str(&html_escape(&rest[..open_index]));
+        let candidate = &rest[open_index..];
+
+        let Some(separator_index) = candidate.find("](") else {
+            rendered.push_str(&html_escape(candidate));
+            return rendered;
+        };
+
+        let label = &candidate[1..separator_index];
+        let url_start = separator_index + 2;
+        let Some(close_offset) = candidate[url_start..].find(')') else {
+            rendered.push_str(&html_escape(candidate));
+            return rendered;
+        };
+
+        let url_end = url_start + close_offset;
+        let url = candidate[url_start..url_end].trim();
+        let markdown = &candidate[..=url_end];
+
+        if is_safe_title_url(url) {
+            rendered.push_str(&format!(
+                r#"<a href="{}" target="_blank" rel="noopener noreferrer">{}</a>"#,
+                html_escape(url),
+                html_escape(label)
+            ));
+        } else {
+            rendered.push_str(&html_escape(markdown));
+        }
+
+        rest = &candidate[url_end + 1..];
+    }
+
+    rendered.push_str(&html_escape(rest));
+    rendered
+}
+
+fn is_safe_title_url(url: &str) -> bool {
+    let url = url.trim();
+    !url.is_empty()
+        && (url.starts_with("http://") || url.starts_with("https://") || url.starts_with("mailto:"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::render_title_markdown_links;
+
+    #[test]
+    fn renders_safe_markdown_links() {
+        assert_eq!(
+            render_title_markdown_links("Page title [original](https://example.com/page?a=1&b=2)"),
+            r#"Page title <a href="https://example.com/page?a=1&amp;b=2" target="_blank" rel="noopener noreferrer">original</a>"#
+        );
+    }
+
+    #[test]
+    fn escapes_plain_title_text() {
+        assert_eq!(
+            render_title_markdown_links(r#"<script>alert("x")</script>"#),
+            "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;"
+        );
+    }
+
+    #[test]
+    fn rejects_unsafe_link_urls() {
+        assert_eq!(
+            render_title_markdown_links("[bad](javascript:alert(1))"),
+            "[bad](javascript:alert(1))"
+        );
+    }
 }
