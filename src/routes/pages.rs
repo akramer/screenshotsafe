@@ -416,7 +416,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
                 <button class="tool-btn" id="undo-btn" title="Undo">↩</button>
                 <button class="tool-btn" id="redo-btn" title="Redo">↪</button>
                 <button class="tool-btn" id="reset-btn" title="Reset all">Reset</button>
-                <button class="tool-btn btn-primary" id="save-btn">Save</button>
+                <span class="save-status" id="save-status" aria-live="polite">Saved</span>
             </div>
         </div>
         <div class="editor-canvas-wrap">

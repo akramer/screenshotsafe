@@ -19,6 +19,12 @@
     let canvas;
     let backgroundImage;
     let lineHandles = [];
+    let autosaveTimer = null;
+    let saveInFlight = false;
+    let saveAgainAfterCurrent = false;
+    let lastSavedSnapshot = null;
+    let editorReady = false;
+    let autosavePendingWhileLoading = false;
 
     const dropShadowConfig = {
         color: 'rgba(0,0,0,0.3)',
@@ -70,7 +76,14 @@
             });
 
             // Save initial state for undo
-            saveUndoState();
+            saveUndoState({ autosave: false });
+            editorReady = true;
+            if (autosavePendingWhileLoading) {
+                autosavePendingWhileLoading = false;
+                scheduleAutosave(0);
+            } else {
+                lastSavedSnapshot = getSaveSnapshot();
+            }
 
             window.addEventListener('resize', function() {
                 const wrapper = document.querySelector('.editor-canvas-wrap');
@@ -471,7 +484,6 @@
         document.getElementById('undo-btn').addEventListener('click', undo);
         document.getElementById('redo-btn').addEventListener('click', redo);
         document.getElementById('reset-btn').addEventListener('click', resetAll);
-        document.getElementById('save-btn').addEventListener('click', save);
     }
 
     // ── Canvas drawing events ──
@@ -543,6 +555,10 @@
 
         canvas.on('object:modified', function () {
             saveUndoState();
+        });
+
+        canvas.on('text:changed', function () {
+            scheduleAutosave();
         });
 
         canvas.on('mouse:wheel', function(opt) {
@@ -796,28 +812,45 @@
     }
 
     // ── Undo / Redo ──
-    function saveUndoState() {
-        undoStack.push(canvas.toJSON(['annotationType', '_arrowData', '_isCropIndicator']));
+    function cloneCropRect() {
+        return window.CROP_RECT ? { ...window.CROP_RECT } : null;
+    }
+
+    function getEditorState() {
+        return {
+            canvas: canvas.toJSON(['annotationType', '_arrowData', '_lineData', '_initialLeft', '_initialTop', '_isCropIndicator']),
+            crop: cloneCropRect(),
+        };
+    }
+
+    function saveUndoState(options = {}) {
+        const shouldAutosave = options.autosave !== false;
+        undoStack.push(getEditorState());
         redoStack = [];
         if (undoStack.length > 50) undoStack.shift();
+        if (shouldAutosave) scheduleAutosave();
+    }
+
+    function restoreEditorState(state) {
+        window.CROP_RECT = state.crop ? { ...state.crop } : null;
+        canvas.loadFromJSON(state.canvas, function () {
+            canvas.renderAll();
+            scheduleAutosave();
+        });
     }
 
     function undo() {
         if (undoStack.length <= 1) return;
         redoStack.push(undoStack.pop());
         const state = undoStack[undoStack.length - 1];
-        canvas.loadFromJSON(state, function () {
-            canvas.renderAll();
-        });
+        restoreEditorState(state);
     }
 
     function redo() {
         if (redoStack.length === 0) return;
         const state = redoStack.pop();
         undoStack.push(state);
-        canvas.loadFromJSON(state, function () {
-            canvas.renderAll();
-        });
+        restoreEditorState(state);
     }
 
     function resetAll() {
@@ -830,57 +863,122 @@
         saveUndoState();
     }
 
-    // ── Save ──
+    // ── Autosave ──
+    function setSaveStatus(text, statusClass) {
+        const status = document.getElementById('save-status');
+        if (!status) return;
+        status.textContent = text;
+        status.classList.remove('is-saving', 'is-error');
+        if (statusClass) status.classList.add(statusClass);
+    }
+
+    function getSavePayload() {
+        const title = document.getElementById('screenshot-title').value;
+        const visibility = document.getElementById('screenshot-visibility').value;
+        const expiresIn = document.getElementById('screenshot-expires-in').value;
+        const metadata = { title, visibility };
+        if (expiresIn) {
+            metadata.expires_in = expiresIn;
+        }
+
+        return {
+            annotations: serializeAnnotations(),
+            crop: window.CROP_RECT || null,
+            metadata,
+        };
+    }
+
+    function getSaveSnapshot() {
+        return JSON.stringify(getSavePayload());
+    }
+
+    function scheduleAutosave(delay = 500) {
+        if (!canvas) return;
+        if (!editorReady) {
+            autosavePendingWhileLoading = true;
+            return;
+        }
+        setSaveStatus('Saving...', 'is-saving');
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(save, delay);
+    }
+
+    async function flushAutosave() {
+        clearTimeout(autosaveTimer);
+        await save();
+    }
+
     async function save() {
-        const saveBtn = document.getElementById('save-btn');
-        saveBtn.textContent = 'Saving...';
-        saveBtn.disabled = true;
+        if (!editorReady) {
+            autosavePendingWhileLoading = true;
+            return;
+        }
+
+        const snapshot = getSaveSnapshot();
+        if (snapshot === lastSavedSnapshot && !saveAgainAfterCurrent) {
+            setSaveStatus('Saved');
+            return;
+        }
+
+        if (saveInFlight) {
+            saveAgainAfterCurrent = true;
+            return;
+        }
 
         try {
-            // Save annotations
-            const annotations = serializeAnnotations();
-            const crop = window.CROP_RECT || null;
+            saveInFlight = true;
+            saveAgainAfterCurrent = false;
+            setSaveStatus('Saving...', 'is-saving');
+            const payload = JSON.parse(snapshot);
 
             const resp = await fetch(`/api/screenshots/${window.SCREENSHOT_ID}/annotations`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ annotations, crop }),
+                body: JSON.stringify({ annotations: payload.annotations, crop: payload.crop }),
             });
 
             if (!resp.ok) {
                 const data = await resp.json();
-                alert('Save failed: ' + (data.error || 'Unknown error'));
+                setSaveStatus(data.error || 'Save failed', 'is-error');
                 return;
             }
 
-            // Save metadata
-            const title = document.getElementById('screenshot-title').value;
-            const visibility = document.getElementById('screenshot-visibility').value;
-            const expiresIn = document.getElementById('screenshot-expires-in').value;
-            const metadata = { title, visibility };
-            if (expiresIn) {
-                metadata.expires_in = expiresIn;
-            }
-
-            await fetch(`/api/screenshots/${window.SCREENSHOT_ID}`, {
+            const metadataResp = await fetch(`/api/screenshots/${window.SCREENSHOT_ID}`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(metadata),
+                body: JSON.stringify(payload.metadata),
             });
 
-            saveBtn.textContent = 'Saved ✓';
-            setTimeout(function () {
-                saveBtn.textContent = 'Save';
-            }, 2000);
+            if (!metadataResp.ok) {
+                setSaveStatus('Save failed', 'is-error');
+                return;
+            }
+
+            lastSavedSnapshot = snapshot;
+            setSaveStatus('Saved');
         } catch (err) {
-            alert('Save failed: ' + err.message);
+            setSaveStatus('Save failed', 'is-error');
         } finally {
-            saveBtn.disabled = false;
+            saveInFlight = false;
+            if (saveAgainAfterCurrent) {
+                saveAgainAfterCurrent = false;
+                scheduleAutosave(0);
+            }
         }
     }
 
     // ── Sidebar setup ──
     function setupSidebar() {
+        document.getElementById('screenshot-title').addEventListener('input', function () {
+            scheduleAutosave();
+        });
+        document.getElementById('screenshot-visibility').addEventListener('change', function () {
+            scheduleAutosave();
+        });
+        document.getElementById('screenshot-expires-in').addEventListener('change', function () {
+            scheduleAutosave();
+        });
+
         document.getElementById('copy-share-btn').addEventListener('click', function () {
             navigator.clipboard.writeText(document.getElementById('share-url').value);
             this.textContent = 'Copied!';
@@ -908,7 +1006,7 @@
         }
         if ((e.metaKey || e.ctrlKey) && e.key === 's') {
             e.preventDefault();
-            save();
+            flushAutosave();
         }
         if (e.key === 'Delete' || e.key === 'Backspace') {
             const active = canvas.getActiveObject();

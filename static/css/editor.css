@@ -58,6 +58,20 @@
     font-weight: 600;
 }
 
+.save-status {
+    min-width: 4.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.save-status.is-saving {
+    color: var(--text-secondary);
+}
+
+.save-status.is-error {
+    color: var(--danger);
+}
+
 .tool-icon {
     font-size: 1.1rem;
     line-height: 1;
