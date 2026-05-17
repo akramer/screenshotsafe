@@ -416,6 +416,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_editor_page_uses_autosave_assets() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let upload_body = upload_screenshot(&app, &cookie).await;
+        let id = upload_body["id"].as_str().unwrap();
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/screenshots/{}/edit", id))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let html = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(html.contains(r#"id="save-status""#));
+        assert!(html.contains(r#"id="save-btn""#));
+        assert!(html.contains(r#"/static/js/editor.js?v=autosave-1"#));
+    }
+
+    #[tokio::test]
     async fn test_upload_requires_auth() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app(dir.path());

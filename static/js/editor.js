@@ -23,8 +23,6 @@
     let saveInFlight = false;
     let saveAgainAfterCurrent = false;
     let lastSavedSnapshot = null;
-    let editorReady = false;
-    let autosavePendingWhileLoading = false;
 
     const dropShadowConfig = {
         color: 'rgba(0,0,0,0.3)',
@@ -77,13 +75,7 @@
 
             // Save initial state for undo
             saveUndoState({ autosave: false });
-            editorReady = true;
-            if (autosavePendingWhileLoading) {
-                autosavePendingWhileLoading = false;
-                scheduleAutosave(0);
-            } else {
-                lastSavedSnapshot = getSaveSnapshot();
-            }
+            lastSavedSnapshot = getSaveSnapshot();
 
             window.addEventListener('resize', function() {
                 const wrapper = document.querySelector('.editor-canvas-wrap');
@@ -484,6 +476,8 @@
         document.getElementById('undo-btn').addEventListener('click', undo);
         document.getElementById('redo-btn').addEventListener('click', redo);
         document.getElementById('reset-btn').addEventListener('click', resetAll);
+        const legacySaveBtn = document.getElementById('save-btn');
+        if (legacySaveBtn) legacySaveBtn.addEventListener('click', flushAutosave);
     }
 
     // ── Canvas drawing events ──
@@ -894,10 +888,6 @@
 
     function scheduleAutosave(delay = 500) {
         if (!canvas) return;
-        if (!editorReady) {
-            autosavePendingWhileLoading = true;
-            return;
-        }
         setSaveStatus('Saving...', 'is-saving');
         clearTimeout(autosaveTimer);
         autosaveTimer = setTimeout(save, delay);
@@ -909,11 +899,6 @@
     }
 
     async function save() {
-        if (!editorReady) {
-            autosavePendingWhileLoading = true;
-            return;
-        }
-
         const snapshot = getSaveSnapshot();
         if (snapshot === lastSavedSnapshot && !saveAgainAfterCurrent) {
             setSaveStatus('Saved');

@@ -360,7 +360,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Edit — {{TITLE}}</title>
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/editor.css">
+    <link rel="stylesheet" href="/static/css/editor.css?v=autosave-1">
 </head>
 <body>
     <nav class="navbar">
@@ -416,6 +416,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
                 <button class="tool-btn" id="undo-btn" title="Undo">↩</button>
                 <button class="tool-btn" id="redo-btn" title="Redo">↪</button>
                 <button class="tool-btn" id="reset-btn" title="Reset all">Reset</button>
+                <button class="tool-btn btn-primary save-btn-compat" id="save-btn" type="button" hidden>Save</button>
                 <span class="save-status" id="save-status" aria-live="polite">Saved</span>
             </div>
         </div>
@@ -468,7 +469,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
         window.ANNOTATIONS = {{ANNOTATIONS}};
         window.CROP_RECT = {{CROP}};
     </script>
-    <script src="/static/js/editor.js"></script>
+    <script src="/static/js/editor.js?v=autosave-1"></script>
 </body>
 </html>"##;
 
