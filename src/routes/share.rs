@@ -46,7 +46,7 @@ pub async fn share_page(
     let cache_bust = screenshot.updated_at.timestamp();
     let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
     let share_url = format!("{}/s/{}", base_url, share_id);
-    let direct_image_url = format!("{}/s/{}.png", base_url, share_id);
+    let direct_image_url = format!("/s/{}.png", share_id);
     let image_url = format!("{}/s/{}.png?v={}", base_url, share_id, cache_bust);
     let created = screenshot.created_at.format("%B %d, %Y").to_string();
     let expires_info = screenshot
@@ -90,10 +90,18 @@ pub async fn share_page(
             border-bottom: 1px solid rgba(255,255,255,0.06);
             background: rgba(255,255,255,0.02);
         }}
+        .share-topline {{
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+        }}
         .share-title {{
             font-size: 1.25rem;
             font-weight: 600;
             color: #f0f0f0;
+            flex: 1 1 auto;
+            min-width: 0;
             word-break: break-word;
         }}
         .share-title a {{
@@ -117,7 +125,8 @@ pub async fn share_page(
             display: flex;
             flex-wrap: wrap;
             gap: 0.5rem;
-            margin-top: 1rem;
+            flex: 0 0 auto;
+            justify-content: flex-end;
         }}
         .share-action {{
             appearance: none;
@@ -181,6 +190,10 @@ pub async fn share_page(
         }}
         @media (max-width: 768px) {{
             .share-header {{ padding: 1rem; }}
+            .share-topline {{
+                flex-direction: column;
+                gap: 0.85rem;
+            }}
             .share-actions {{ gap: 0.4rem; }}
             .share-action {{
                 flex: 1 1 100%;
@@ -193,14 +206,16 @@ pub async fn share_page(
 </head>
 <body>
     <header class="share-header">
-        <h1 class="share-title">{title_html}</h1>
+        <div class="share-topline">
+            <h1 class="share-title">{title_html}</h1>
+            <div class="share-actions" aria-label="Share actions">
+                <button class="share-action" type="button" id="copy-page-link" data-url="{share_url}">Copy Page Link</button>
+                <a class="share-action" href="{direct_image_url}" target="_blank" rel="noopener" type="image/png">Open Image</a>
+                <button class="share-action" type="button" id="copy-image" data-url="{image_url}">Copy Image</button>
+            </div>
+        </div>
         <div class="share-meta">
             Shared on {created} · {expires_info}{source_link}
-        </div>
-        <div class="share-actions" aria-label="Share actions">
-            <button class="share-action" type="button" id="copy-page-link" data-url="{share_url}">Copy Page Link</button>
-            <a class="share-action" href="{direct_image_url}" target="_blank" rel="noopener">Open Image</a>
-            <button class="share-action" type="button" id="copy-image" data-url="{image_url}">Copy Image</button>
         </div>
     </header>
     <main class="share-body">

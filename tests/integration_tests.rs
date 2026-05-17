@@ -900,7 +900,7 @@ mod tests {
         assert!(html.contains(r#"id="copy-page-link""#));
         assert!(html.contains(r#"id="copy-image""#));
         assert!(html.contains("Open Image"));
-        assert!(html.contains(&format!("/s/{}.png", share_id)));
+        assert!(html.contains(&format!(r#"href="/s/{}.png""#, share_id)));
     }
 
     #[tokio::test]
