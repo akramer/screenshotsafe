@@ -7,6 +7,8 @@ use axum::{
 use crate::auth::middleware::{AuthUser, MaybeAuthUser};
 use crate::{AppError, SharedState};
 
+const FAVICON_LINK: &str = r#"<link rel="icon" type="image/png" href="/favicon.ico">"#;
+
 /// Dashboard page — lists all screenshots for the logged-in user.
 /// Redirects to /setup if no users exist, or /login if not authenticated.
 pub async fn dashboard(
@@ -87,13 +89,14 @@ pub async fn dashboard(
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ScreenshotSafe — Dashboard</title>
+    {favicon}
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
     <nav class="navbar">
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
-            <span class="nav-user">{}</span>
+            <span class="nav-user">{display_name}</span>
             <a href="/settings" class="btn btn-sm btn-outline">Settings</a>
             <button id="logout-btn" class="btn btn-sm btn-outline">Logout</button>
         </div>
@@ -103,7 +106,7 @@ pub async fn dashboard(
             <h1>Your Screenshots</h1>
         </div>
         <div class="screenshot-grid">
-            {}
+            {screenshot_cards}
         </div>
     </main>
     <script>
@@ -130,8 +133,9 @@ pub async fn dashboard(
     </script>
 </body>
 </html>"#,
-        html_escape(&user.display_name),
-        screenshot_cards,
+        favicon = FAVICON_LINK,
+        display_name = html_escape(&user.display_name),
+        screenshot_cards = screenshot_cards,
     );
 
     Ok(Html(html).into_response())
@@ -149,6 +153,7 @@ pub async fn setup_page(State(state): State<SharedState>) -> crate::Result<impl 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ScreenshotSafe — Setup</title>
+    <link rel="icon" type="image/png" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -228,6 +233,7 @@ pub async fn login_page(
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ScreenshotSafe — Login</title>
+    <link rel="icon" type="image/png" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -391,6 +397,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Edit — {{TITLE}}</title>
+    <link rel="icon" type="image/png" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
     <link rel="stylesheet" href="/static/css/editor.css?v=dpi-edit-1">
 </head>
@@ -556,6 +563,7 @@ pub async fn settings_page(
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>ScreenshotSafe — Settings</title>
+    {favicon}
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -611,7 +619,7 @@ pub async fn settings_page(
                     </tr>
                 </thead>
                 <tbody id="tokens-body">
-                    {}
+                    {token_rows}
                 </tbody>
             </table>
         </section>
@@ -709,7 +717,8 @@ pub async fn settings_page(
     </script>
 </body>
 </html>"#,
-        token_rows,
+        favicon = FAVICON_LINK,
+        token_rows = token_rows,
     );
 
     Ok(Html(html).into_response())

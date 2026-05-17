@@ -16,7 +16,7 @@ use axum::{
     Router,
 };
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
 
 /// Shared application state accessible from all route handlers.
@@ -117,6 +117,10 @@ pub fn build_router(state: SharedState) -> Router {
         .merge(public_routes)
         .merge(auth_pages)
         .merge(api_routes)
+        .route_service(
+            "/favicon.ico",
+            ServeFile::new("extension/icons/icon128.png"),
+        )
         .nest_service("/static", ServeDir::new("static"))
         .layer(cors)
         .layer(TraceLayer::new_for_http())

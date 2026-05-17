@@ -486,6 +486,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_favicon_serves_extension_icon() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/favicon.ico")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "image/png"
+        );
+
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let expected = std::fs::read("extension/icons/icon128.png").unwrap();
+        assert_eq!(bytes.as_ref(), expected.as_slice());
+    }
+
+    #[tokio::test]
     async fn test_upload_requires_auth() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app(dir.path());
