@@ -12,12 +12,16 @@ pub use error::{AppError, Result};
 use std::sync::Arc;
 
 use axum::{
+    http::{header, HeaderValue},
+    response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
     Router,
 };
 use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::{ServeDir, ServeFile};
+use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
+
+const FAVICON_PNG: &[u8] = include_bytes!("../extension/icons/icon128.png");
 
 /// Shared application state accessible from all route handlers.
 pub struct AppState {
@@ -124,12 +128,18 @@ pub fn build_router(state: SharedState) -> Router {
         .merge(public_routes)
         .merge(auth_pages)
         .merge(api_routes)
-        .route_service(
-            "/favicon.ico",
-            ServeFile::new("extension/icons/icon128.png"),
-        )
+        .route("/favicon.ico", get(favicon))
         .nest_service("/static", ServeDir::new("static"))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+async fn favicon() -> Response {
+    let mut response = FAVICON_PNG.into_response();
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("image/png"),
+    );
+    response
 }
