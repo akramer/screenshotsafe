@@ -21,7 +21,12 @@
     const copyShareBtn = document.getElementById('copy-share-btn');
     const copyRawBtn = document.getElementById('copy-raw-btn');
     const openServerEditorBtn = document.getElementById('open-server-editor-btn');
-    const sourceLabel = document.getElementById('source-label');
+    const pageTitleInput = document.getElementById('page-title');
+    const imageUrlInput = document.getElementById('image-url');
+    const preUploadControls = document.getElementById('pre-upload-controls');
+    const metadataControls = document.getElementById('metadata-controls');
+    const editControls = document.getElementById('edit-controls');
+    const uploadControls = document.getElementById('upload-controls');
     const expiresInSelect = document.getElementById('expires-in');
 
     const ext = window.sssWebExt;
@@ -43,6 +48,8 @@
     resetEditBtn.addEventListener('click', resetEdits);
     uploadBtn.addEventListener('click', uploadEditedScreenshot);
     discardBtn.addEventListener('click', () => window.close());
+    pageTitleInput.addEventListener('input', updateDraftMetadata);
+    imageUrlInput.addEventListener('input', updateDraftMetadata);
 
     canvas.addEventListener('pointerdown', startDrag);
     canvas.addEventListener('pointermove', moveDrag);
@@ -54,12 +61,12 @@
 
     copyShareBtn.addEventListener('click', async () => {
         copyShareBtn.textContent = await copyText(shareUrlInput.value) ? '✓' : '!';
-        setTimeout(() => { copyShareBtn.textContent = 'Copy'; }, 1500);
+        setTimeout(() => { copyShareBtn.textContent = 'Copy Share Link'; }, 1500);
     });
 
     copyRawBtn.addEventListener('click', async () => {
         copyRawBtn.textContent = await copyText(rawUrlInput.value) ? '✓' : '!';
-        setTimeout(() => { copyRawBtn.textContent = 'Copy'; }, 1500);
+        setTimeout(() => { copyRawBtn.textContent = 'Copy Direct Link'; }, 1500);
     });
 
     openServerEditorBtn.addEventListener('click', () => {
@@ -97,7 +104,8 @@
                 cropRect: null,
                 redactions: [],
             };
-            sourceLabel.textContent = draft.sourceUrl || draft.title;
+            pageTitleInput.value = draft.title;
+            imageUrlInput.value = draft.sourceUrl;
             renderEditor();
         } catch (err) {
             showError(err.message);
@@ -134,8 +142,8 @@
     async function uploadBlob(blob) {
         const formData = new FormData();
         formData.append('image', blob, 'screenshot.png');
-        formData.append('title', draft.title);
-        formData.append('source_url', draft.sourceUrl);
+        formData.append('title', pageTitleInput.value.trim() || 'Screenshot');
+        formData.append('source_url', imageUrlInput.value.trim());
         formData.append('image_dpi', String(draft.imageDpi || 100));
         if (expiresInSelect.value) {
             formData.append('expires_in', expiresInSelect.value);
@@ -305,6 +313,12 @@
         renderEditor();
     }
 
+    function updateDraftMetadata() {
+        if (!draft || finalized) return;
+        draft.title = pageTitleInput.value.trim() || 'Screenshot';
+        draft.sourceUrl = imageUrlInput.value.trim();
+    }
+
     function lockEditor(message) {
         cropToolBtn.disabled = true;
         redactToolBtn.disabled = true;
@@ -312,6 +326,10 @@
         resetEditBtn.disabled = true;
         uploadBtn.disabled = true;
         uploadBtn.textContent = 'Finalized and Uploaded';
+        preUploadControls.classList.add('is-hidden');
+        metadataControls.classList.add('is-hidden');
+        editControls.classList.add('is-hidden');
+        uploadControls.classList.add('is-hidden');
         canvas.classList.add('locked');
         editorHint.textContent = message;
     }

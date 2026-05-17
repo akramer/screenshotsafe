@@ -606,7 +606,12 @@ mod tests {
         let html = String::from_utf8(bytes.to_vec()).unwrap();
         assert!(html.contains(r#"id="save-status""#));
         assert!(html.contains(r#"id="save-btn""#));
-        assert!(html.contains(r#"/static/js/editor.js?v=dpi-edit-1"#));
+        assert!(html.contains(r#"/static/js/editor.js?v=autosave-delay-1"#));
+
+        let editor_js = std::fs::read_to_string("static/js/editor.js").unwrap();
+        assert!(editor_js.contains("const AUTOSAVE_DELAY_MS = 5000;"));
+        assert!(editor_js.contains("window.addEventListener('pagehide', flushAutosaveOnPageExit);"));
+        assert!(editor_js.contains("keepalive: true"));
     }
 
     #[tokio::test]

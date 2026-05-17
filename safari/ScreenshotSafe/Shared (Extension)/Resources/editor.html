@@ -19,10 +19,12 @@
         }
         .workspace {
             display: flex;
-            align-items: center;
+            flex-direction: column;
+            align-items: stretch;
             justify-content: center;
             min-width: 0;
             padding: 24px;
+            gap: 16px;
             background: #08080b;
         }
         .canvas-wrap {
@@ -31,6 +33,7 @@
             justify-content: center;
             width: 100%;
             height: 100%;
+            min-height: 0;
             overflow: auto;
         }
         #edit-canvas {
@@ -61,11 +64,11 @@
             font-size: 16px;
             font-weight: 650;
         }
-        .header p {
-            margin-top: 4px;
-            color: #888;
-            font-size: 12px;
-            line-height: 1.4;
+        .metadata {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 100%;
         }
         .section {
             display: flex;
@@ -176,6 +179,33 @@
             color: #e8e8f0;
             font: 12px 'SF Mono', Monaco, monospace;
         }
+        .field {
+            width: 100%;
+            min-height: 36px;
+            padding: 8px 10px;
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            background: #0f0f13;
+            color: #e8e8f0;
+            font-size: 13px;
+            text-align: left;
+        }
+        .field:focus {
+            outline: none;
+            border-color: #6a6aff;
+        }
+        .field-mono {
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 12px;
+        }
+        .result-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        #pre-upload-controls .btn {
+            width: 100%;
+        }
         .copy-btn {
             min-height: 32px;
             padding: 7px 10px;
@@ -196,6 +226,7 @@
             border-color: #6a6aff;
         }
         .spacer { flex: 1; }
+        .is-hidden { display: none !important; }
         @media (max-width: 840px) {
             body { overflow: auto; }
             .app {
@@ -218,20 +249,43 @@
 <body>
     <main class="app">
         <section class="workspace">
+            <div class="metadata" id="metadata-controls">
+                <div class="section">
+                    <label class="label" for="page-title">Page Title</label>
+                    <input class="field" type="text" id="page-title" autocomplete="off">
+                </div>
+                <div class="section">
+                    <label class="label" for="image-url">Image URL</label>
+                    <input class="field field-mono" type="url" id="image-url" autocomplete="off">
+                </div>
+            </div>
+
             <div class="canvas-wrap">
                 <canvas id="edit-canvas"></canvas>
             </div>
         </section>
 
         <aside class="sidebar">
-            <button class="btn btn-outline" id="discard-btn" type="button">Discard Screenshot</button>
-
             <div class="header">
                 <h1>ScreenshotSafe</h1>
-                <p id="source-label">Loading screenshot...</p>
             </div>
 
-            <div class="section">
+            <div class="result" id="result">
+                <div class="label">Uploaded</div>
+                <input type="text" id="share-url" class="is-hidden" readonly>
+                <input type="text" id="raw-url" class="is-hidden" readonly>
+                <div class="result-actions">
+                    <button class="btn btn-primary" id="copy-share-btn" type="button">Copy Share Link</button>
+                    <button class="btn btn-outline" id="copy-raw-btn" type="button">Copy Direct Link</button>
+                    <button class="btn btn-outline" id="open-server-editor-btn" type="button">Open Editor Link</button>
+                </div>
+            </div>
+
+            <div id="pre-upload-controls">
+                <button class="btn btn-outline" id="discard-btn" type="button">Discard Screenshot</button>
+            </div>
+
+            <div class="section" id="edit-controls">
                 <div class="label">Tools</div>
                 <div class="tool-grid">
                     <button class="tool-btn active" id="crop-tool-btn" type="button">Crop</button>
@@ -244,7 +298,7 @@
                 <div class="hint" id="editor-hint">Drag to set the crop area.</div>
             </div>
 
-            <div class="section">
+            <div class="section" id="upload-controls">
                 <label class="label" for="expires-in">Expires</label>
                 <select id="expires-in">
                     <option value="">Server default</option>
@@ -258,20 +312,6 @@
             </div>
 
             <div class="error" id="error-msg"></div>
-
-            <div class="result" id="result">
-                <div class="label">Share Link</div>
-                <div class="result-row">
-                    <input type="text" id="share-url" readonly>
-                    <button class="copy-btn" id="copy-share-btn" type="button">Copy</button>
-                </div>
-                <div class="label">Direct Image</div>
-                <div class="result-row">
-                    <input type="text" id="raw-url" readonly>
-                    <button class="copy-btn" id="copy-raw-btn" type="button">Copy</button>
-                </div>
-                <button class="btn btn-outline" id="open-server-editor-btn" type="button">Open in Server Editor</button>
-            </div>
 
             <div class="spacer"></div>
         </aside>

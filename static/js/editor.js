@@ -27,6 +27,7 @@
     let lastSavedSnapshot = null;
     let imageDpi = getImageDpi();
     let visualScale = dpiToVisualScale(imageDpi);
+    const AUTOSAVE_DELAY_MS = 5000;
 
     const dropShadowConfig = {
         color: 'rgba(0,0,0,0.3)',
@@ -1117,7 +1118,7 @@
         }
     }
 
-    function scheduleAutosave(delay = 500) {
+    function scheduleAutosave(delay = AUTOSAVE_DELAY_MS) {
         if (!canvas) return;
         setSaveStatus('Saving...', 'is-saving');
         clearTimeout(autosaveTimer);
@@ -1127,6 +1128,33 @@
     async function flushAutosave() {
         clearTimeout(autosaveTimer);
         await save();
+    }
+
+    function sendKeepaliveRequest(url, method, body) {
+        try {
+            fetch(url, {
+                method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+                keepalive: true,
+            });
+        } catch (err) {
+            // The page is closing, so there is no useful recovery path here.
+        }
+    }
+
+    function flushAutosaveOnPageExit() {
+        clearTimeout(autosaveTimer);
+        const snapshot = getSaveSnapshot();
+        if (snapshot === lastSavedSnapshot) return;
+
+        const payload = JSON.parse(snapshot);
+        sendKeepaliveRequest(`/api/screenshots/${window.SCREENSHOT_ID}/annotations`, 'PUT', {
+            annotations: payload.annotations,
+            crop: payload.crop,
+        });
+        sendKeepaliveRequest(`/api/screenshots/${window.SCREENSHOT_ID}`, 'PATCH', payload.metadata);
+        lastSavedSnapshot = snapshot;
     }
 
     async function save() {
@@ -1178,7 +1206,7 @@
             saveInFlight = false;
             if (saveAgainAfterCurrent) {
                 saveAgainAfterCurrent = false;
-                scheduleAutosave(0);
+                scheduleAutosave();
             }
         }
     }
@@ -1245,6 +1273,9 @@
             }
         }
     });
+
+    window.addEventListener('pagehide', flushAutosaveOnPageExit);
+    window.addEventListener('beforeunload', flushAutosaveOnPageExit);
 
     // ── Start ──
     if (document.readyState === 'loading') {

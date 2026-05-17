@@ -525,7 +525,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
         window.CROP_RECT = {{CROP}};
         window.IMAGE_DPI = {{IMAGE_DPI}};
     </script>
-    <script src="/static/js/editor.js?v=dpi-edit-1"></script>
+    <script src="/static/js/editor.js?v=autosave-delay-1"></script>
 </body>
 </html>"##;
 
