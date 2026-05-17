@@ -83,7 +83,11 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/login", get(routes::pages::login_page))
         .route("/screenshots/{id}/edit", get(routes::pages::editor_page))
         .route("/settings", get(routes::pages::settings_page))
-        .route("/admin", get(routes::pages::admin_page));
+        .route("/admin", get(routes::pages::admin_page))
+        .route(
+            "/admin/users/{id}",
+            get(routes::pages::admin_edit_user_page),
+        );
 
     let api_routes = Router::new()
         .route("/api/ping", get(routes::api::ping))

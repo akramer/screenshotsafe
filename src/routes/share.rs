@@ -45,6 +45,8 @@ pub async fn share_page(
     let title = screenshot.display_title().to_string();
     let cache_bust = screenshot.updated_at.timestamp();
     let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
+    let share_url = format!("{}/s/{}", base_url, share_id);
+    let direct_image_url = format!("{}/s/{}.png", base_url, share_id);
     let image_url = format!("{}/s/{}.png?v={}", base_url, share_id, cache_bust);
     let created = screenshot.created_at.format("%B %d, %Y").to_string();
     let expires_info = screenshot
@@ -111,6 +113,48 @@ pub async fn share_page(
         .share-meta a:hover {{
             text-decoration: underline;
         }}
+        .share-actions {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }}
+        .share-action {{
+            appearance: none;
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 6px;
+            background: rgba(255,255,255,0.06);
+            color: #f4f4f5;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 2.25rem;
+            padding: 0.45rem 0.75rem;
+            font: inherit;
+            font-size: 0.85rem;
+            font-weight: 600;
+            line-height: 1;
+            text-decoration: none;
+            transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+        }}
+        .share-action:hover {{
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.22);
+            text-decoration: none;
+        }}
+        .share-action:focus-visible {{
+            outline: 2px solid #8ea8ff;
+            outline-offset: 2px;
+        }}
+        .share-action[data-status="success"] {{
+            border-color: rgba(91, 214, 138, 0.52);
+            color: #a7f3c1;
+        }}
+        .share-action[data-status="error"] {{
+            border-color: rgba(255, 130, 130, 0.5);
+            color: #ffb4b4;
+        }}
         .share-body {{
             flex: 1;
             display: flex;
@@ -137,6 +181,11 @@ pub async fn share_page(
         }}
         @media (max-width: 768px) {{
             .share-header {{ padding: 1rem; }}
+            .share-actions {{ gap: 0.4rem; }}
+            .share-action {{
+                flex: 1 1 100%;
+                min-width: 0;
+            }}
             .share-body {{ padding: 1rem; }}
             .share-image {{ border-radius: 4px; }}
         }}
@@ -148,6 +197,11 @@ pub async fn share_page(
         <div class="share-meta">
             Shared on {created} · {expires_info}{source_link}
         </div>
+        <div class="share-actions" aria-label="Share actions">
+            <button class="share-action" type="button" id="copy-page-link" data-url="{share_url}">Copy Page Link</button>
+            <a class="share-action" href="{direct_image_url}" target="_blank" rel="noopener">Open Image</a>
+            <button class="share-action" type="button" id="copy-image" data-url="{image_url}">Copy Image</button>
+        </div>
     </header>
     <main class="share-body">
         <img src="{image_url}" alt="{title}" class="share-image">
@@ -155,10 +209,55 @@ pub async fn share_page(
     <footer class="share-footer">
         Powered by <a href="https://github.com/screenshotsafe/screenshotsafe">ScreenshotSafe</a>
     </footer>
+    <script>
+        const setButtonStatus = (button, text, status) => {{
+            const original = button.dataset.label || button.textContent;
+            button.dataset.label = original;
+            button.textContent = text;
+            button.dataset.status = status;
+            window.clearTimeout(button._statusTimer);
+            button._statusTimer = window.setTimeout(() => {{
+                button.textContent = original;
+                delete button.dataset.status;
+            }}, 1800);
+        }};
+
+        document.getElementById('copy-page-link')?.addEventListener('click', async (event) => {{
+            const button = event.currentTarget;
+            try {{
+                await navigator.clipboard.writeText(button.dataset.url);
+                setButtonStatus(button, 'Copied', 'success');
+            }} catch (_error) {{
+                setButtonStatus(button, 'Could not copy', 'error');
+            }}
+        }});
+
+        document.getElementById('copy-image')?.addEventListener('click', async (event) => {{
+            const button = event.currentTarget;
+            try {{
+                if (!window.ClipboardItem) {{
+                    throw new Error('Image clipboard is not supported');
+                }}
+                const response = await fetch(button.dataset.url);
+                if (!response.ok) {{
+                    throw new Error('Could not load image');
+                }}
+                const blob = await response.blob();
+                await navigator.clipboard.write([
+                    new ClipboardItem({{ [blob.type || 'image/png']: blob }})
+                ]);
+                setButtonStatus(button, 'Copied', 'success');
+            }} catch (_error) {{
+                setButtonStatus(button, 'Could not copy', 'error');
+            }}
+        }});
+    </script>
 </body>
 </html>"#,
         title = html_escape(&title),
         title_html = title_html,
+        share_url = html_escape(&share_url),
+        direct_image_url = html_escape(&direct_image_url),
         image_url = image_url,
         created = created,
         expires_info = expires_info,

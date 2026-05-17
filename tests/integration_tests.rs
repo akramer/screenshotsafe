@@ -405,6 +405,89 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_admin_edit_user_page() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/admin/users/{}", admin.id))
+            .header(header::COOKIE, &cookie)
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let html = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(html.contains(r#"id="max-screenshot-size-bytes""#));
+        assert!(html.contains(r#"id="max-expiry-seconds""#));
+        assert!(html.contains(r#"id="password-reset-form""#));
+    }
+
+    #[tokio::test]
+    async fn test_admin_can_reset_user_password_without_clearing_limits() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let admin_cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "POST",
+            "/api/admin/users",
+            &admin_cookie,
+            serde_json::json!({
+                "username": "alice",
+                "password": "testpassword456",
+                "is_admin": false,
+                "max_screenshot_size_bytes": 12345,
+                "max_expiry_seconds": 3600
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let alice = state.db.get_user_by_username("alice").unwrap().unwrap();
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/admin/users/{}", alice.id),
+            &admin_cookie,
+            serde_json::json!({ "password": "newpassword789" }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let alice = state.db.get_user_by_username("alice").unwrap().unwrap();
+        assert_eq!(alice.max_screenshot_size_bytes, Some(12345));
+        assert_eq!(alice.max_expiry_seconds, Some(3600));
+
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "alice",
+                "password": "testpassword456"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "alice",
+                "password": "newpassword789"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn test_non_admin_cannot_manage_users() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app(dir.path());
@@ -814,6 +897,10 @@ mod tests {
         let html = String::from_utf8(body.to_vec()).unwrap();
         assert!(html.contains("Test Screenshot"));
         assert!(html.contains("og:image")); // OpenGraph meta tag
+        assert!(html.contains(r#"id="copy-page-link""#));
+        assert!(html.contains(r#"id="copy-image""#));
+        assert!(html.contains("Open Image"));
+        assert!(html.contains(&format!("/s/{}.png", share_id)));
     }
 
     #[tokio::test]

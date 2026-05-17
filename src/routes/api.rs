@@ -148,9 +148,10 @@ pub struct CreateUserRequest {
 }
 
 #[derive(Deserialize)]
-pub struct UpdateUserLimitsRequest {
-    pub max_screenshot_size_bytes: Option<u64>,
-    pub max_expiry_seconds: Option<u64>,
+pub struct UpdateUserRequest {
+    pub max_screenshot_size_bytes: Option<Option<u64>>,
+    pub max_expiry_seconds: Option<Option<u64>>,
+    pub password: Option<String>,
 }
 
 pub async fn admin_list_users(
@@ -228,16 +229,34 @@ pub async fn admin_update_user_limits(
     State(state): State<SharedState>,
     AdminUser(_admin): AdminUser,
     Path(id): Path<Uuid>,
-    Json(req): Json<UpdateUserLimitsRequest>,
+    Json(req): Json<UpdateUserRequest>,
 ) -> crate::Result<Json<serde_json::Value>> {
-    let max_screenshot_size_bytes = normalize_user_limit(req.max_screenshot_size_bytes);
-    let max_expiry_seconds = normalize_user_limit(req.max_expiry_seconds);
+    let user = state.db.get_user_by_id(&id)?.ok_or(AppError::NotFound)?;
+
+    let max_screenshot_size_bytes = req
+        .max_screenshot_size_bytes
+        .map(normalize_user_limit)
+        .unwrap_or(user.max_screenshot_size_bytes);
+    let max_expiry_seconds = req
+        .max_expiry_seconds
+        .map(normalize_user_limit)
+        .unwrap_or(user.max_expiry_seconds);
     let updated =
         state
             .db
             .update_user_limits(&id, max_screenshot_size_bytes, max_expiry_seconds)?;
     if !updated {
         return Err(AppError::NotFound);
+    }
+    if let Some(password) = req.password {
+        if password.len() < 8 {
+            return Err(AppError::BadRequest(
+                "Password must be at least 8 characters".into(),
+            ));
+        }
+        let password_hash = auth::hash_password(&password)
+            .map_err(|e| AppError::Internal(format!("Password hashing failed: {}", e)))?;
+        state.db.update_user_password_hash(&id, &password_hash)?;
     }
 
     Ok(Json(serde_json::json!({

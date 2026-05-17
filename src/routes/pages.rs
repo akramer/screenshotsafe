@@ -768,14 +768,6 @@ pub async fn admin_page(
         .iter()
         .map(|user| {
             let role = if user.is_admin { "Admin" } else { "User" };
-            let size_limit = user
-                .max_screenshot_size_bytes
-                .map(|v| v.to_string())
-                .unwrap_or_default();
-            let expiry_limit = user
-                .max_expiry_seconds
-                .map(|v| v.to_string())
-                .unwrap_or_default();
             let delete_button = if user.id == admin.id {
                 "<span class=\"admin-muted\">Current user</span>".to_string()
             } else {
@@ -790,11 +782,9 @@ pub async fn admin_page(
                     <td>{}</td>
                     <td>{}</td>
                     <td><span class="role-pill{}">{}</span></td>
-                    <td><input class="admin-limit-input" type="number" min="0" step="1" value="{}" data-field="max_screenshot_size_bytes" data-user-id="{}" placeholder="Server"></td>
-                    <td><input class="admin-limit-input" type="number" min="0" step="1" value="{}" data-field="max_expiry_seconds" data-user-id="{}" placeholder="Server"></td>
                     <td>{}</td>
                     <td>
-                        <button class="btn btn-sm btn-outline save-limits-btn" data-id="{}">Save Limits</button>
+                        <a class="btn btn-sm btn-outline" href="/admin/users/{}">Edit</a>
                         {}
                     </td>
                 </tr>"#,
@@ -802,10 +792,6 @@ pub async fn admin_page(
                 html_escape(&user.display_name),
                 if user.is_admin { " role-pill-admin" } else { "" },
                 role,
-                size_limit,
-                user.id,
-                expiry_limit,
-                user.id,
                 user.created_at.format("%b %d, %Y"),
                 user.id,
                 delete_button,
@@ -854,14 +840,6 @@ pub async fn admin_page(
                         <label for="password">Password</label>
                         <input type="password" id="password" autocomplete="new-password" minlength="8" required>
                     </div>
-                    <div class="form-group">
-                        <label for="max-screenshot-size-bytes">Max Screenshot Bytes</label>
-                        <input type="number" id="max-screenshot-size-bytes" min="0" step="1" placeholder="Server default">
-                    </div>
-                    <div class="form-group">
-                        <label for="max-expiry-seconds">Max Expiry Seconds</label>
-                        <input type="number" id="max-expiry-seconds" min="0" step="1" placeholder="Server default">
-                    </div>
                     <label class="checkbox-row">
                         <input type="checkbox" id="is-admin">
                         <span>Admin user</span>
@@ -879,8 +857,6 @@ pub async fn admin_page(
                         <th>Username</th>
                         <th>Display Name</th>
                         <th>Role</th>
-                        <th>Max Screenshot Bytes</th>
-                        <th>Max Expiry Seconds</th>
                         <th>Created</th>
                         <th></th>
                     </tr>
@@ -901,11 +877,6 @@ pub async fn admin_page(
             message.style.display = 'block';
         }}
 
-        function optionalNumber(id) {{
-            const value = document.getElementById(id).value.trim();
-            return value ? Number(value) : undefined;
-        }}
-
         form.addEventListener('submit', async (event) => {{
             event.preventDefault();
             const resp = await fetch('/api/admin/users', {{
@@ -916,8 +887,6 @@ pub async fn admin_page(
                     display_name: document.getElementById('display-name').value || undefined,
                     password: document.getElementById('password').value,
                     is_admin: document.getElementById('is-admin').checked,
-                    max_screenshot_size_bytes: optionalNumber('max-screenshot-size-bytes'),
-                    max_expiry_seconds: optionalNumber('max-expiry-seconds'),
                 }}),
             }});
 
@@ -931,33 +900,6 @@ pub async fn admin_page(
                 }} catch (_) {{}}
                 showMessage(text, true);
             }}
-        }});
-
-        document.querySelectorAll('.save-limits-btn').forEach((btn) => {{
-            btn.addEventListener('click', async () => {{
-                const id = btn.dataset.id;
-                const sizeInput = document.querySelector(`input[data-user-id="${{id}}"][data-field="max_screenshot_size_bytes"]`);
-                const expiryInput = document.querySelector(`input[data-user-id="${{id}}"][data-field="max_expiry_seconds"]`);
-                const payload = {{
-                    max_screenshot_size_bytes: sizeInput.value.trim() ? Number(sizeInput.value) : null,
-                    max_expiry_seconds: expiryInput.value.trim() ? Number(expiryInput.value) : null,
-                }};
-                const resp = await fetch(`/api/admin/users/${{id}}`, {{
-                    method: 'PATCH',
-                    headers: {{ 'Content-Type': 'application/json' }},
-                    body: JSON.stringify(payload),
-                }});
-                if (resp.ok) {{
-                    showMessage('User limits saved.', false);
-                }} else {{
-                    let text = 'Unable to save user limits.';
-                    try {{
-                        const data = await resp.json();
-                        if (data.error) text = data.error;
-                    }} catch (_) {{}}
-                    showMessage(text, true);
-                }}
-            }});
         }});
 
         document.querySelectorAll('.delete-user-btn').forEach((btn) => {{
@@ -981,6 +923,163 @@ pub async fn admin_page(
 </html>"#,
         favicon = FAVICON_LINK,
         user_rows = user_rows,
+    );
+
+    Ok(Html(html).into_response())
+}
+
+/// Admin user edit page for per-user limits and password resets.
+pub async fn admin_edit_user_page(
+    State(state): State<SharedState>,
+    AdminUser(_admin): AdminUser,
+    Path(id): Path<uuid::Uuid>,
+) -> crate::Result<impl IntoResponse> {
+    let user = state.db.get_user_by_id(&id)?.ok_or(AppError::NotFound)?;
+    let size_limit = user
+        .max_screenshot_size_bytes
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+    let expiry_limit = user
+        .max_expiry_seconds
+        .map(|v| v.to_string())
+        .unwrap_or_default();
+    let server_expiry = state
+        .config
+        .server
+        .max_expiry_seconds
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| "none".to_string());
+
+    let html = format!(
+        r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ScreenshotSafe — Edit User</title>
+    {favicon}
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
+        <div class="nav-right">
+            <a href="/admin" class="btn btn-sm btn-outline">Admin</a>
+            <a href="/" class="btn btn-sm btn-outline">Dashboard</a>
+        </div>
+    </nav>
+    <main class="container">
+        <div class="page-header">
+            <h1>Edit User</h1>
+        </div>
+
+        <section class="settings-section">
+            <h2>{username}</h2>
+            <p>{display_name} · {role} · Created {created_at}</p>
+            <div id="user-message" class="settings-message" style="display:none"></div>
+            <form id="limits-form" class="admin-user-form">
+                <div class="admin-form-grid">
+                    <div class="form-group">
+                        <label for="max-screenshot-size-bytes">Max Screenshot Bytes</label>
+                        <input type="number" id="max-screenshot-size-bytes" min="0" step="1" value="{size_limit}" placeholder="{server_size}">
+                    </div>
+                    <div class="form-group">
+                        <label for="max-expiry-seconds">Max Expiry Seconds</label>
+                        <input type="number" id="max-expiry-seconds" min="0" step="1" value="{expiry_limit}" placeholder="{server_expiry}">
+                    </div>
+                </div>
+                <button class="btn btn-primary" type="submit">Save Limits</button>
+            </form>
+        </section>
+
+        <section class="settings-section">
+            <h2>Reset Password</h2>
+            <form id="password-reset-form" class="password-form">
+                <div class="form-group">
+                    <label for="new-password">New Password</label>
+                    <input type="password" id="new-password" autocomplete="new-password" minlength="8" required>
+                </div>
+                <div class="form-group">
+                    <label for="confirm-password">Confirm New Password</label>
+                    <input type="password" id="confirm-password" autocomplete="new-password" minlength="8" required>
+                </div>
+                <button class="btn btn-primary" type="submit">Reset Password</button>
+            </form>
+        </section>
+    </main>
+    <script>
+        const userId = "{id}";
+        const message = document.getElementById('user-message');
+
+        function showMessage(text, isError) {{
+            message.textContent = text;
+            message.className = `settings-message ${{isError ? 'settings-message-error' : 'settings-message-success'}}`;
+            message.style.display = 'block';
+        }}
+
+        function optionalNumber(id) {{
+            const value = document.getElementById(id).value.trim();
+            return value ? Number(value) : null;
+        }}
+
+        async function patchUser(payload) {{
+            const resp = await fetch(`/api/admin/users/${{userId}}`, {{
+                method: 'PATCH',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify(payload),
+            }});
+            if (!resp.ok) {{
+                let text = 'Unable to update user.';
+                try {{
+                    const data = await resp.json();
+                    if (data.error) text = data.error;
+                }} catch (_) {{}}
+                throw new Error(text);
+            }}
+        }}
+
+        document.getElementById('limits-form').addEventListener('submit', async (event) => {{
+            event.preventDefault();
+            try {{
+                await patchUser({{
+                    max_screenshot_size_bytes: optionalNumber('max-screenshot-size-bytes'),
+                    max_expiry_seconds: optionalNumber('max-expiry-seconds'),
+                }});
+                showMessage('User limits saved.', false);
+            }} catch (error) {{
+                showMessage(error.message, true);
+            }}
+        }});
+
+        document.getElementById('password-reset-form').addEventListener('submit', async (event) => {{
+            event.preventDefault();
+            const password = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            if (password !== confirmPassword) {{
+                showMessage('New passwords do not match.', true);
+                return;
+            }}
+            try {{
+                await patchUser({{ password }});
+                document.getElementById('password-reset-form').reset();
+                showMessage('Password reset.', false);
+            }} catch (error) {{
+                showMessage(error.message, true);
+            }}
+        }});
+    </script>
+</body>
+</html>"#,
+        favicon = FAVICON_LINK,
+        id = user.id,
+        username = html_escape(&user.username),
+        display_name = html_escape(&user.display_name),
+        role = if user.is_admin { "Admin" } else { "User" },
+        created_at = user.created_at.format("%b %d, %Y"),
+        size_limit = size_limit,
+        expiry_limit = expiry_limit,
+        server_size = state.config.server.max_screenshot_size_bytes,
+        server_expiry = server_expiry,
     );
 
     Ok(Html(html).into_response())
