@@ -12,7 +12,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        connectionOptions.urlContexts.forEach { _ = ScreenshotSafeSettingsStore().saveConfiguration(from: $0.url) }
         guard let _ = (scene as? UIWindowScene) else { return }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        URLContexts.forEach { _ = ScreenshotSafeSettingsStore().saveConfiguration(from: $0.url) }
     }
 
 }

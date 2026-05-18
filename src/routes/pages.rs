@@ -769,6 +769,7 @@ pub async fn settings_page(
                 <strong>Your new token (copy it now — it won't be shown again):</strong>
                 <code id="new-token-value"></code>
                 <button class="btn btn-sm" id="copy-token-btn">Copy</button>
+                <a class="btn btn-sm btn-primary" id="open-native-app-btn" href="" style="display:none">Open in ScreenshotSafe</a>
             </div>
             <table class="tokens-table">
                 <thead>
@@ -839,6 +840,10 @@ pub async fn settings_page(
             if (resp.ok) {{
                 const data = await resp.json();
                 document.getElementById('new-token-value').textContent = data.token;
+                const configureUrl = `screenshotsafe://configure?server_url=${{encodeURIComponent(window.location.origin)}}&token=${{encodeURIComponent(data.token)}}`;
+                const openNativeAppBtn = document.getElementById('open-native-app-btn');
+                openNativeAppBtn.href = configureUrl;
+                openNativeAppBtn.style.display = 'inline-flex';
                 document.getElementById('new-token-display').style.display = 'block';
                 document.getElementById('token-label').value = '';
 
