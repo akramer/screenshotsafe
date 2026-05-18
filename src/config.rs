@@ -56,6 +56,8 @@ pub struct OAuthConfig {
     #[serde(default = "default_oauth_provider")]
     pub provider: String,
     #[serde(default)]
+    pub display_name: String,
+    #[serde(default)]
     pub client_id: String,
     #[serde(default)]
     pub client_secret: String,
@@ -158,6 +160,7 @@ impl Default for OAuthConfig {
         Self {
             enabled: false,
             provider: default_oauth_provider(),
+            display_name: String::new(),
             client_id: String::new(),
             client_secret: String::new(),
             issuer_url: String::new(),
@@ -169,6 +172,16 @@ impl Default for OAuthConfig {
             redirect_url: String::new(),
             allowed_email_domains: Vec::new(),
             account_mode: OAuthAccountMode::LinkOnly,
+        }
+    }
+}
+
+impl OAuthConfig {
+    pub fn idp_name(&self) -> &str {
+        if self.display_name.is_empty() {
+            "OAuth"
+        } else {
+            &self.display_name
         }
     }
 }
@@ -244,6 +257,9 @@ impl Config {
         if let Ok(val) = std::env::var("SSS_OAUTH_PROVIDER") {
             config.auth.oauth.provider = val;
         }
+        if let Ok(val) = std::env::var("SSS_OAUTH_DISPLAY_NAME") {
+            config.auth.oauth.display_name = val;
+        }
         if let Ok(val) = std::env::var("SSS_OAUTH_CLIENT_ID") {
             config.auth.oauth.client_id = val;
         }
@@ -293,6 +309,7 @@ impl Config {
             .max_expiry_seconds
             .filter(|seconds| *seconds > 0 && i64::try_from(*seconds).is_ok());
         config.auth.oauth.provider = config.auth.oauth.provider.trim().to_string();
+        config.auth.oauth.display_name = config.auth.oauth.display_name.trim().to_string();
         config.auth.oauth.issuer_url = config
             .auth
             .oauth
@@ -347,5 +364,25 @@ impl Default for Config {
             database: DatabaseConfig::default(),
             auth: AuthConfig::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OAuthConfig;
+
+    #[test]
+    fn oauth_idp_name_defaults_to_oauth() {
+        let config = OAuthConfig::default();
+        assert_eq!(config.idp_name(), "OAuth");
+    }
+
+    #[test]
+    fn oauth_idp_name_uses_display_name() {
+        let config = OAuthConfig {
+            display_name: "Acme SSO".to_string(),
+            ..OAuthConfig::default()
+        };
+        assert_eq!(config.idp_name(), "Acme SSO");
     }
 }

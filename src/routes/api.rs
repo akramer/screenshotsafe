@@ -950,7 +950,7 @@ pub async fn disconnect_oauth_identity(
 
     if user.password_hash.is_none() && identities.len() <= 1 {
         return Err(AppError::BadRequest(
-            "Add a password or link another OAuth identity before disconnecting this one".into(),
+            "Add a password before disconnecting your only OAuth identity".into(),
         ));
     }
 

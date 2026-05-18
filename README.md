@@ -72,6 +72,7 @@ jwt_secret = "replace-with-a-long-random-secret"
 [auth.oauth]
 enabled = false
 provider = "example"
+display_name = "Example SSO"
 client_id = ""
 client_secret = ""
 issuer_url = "https://provider.example"
@@ -98,6 +99,7 @@ SSS_DATABASE_PATH=/data/screenshotsafe.db
 SSS_JWT_SECRET=replace-with-a-long-random-secret
 SSS_OAUTH_ENABLED=true
 SSS_OAUTH_PROVIDER=example
+SSS_OAUTH_DISPLAY_NAME="Example SSO"
 SSS_OAUTH_CLIENT_ID=client-id
 SSS_OAUTH_CLIENT_SECRET=client-secret
 SSS_OAUTH_ISSUER_URL=https://provider.example
@@ -114,13 +116,13 @@ If `jwt_secret` is omitted, ScreenshotSafe generates one and stores it next to t
 
 `max_screenshot_size_bytes` defaults to 25 MiB. `default_expiry_seconds` controls the default retention window for newly uploaded screenshots, and `max_expiry_seconds` optionally caps requested expiry windows. Admins can set per-user overrides for both limits from the Admin page; blank or `0` means the user follows the server setting.
 
-OAuth uses the configured authorization, token, and userinfo endpoints. If `issuer_url` or `discovery_url` is set, ScreenshotSafe reads the OpenID discovery document and uses the discovered endpoints unless explicit endpoint URLs are configured. `account_mode = "link_only"` only allows OAuth identities that users have linked from Settings. `account_mode = "pending"` creates disabled-by-default pending accounts for admins to enable. `account_mode = "auto_enabled"` creates enabled non-admin accounts immediately. When `allowed_email_domains` is set, the OAuth userinfo response must include an allowed verified email domain.
+OAuth uses one configured identity provider. If `issuer_url` or `discovery_url` is set, ScreenshotSafe reads the OpenID discovery document and uses the discovered authorization, token, and userinfo endpoints unless explicit endpoint URLs are configured. `account_mode = "link_only"` only allows OAuth identities that users have linked from Settings. `account_mode = "pending"` creates disabled-by-default pending accounts for admins to enable. `account_mode = "auto_enabled"` creates enabled non-admin accounts immediately. When `allowed_email_domains` is set, the OAuth userinfo response must include an allowed verified email domain.
 
 ## OAuth Authentication
 
-ScreenshotSafe can add OAuth sign-in alongside the built-in password login. Password login remains available for accounts with a password, and OAuth identities are stored separately from local users so a single local account can be linked to a provider identity.
+ScreenshotSafe can add OAuth sign-in alongside the built-in password login. Password login remains available for accounts with a password, and OAuth identities are stored separately from local users so the configured provider identity can be linked to a local account.
 
-OAuth is configured under `[auth.oauth]`. The implementation expects a provider with an authorization endpoint, token endpoint, and userinfo endpoint. OIDC providers work well because their userinfo response normally includes a stable `sub` field. For non-OIDC providers, ScreenshotSafe can also use an `id` field from userinfo.
+OAuth is configured under `[auth.oauth]`, and only one provider can be active at a time. The implementation expects that provider to expose an authorization endpoint, token endpoint, and userinfo endpoint. `provider` is the stable internal key used for identity matching. `display_name` is optional user-facing text for buttons and messages, such as "Sign in with Google" or "Connect Acme SSO". OIDC providers work well because their userinfo response normally includes a stable `sub` field. For non-OIDC providers, ScreenshotSafe can also use an `id` field from userinfo.
 
 Example:
 
@@ -128,6 +130,7 @@ Example:
 [auth.oauth]
 enabled = true
 provider = "google"
+display_name = "Google"
 client_id = "..."
 client_secret = "..."
 issuer_url = "https://accounts.google.com"
@@ -155,7 +158,7 @@ You can set `discovery_url` directly for providers that publish the document som
 
 ### Account Modes
 
-`link_only` is the safest default. OAuth can only be used after a signed-in user links a provider identity from Settings. Unknown OAuth identities are rejected at login. Use this for private installs where admins create accounts manually.
+`link_only` is the safest default. OAuth can only be used after a signed-in user links the configured provider identity from Settings. Unknown OAuth identities are rejected at login. Use this for private installs where admins create accounts manually.
 
 `pending` allows self-service OAuth requests without granting immediate access. When an unknown OAuth identity signs in, ScreenshotSafe creates a local non-admin account with `account_status = "pending"` and does not issue a session. An admin must enable the account from the Admin page before the user can sign in.
 
@@ -163,9 +166,9 @@ You can set `discovery_url` directly for providers that publish the document som
 
 ### Linking Existing Accounts
 
-When OAuth is enabled, signed-in users see an OAuth section in Settings. The Connect OAuth button starts a provider login and links the returned provider identity to the current local account. Future OAuth logins with that provider identity sign in as the linked user. Users can disconnect linked OAuth identities from Settings, but ScreenshotSafe blocks removing the only OAuth identity from an account that does not have a password.
+When OAuth is enabled, signed-in users see an OAuth section in Settings. The Connect OAuth button starts a login with the configured provider and links the returned identity to the current local account. Future OAuth logins with that provider identity sign in as the linked user. Users can disconnect linked OAuth identities from Settings, but ScreenshotSafe blocks removing the only OAuth identity from an account that does not have a password.
 
-OAuth identities are matched by:
+OAuth identities are matched by the configured provider name plus the provider's stable user subject:
 
 ```text
 provider + subject

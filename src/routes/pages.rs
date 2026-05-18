@@ -236,25 +236,41 @@ pub async fn login_page(
         return Ok(Redirect::to("/").into_response());
     }
 
+    let idp_name = html_escape(state.config.auth.oauth.idp_name());
     let oauth_message = match params.get("oauth").map(String::as_str) {
         Some("pending") => {
-            r#"<div class="settings-message settings-message-success">Your OAuth account is pending admin approval.</div>"#
+            format!(
+                r#"<div class="settings-message settings-message-success">Your {} account is pending admin approval.</div>"#,
+                idp_name
+            )
         }
         Some("not_linked") => {
-            r#"<div class="settings-message settings-message-error">No local account is linked to that OAuth identity.</div>"#
+            format!(
+                r#"<div class="settings-message settings-message-error">No local account is linked to that {} identity.</div>"#,
+                idp_name
+            )
         }
         Some("denied") => {
-            r#"<div class="settings-message settings-message-error">That OAuth account is not allowed to access this server.</div>"#
+            format!(
+                r#"<div class="settings-message settings-message-error">That {} account is not allowed to access this server.</div>"#,
+                idp_name
+            )
         }
         Some("error") => {
-            r#"<div class="settings-message settings-message-error">OAuth sign-in failed. Please try again.</div>"#
+            format!(
+                r#"<div class="settings-message settings-message-error">{} sign-in failed. Please try again.</div>"#,
+                idp_name
+            )
         }
-        _ => "",
+        _ => String::new(),
     };
     let oauth_button = if state.config.auth.oauth.enabled {
-        r#"<a class="btn btn-outline btn-full oauth-login-btn" href="/api/auth/oauth/start">Sign in with OAuth</a>"#
+        format!(
+            r#"<a class="btn btn-outline btn-full oauth-login-btn" href="/api/auth/oauth/start">Sign in with {}</a>"#,
+            idp_name
+        )
     } else {
-        ""
+        String::new()
     };
 
     let html = r#"<!DOCTYPE html>
@@ -316,8 +332,8 @@ pub async fn login_page(
     </script>
 </body>
 </html>"#
-    .replace("{{OAUTH_MESSAGE}}", oauth_message)
-    .replace("{{OAUTH_BUTTON}}", oauth_button);
+    .replace("{{OAUTH_MESSAGE}}", &oauth_message)
+    .replace("{{OAUTH_BUTTON}}", &oauth_button);
 
     Ok(Html(html).into_response())
 }
@@ -618,22 +634,34 @@ pub async fn settings_page(
             .collect::<Vec<_>>()
             .join("\n")
     };
+    let idp_name = html_escape(state.config.auth.oauth.idp_name());
     let oauth_message = match params.get("oauth").map(String::as_str) {
         Some("linked") => {
-            r#"<div class="settings-message settings-message-success">OAuth identity linked.</div>"#
+            format!(
+                r#"<div class="settings-message settings-message-success">{} identity linked.</div>"#,
+                idp_name
+            )
         }
         Some("disconnected") => {
-            r#"<div class="settings-message settings-message-success">OAuth identity disconnected.</div>"#
+            format!(
+                r#"<div class="settings-message settings-message-success">{} identity disconnected.</div>"#,
+                idp_name
+            )
         }
         Some("already_linked") => {
-            r#"<div class="settings-message settings-message-error">That OAuth identity is already linked to another account.</div>"#
+            format!(
+                r#"<div class="settings-message settings-message-error">That {} identity is already linked to another account.</div>"#,
+                idp_name
+            )
         }
-        _ => "",
+        _ => String::new(),
     };
     let oauth_section = if state.config.auth.oauth.enabled {
         let rows = if oauth_identities.is_empty() {
-            "<tr><td colspan=\"5\" class=\"empty-cell\">No OAuth identities linked.</td></tr>"
-                .to_string()
+            format!(
+                "<tr><td colspan=\"5\" class=\"empty-cell\">No {} identities linked.</td></tr>",
+                idp_name
+            )
         } else {
             oauth_identities
                 .iter()
@@ -664,8 +692,8 @@ pub async fn settings_page(
             r#"<section class="settings-section">
                 <h2>OAuth</h2>
                 {oauth_message}
-                <p>Link an OAuth identity so you can sign in without a password.</p>
-                <a class="btn btn-primary" href="/api/auth/oauth/start?link=true">Connect OAuth</a>
+                <p>Link a {idp_name} identity so you can sign in without a password.</p>
+                <a class="btn btn-primary" href="/api/auth/oauth/start?link=true">Connect {idp_name}</a>
                 <table class="tokens-table">
                     <thead>
                         <tr>
@@ -680,6 +708,7 @@ pub async fn settings_page(
                 </table>
             </section>"#,
             oauth_message = oauth_message,
+            idp_name = idp_name,
             rows = rows,
         )
     } else {
