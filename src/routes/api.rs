@@ -938,6 +938,26 @@ pub async fn change_password(
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
+pub async fn disconnect_oauth_identity(
+    State(state): State<SharedState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<Uuid>,
+) -> crate::Result<Json<serde_json::Value>> {
+    let identities = state.db.list_oauth_identities_for_user(&user.id)?;
+    if !identities.iter().any(|identity| identity.id == id) {
+        return Err(AppError::NotFound);
+    }
+
+    if user.password_hash.is_none() && identities.len() <= 1 {
+        return Err(AppError::BadRequest(
+            "Add a password or link another OAuth identity before disconnecting this one".into(),
+        ));
+    }
+
+    state.db.delete_oauth_identity_for_user(&id, &user.id)?;
+    Ok(Json(serde_json::json!({ "ok": true })))
+}
+
 // ── Screenshot upload ──
 
 pub async fn upload_screenshot(

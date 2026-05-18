@@ -622,6 +622,9 @@ pub async fn settings_page(
         Some("linked") => {
             r#"<div class="settings-message settings-message-success">OAuth identity linked.</div>"#
         }
+        Some("disconnected") => {
+            r#"<div class="settings-message settings-message-success">OAuth identity disconnected.</div>"#
+        }
         Some("already_linked") => {
             r#"<div class="settings-message settings-message-error">That OAuth identity is already linked to another account.</div>"#
         }
@@ -629,7 +632,7 @@ pub async fn settings_page(
     };
     let oauth_section = if state.config.auth.oauth.enabled {
         let rows = if oauth_identities.is_empty() {
-            "<tr><td colspan=\"4\" class=\"empty-cell\">No OAuth identities linked.</td></tr>"
+            "<tr><td colspan=\"5\" class=\"empty-cell\">No OAuth identities linked.</td></tr>"
                 .to_string()
         } else {
             oauth_identities
@@ -645,11 +648,13 @@ pub async fn settings_page(
                             <td>{}</td>
                             <td>{}</td>
                             <td>{}</td>
+                            <td><button class="btn btn-sm btn-danger disconnect-oauth-btn" data-id="{}">Disconnect</button></td>
                         </tr>"#,
                         html_escape(&identity.provider),
                         html_escape(identity.email.as_deref().unwrap_or(&identity.subject)),
                         identity.created_at.format("%b %d, %Y"),
                         last_login,
+                        identity.id,
                     )
                 })
                 .collect::<Vec<_>>()
@@ -668,6 +673,7 @@ pub async fn settings_page(
                             <th>Identity</th>
                             <th>Linked</th>
                             <th>Last Login</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>{rows}</tbody>
@@ -831,6 +837,24 @@ pub async fn settings_page(
             const btn = document.getElementById('copy-token-btn');
             btn.textContent = 'Copied!';
             setTimeout(() => btn.textContent = 'Copy', 2000);
+        }});
+
+        document.querySelectorAll('.disconnect-oauth-btn').forEach(btn => {{
+            btn.addEventListener('click', async () => {{
+                if (!confirm('Disconnect this OAuth identity?')) return;
+                const resp = await fetch(`/api/auth/oauth/identities/${{btn.dataset.id}}`, {{ method: 'DELETE' }});
+                if (resp.ok) {{
+                    window.location.href = '/settings?oauth=disconnected';
+                    return;
+                }}
+
+                let message = 'Unable to disconnect OAuth identity.';
+                try {{
+                    const data = await resp.json();
+                    if (data.error) message = data.error;
+                }} catch (_) {{}}
+                alert(message);
+            }});
         }});
 
         document.querySelectorAll('.revoke-btn').forEach(btn => {{

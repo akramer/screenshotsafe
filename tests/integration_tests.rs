@@ -9,7 +9,7 @@ mod tests {
 
     use screenshotsafe::config::Config;
     use screenshotsafe::db::Database;
-    use screenshotsafe::models::AccountStatus;
+    use screenshotsafe::models::{AccountStatus, OAuthIdentity, User};
     use screenshotsafe::*;
 
     /// Create a test app with an in-memory database and temp storage.
@@ -58,6 +58,15 @@ mod tests {
             .header(header::CONTENT_TYPE, "application/json")
             .header(header::COOKIE, cookie)
             .body(Body::from(serde_json::to_string(&body).unwrap()))
+            .unwrap()
+    }
+
+    fn authed_request(method: &str, uri: &str, cookie: &str) -> axum::http::Request<Body> {
+        axum::http::Request::builder()
+            .method(method)
+            .uri(uri)
+            .header(header::COOKIE, cookie)
+            .body(Body::empty())
             .unwrap()
     }
 
@@ -623,6 +632,91 @@ mod tests {
         );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_user_can_disconnect_oauth_identity_when_password_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+        let user = state.db.get_user_by_username("admin").unwrap().unwrap();
+        let identity = OAuthIdentity {
+            id: uuid::Uuid::new_v4(),
+            user_id: user.id,
+            provider: "test".to_string(),
+            subject: "subject-1".to_string(),
+            email: Some("admin@example.com".to_string()),
+            display_name: Some("Admin".to_string()),
+            created_at: Utc::now(),
+            last_login_at: None,
+        };
+        state.db.create_oauth_identity(&identity).unwrap();
+
+        let req = authed_request(
+            "DELETE",
+            &format!("/api/auth/oauth/identities/{}", identity.id),
+            &cookie,
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(state
+            .db
+            .list_oauth_identities_for_user(&user.id)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_oauth_only_user_cannot_disconnect_only_oauth_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let user = User {
+            id: uuid::Uuid::new_v4(),
+            username: "oauth@example.com".to_string(),
+            password_hash: None,
+            display_name: "OAuth User".to_string(),
+            is_admin: false,
+            account_status: AccountStatus::Enabled,
+            max_screenshot_size_bytes: None,
+            max_expiry_seconds: None,
+            created_at: Utc::now(),
+        };
+        let identity = OAuthIdentity {
+            id: uuid::Uuid::new_v4(),
+            user_id: user.id,
+            provider: "test".to_string(),
+            subject: "subject-1".to_string(),
+            email: Some("oauth@example.com".to_string()),
+            display_name: Some("OAuth User".to_string()),
+            created_at: Utc::now(),
+            last_login_at: None,
+        };
+        state
+            .db
+            .create_user_with_oauth_identity(&user, &identity)
+            .unwrap();
+        let session = auth::middleware::create_session_token(
+            &user.id,
+            &state.jwt_secret,
+            state.config.auth.session_ttl_seconds,
+        );
+        let cookie = format!("session={}", session);
+
+        let req = authed_request(
+            "DELETE",
+            &format!("/api/auth/oauth/identities/{}", identity.id),
+            &cookie,
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            state
+                .db
+                .list_oauth_identities_for_user(&user.id)
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     // ── Screenshot Tests ──

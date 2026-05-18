@@ -318,6 +318,19 @@ impl Database {
         Ok(())
     }
 
+    pub fn delete_oauth_identity_for_user(
+        &self,
+        id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+    ) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let rows = conn.execute(
+            "DELETE FROM oauth_identities WHERE id = ?1 AND user_id = ?2",
+            params![id.to_string(), user_id.to_string()],
+        )?;
+        Ok(rows > 0)
+    }
+
     pub fn create_user_with_oauth_identity(
         &self,
         user: &User,

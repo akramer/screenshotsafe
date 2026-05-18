@@ -163,7 +163,7 @@ You can set `discovery_url` directly for providers that publish the document som
 
 ### Linking Existing Accounts
 
-When OAuth is enabled, signed-in users see an OAuth section in Settings. The Connect OAuth button starts a provider login and links the returned provider identity to the current local account. Future OAuth logins with that provider identity sign in as the linked user.
+When OAuth is enabled, signed-in users see an OAuth section in Settings. The Connect OAuth button starts a provider login and links the returned provider identity to the current local account. Future OAuth logins with that provider identity sign in as the linked user. Users can disconnect linked OAuth identities from Settings, but ScreenshotSafe blocks removing the only OAuth identity from an account that does not have a password.
 
 OAuth identities are matched by:
 
