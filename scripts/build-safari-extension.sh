@@ -31,7 +31,7 @@ if [[ "${1:-}" == "--xcode-project" ]]; then
     fi
 
     xcrun safari-web-extension-converter "$DIST_DIR" \
-        --project-location "$ROOT_DIR/safari" \
+        --project-location "$ROOT_DIR/apple" \
         --app-name "$APP_NAME" \
         --bundle-identifier "$BUNDLE_IDENTIFIER" \
         --copy-resources \

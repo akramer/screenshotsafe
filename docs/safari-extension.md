@@ -54,7 +54,7 @@ The script uses:
 
 ```sh
 xcrun safari-web-extension-converter dist/safari-extension \
-  --project-location safari \
+  --project-location apple \
   --app-name ScreenshotSafe \
   --bundle-identifier com.screenshotsafe.safari \
   --copy-resources \
@@ -63,7 +63,7 @@ xcrun safari-web-extension-converter dist/safari-extension \
   --no-open
 ```
 
-The generated project is written to `safari/ScreenshotSafe/`.
+The generated project is written to `apple/ScreenshotSafe/`.
 
 Set a real bundle identifier before distribution:
 
@@ -88,7 +88,7 @@ Implemented here:
 - Safari-specific manifest with `browser_specific_settings.safari`.
 - Safari payload build script.
 - Xcode wrapper generation when full Xcode is installed.
-- Generated Swift host app wrapper under `safari/ScreenshotSafe/`.
+- Generated Swift host app wrapper under `apple/ScreenshotSafe/`.
 
 Still remaining:
 

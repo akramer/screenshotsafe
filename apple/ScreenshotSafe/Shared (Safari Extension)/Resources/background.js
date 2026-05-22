@@ -1,5 +1,5 @@
 /**
- * ScreenshotSafe Extension — Background Worker
+ * ScreenshotSafe Safari Extension - Background Worker
  *
  * Handles toolbar-click capture, settings menu access, and screenshot draft
  * handoff for the full-tab editor.
@@ -13,6 +13,7 @@ const draftTtlMs = 10 * 60 * 1000;
 const settingsMenuId = 'screenshotsafe-settings';
 const delayedCapture3MenuId = 'screenshotsafe-capture-delay-3';
 const delayedCapture10MenuId = 'screenshotsafe-capture-delay-10';
+const nativeApplicationId = 'application.id';
 
 if (api && api.runtime) {
     api.runtime.onInstalled.addListener(() => {
@@ -47,6 +48,13 @@ if (api && api.runtime) {
             drafts.delete(message.id);
             sendResponse({ ok: true, draft: entry.draft });
             return false;
+        }
+
+        if (message.type === 'sss-native-message') {
+            sendNativeMessageToApp(message.message)
+                .then(sendResponse)
+                .catch((err) => sendResponse({ ok: false, error: err.message }));
+            return true;
         }
 
         return false;
@@ -145,11 +153,39 @@ async function validateSettings(settings) {
 }
 
 async function getSettings() {
-    const values = await call(api.storage && api.storage.local, 'get', [['serverUrl', 'apiToken']]);
-    return {
-        serverUrl: values.serverUrl || '',
-        apiToken: values.apiToken || '',
-    };
+    return getNativeSettings();
+}
+
+async function getNativeSettings() {
+    if (!api || !api.runtime || typeof api.runtime.sendNativeMessage !== 'function') {
+        return { serverUrl: '', apiToken: '' };
+    }
+
+    try {
+        const response = await sendNativeMessageToApp({ type: 'sss-get-native-settings' });
+        if (response && response.ok && response.settings) {
+            return {
+                serverUrl: response.settings.serverUrl || '',
+                apiToken: response.settings.apiToken || '',
+                defaultExpiry: response.settings.defaultExpiry || '',
+            };
+        }
+        if (response && response.error) {
+            console.error('ScreenshotSafe native settings bridge failed:', response.error);
+        }
+    } catch (err) {
+        console.error('ScreenshotSafe native settings bridge failed:', err.message);
+    }
+
+    return { serverUrl: '', apiToken: '' };
+}
+
+async function sendNativeMessageToApp(message) {
+    const response = await call(api.runtime, 'sendNativeMessage', [nativeApplicationId, message]);
+    if (!response || response.ok !== false) {
+        return response || { ok: false, error: 'Native ScreenshotSafe settings are unavailable.' };
+    }
+    return response;
 }
 
 async function queryActiveTab() {

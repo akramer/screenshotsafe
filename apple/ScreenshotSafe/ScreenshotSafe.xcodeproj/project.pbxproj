@@ -13,8 +13,8 @@
 		A2FB8AC12FBA180C005916E6 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8ABF2FBA180C005916E6 /* Main.storyboard */; };
 		A2FB8ACA2FBA180C005916E6 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2FB8AC92FBA180C005916E6 /* AppDelegate.swift */; };
 		A2FB8ACD2FBA180C005916E6 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8ACB2FBA180C005916E6 /* Main.storyboard */; };
-		A2FB8AD42FBA180C005916E6 /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A2FB8AD32FBA180C005916E6 /* ScreenshotSafe Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		A2FB8ADE2FBA180C005916E6 /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A2FB8ADD2FBA180C005916E6 /* ScreenshotSafe Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A2FB8AD42FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A2FB8AD32FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A2FB8ADE2FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A2FB8ADD2FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A2FB8AE32FBA180C005916E6 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8AA82FBA180B005916E6 /* Main.html */; };
 		A2FB8AE42FBA180C005916E6 /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8AA82FBA180B005916E6 /* Main.html */; };
 		A2FB8AE52FBA180C005916E6 /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8AAA2FBA180B005916E6 /* Icon.png */; };
@@ -57,6 +57,12 @@
 		C0D000102FBA999900000010 /* ScreenshotSafe Share.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C0D0000D2FBA99990000000D /* ScreenshotSafe Share.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		C0D0001A2FBA99990000001A /* ScreenshotSafeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D000012FBA999900000001 /* ScreenshotSafeSettings.swift */; };
 		C0D0001B2FBA99990000001B /* ScreenshotSafeUploadClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D000022FBA999900000002 /* ScreenshotSafeUploadClient.swift */; };
+		C0D0001C2FBA99990000001C /* ScreenshotSafeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D000012FBA999900000001 /* ScreenshotSafeSettings.swift */; };
+		C0D0001D2FBA99990000001D /* ScreenshotSafeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D000012FBA999900000001 /* ScreenshotSafeSettings.swift */; };
+		C0D001012FBAA20000000101 /* ScreenshotSafeSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D000012FBA999900000001 /* ScreenshotSafeSettings.swift */; };
+		C0D001022FBAA20000000102 /* ScreenshotSafeUploadClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D000022FBA999900000002 /* ScreenshotSafeUploadClient.swift */; };
+		C0D001032FBAA20000000103 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0D001052FBAA20000000105 /* ShareViewController.swift */; };
+		C0D001042FBAA20000000104 /* ScreenshotSafe Share.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C0D001082FBAA20000000108 /* ScreenshotSafe Share.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -65,14 +71,14 @@
 			containerPortal = A2FB8AA22FBA180B005916E6 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = A2FB8AD22FBA180C005916E6;
-			remoteInfo = "ScreenshotSafe Extension (iOS)";
+			remoteInfo = "ScreenshotSafe Safari Extension (iOS)";
 		};
 		A2FB8ADF2FBA180C005916E6 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A2FB8AA22FBA180B005916E6 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = A2FB8ADC2FBA180C005916E6;
-			remoteInfo = "ScreenshotSafe Extension (macOS)";
+			remoteInfo = "ScreenshotSafe Safari Extension (macOS)";
 		};
 		C0D000112FBA999900000011 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -80,6 +86,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = C0D000152FBA999900000015;
 			remoteInfo = "ScreenshotSafe Share Extension (macOS)";
+		};
+		C0D001092FBAA20000000109 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A2FB8AA22FBA180B005916E6 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C0D0010D2FBAA2000000010D;
+			remoteInfo = "ScreenshotSafe Share Extension (iOS)";
 		};
 /* End PBXContainerItemProxy section */
 
@@ -90,7 +103,8 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				A2FB8AD42FBA180C005916E6 /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */,
+				A2FB8AD42FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex in Embed Foundation Extensions */,
+				C0D001042FBAA20000000104 /* ScreenshotSafe Share.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -101,7 +115,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				A2FB8ADE2FBA180C005916E6 /* ScreenshotSafe Extension.appex in Embed Foundation Extensions */,
+				A2FB8ADE2FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex in Embed Foundation Extensions */,
 				C0D000102FBA999900000010 /* ScreenshotSafe Share.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
@@ -127,9 +141,9 @@
 		A2FB8AC92FBA180C005916E6 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A2FB8ACC2FBA180C005916E6 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		A2FB8ACE2FBA180C005916E6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A2FB8AD32FBA180C005916E6 /* ScreenshotSafe Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2FB8AD32FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Safari Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2FB8AD82FBA180C005916E6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A2FB8ADD2FBA180C005916E6 /* ScreenshotSafe Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2FB8ADD2FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Safari Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2FB8AE22FBA180C005916E6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2FB8B022FBA180C005916E6 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup.js; path = Resources/popup.js; sourceTree = "<group>"; };
 		A2FB8B032FBA180C005916E6 /* webext-api.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "webext-api.js"; path = "Resources/webext-api.js"; sourceTree = "<group>"; };
@@ -148,6 +162,13 @@
 		C0D0000B2FBA99990000000B /* ScreenshotSafe.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScreenshotSafe.entitlements; sourceTree = "<group>"; };
 		C0D0000C2FBA99990000000C /* ScreenshotSafeShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScreenshotSafeShare.entitlements; sourceTree = "<group>"; };
 		C0D0000D2FBA99990000000D /* ScreenshotSafe Share.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Share.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C0D0001E2FBA99990000001E /* ScreenshotSafeExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScreenshotSafeExtension.entitlements; sourceTree = "<group>"; };
+		C0D0001F2FBA99990000001F /* ScreenshotSafe.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScreenshotSafe.entitlements; sourceTree = "<group>"; };
+		C0D000202FBA999900000020 /* ScreenshotSafeExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScreenshotSafeExtension.entitlements; sourceTree = "<group>"; };
+		C0D001052FBAA20000000105 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		C0D001062FBAA20000000106 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		C0D001072FBAA20000000107 /* ScreenshotSafeShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ScreenshotSafeShare.entitlements; sourceTree = "<group>"; };
+		C0D001082FBAA20000000108 /* ScreenshotSafe Share.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "ScreenshotSafe Share.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -186,6 +207,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0D0010A2FBAA2000000010A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -194,11 +222,12 @@
 			children = (
 				A2FB8AA62FBA180B005916E6 /* Shared (App) */,
 				C0D000032FBA999900000003 /* Shared (Native) */,
-				A2FB8AAF2FBA180C005916E6 /* Shared (Extension) */,
+				A2FB8AAF2FBA180C005916E6 /* Shared (Safari Extension) */,
 				A2FB8AB72FBA180C005916E6 /* iOS (App) */,
 				A2FB8AC82FBA180C005916E6 /* macOS (App) */,
-				A2FB8AD72FBA180C005916E6 /* iOS (Extension) */,
-				A2FB8AE12FBA180C005916E6 /* macOS (Extension) */,
+				A2FB8AD72FBA180C005916E6 /* iOS (Safari Extension) */,
+				A2FB8AE12FBA180C005916E6 /* macOS (Safari Extension) */,
+				C0D0010E2FBAA2000000010E /* iOS (Share Extension) */,
 				C0D0000E2FBA99990000000E /* macOS (Share Extension) */,
 				A2FB8AB62FBA180C005916E6 /* Products */,
 			);
@@ -225,13 +254,13 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
-		A2FB8AAF2FBA180C005916E6 /* Shared (Extension) */ = {
+		A2FB8AAF2FBA180C005916E6 /* Shared (Safari Extension) */ = {
 			isa = PBXGroup;
 			children = (
 				A2FB8B012FBA180C005916E6 /* Resources */,
 				A2FB8AB02FBA180C005916E6 /* SafariWebExtensionHandler.swift */,
 			);
-			path = "Shared (Extension)";
+			path = "Shared (Safari Extension)";
 			sourceTree = "<group>";
 		};
 		A2FB8AB62FBA180C005916E6 /* Products */ = {
@@ -239,8 +268,9 @@
 			children = (
 				A2FB8AB52FBA180C005916E6 /* ScreenshotSafe.app */,
 				A2FB8AC72FBA180C005916E6 /* ScreenshotSafe.app */,
-				A2FB8AD32FBA180C005916E6 /* ScreenshotSafe Extension.appex */,
-				A2FB8ADD2FBA180C005916E6 /* ScreenshotSafe Extension.appex */,
+				A2FB8AD32FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex */,
+				A2FB8ADD2FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex */,
+				C0D001082FBAA20000000108 /* ScreenshotSafe Share.appex */,
 				C0D0000D2FBA99990000000D /* ScreenshotSafe Share.appex */,
 			);
 			name = Products;
@@ -254,6 +284,7 @@
 				A2FB8ABC2FBA180C005916E6 /* LaunchScreen.storyboard */,
 				A2FB8ABF2FBA180C005916E6 /* Main.storyboard */,
 				A2FB8AC22FBA180C005916E6 /* Info.plist */,
+				C0D0001F2FBA99990000001F /* ScreenshotSafe.entitlements */,
 			);
 			path = "iOS (App)";
 			sourceTree = "<group>";
@@ -269,20 +300,22 @@
 			path = "macOS (App)";
 			sourceTree = "<group>";
 		};
-		A2FB8AD72FBA180C005916E6 /* iOS (Extension) */ = {
+		A2FB8AD72FBA180C005916E6 /* iOS (Safari Extension) */ = {
 			isa = PBXGroup;
 			children = (
 				A2FB8AD82FBA180C005916E6 /* Info.plist */,
+				C0D000202FBA999900000020 /* ScreenshotSafeExtension.entitlements */,
 			);
-			path = "iOS (Extension)";
+			path = "iOS (Safari Extension)";
 			sourceTree = "<group>";
 		};
-		A2FB8AE12FBA180C005916E6 /* macOS (Extension) */ = {
+		A2FB8AE12FBA180C005916E6 /* macOS (Safari Extension) */ = {
 			isa = PBXGroup;
 			children = (
 				A2FB8AE22FBA180C005916E6 /* Info.plist */,
+				C0D0001E2FBA99990000001E /* ScreenshotSafeExtension.entitlements */,
 			);
-			path = "macOS (Extension)";
+			path = "macOS (Safari Extension)";
 			sourceTree = "<group>";
 		};
 		A2FB8B012FBA180C005916E6 /* Resources */ = {
@@ -300,7 +333,7 @@
 				A2FB8B0B2FBA180C005916E6 /* options.html */,
 			);
 			name = Resources;
-			path = "Shared (Extension)";
+			path = "Shared (Safari Extension)";
 			sourceTree = SOURCE_ROOT;
 		};
 		C0D000032FBA999900000003 /* Shared (Native) */ = {
@@ -322,6 +355,16 @@
 			path = "macOS (Share Extension)";
 			sourceTree = "<group>";
 		};
+		C0D0010E2FBAA2000000010E /* iOS (Share Extension) */ = {
+			isa = PBXGroup;
+			children = (
+				C0D001052FBAA20000000105 /* ShareViewController.swift */,
+				C0D001062FBAA20000000106 /* Info.plist */,
+				C0D001072FBAA20000000107 /* ScreenshotSafeShare.entitlements */,
+			);
+			path = "iOS (Share Extension)";
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -338,6 +381,7 @@
 			);
 			dependencies = (
 				A2FB8AD62FBA180C005916E6 /* PBXTargetDependency */,
+				C0D001102FBAA20000000110 /* PBXTargetDependency */,
 			);
 			name = "ScreenshotSafe (iOS)";
 			packageProductDependencies = (
@@ -368,9 +412,9 @@
 			productReference = A2FB8AC72FBA180C005916E6 /* ScreenshotSafe.app */;
 			productType = "com.apple.product-type.application";
 		};
-		A2FB8AD22FBA180C005916E6 /* ScreenshotSafe Extension (iOS) */ = {
+		A2FB8AD22FBA180C005916E6 /* ScreenshotSafe Safari Extension (iOS) */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A2FB8AF32FBA180C005916E6 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (iOS)" */;
+			buildConfigurationList = A2FB8AF32FBA180C005916E6 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Safari Extension (iOS)" */;
 			buildPhases = (
 				A2FB8ACF2FBA180C005916E6 /* Sources */,
 				A2FB8AD02FBA180C005916E6 /* Frameworks */,
@@ -380,16 +424,16 @@
 			);
 			dependencies = (
 			);
-			name = "ScreenshotSafe Extension (iOS)";
+			name = "ScreenshotSafe Safari Extension (iOS)";
 			packageProductDependencies = (
 			);
-			productName = "ScreenshotSafe Extension (iOS)";
-			productReference = A2FB8AD32FBA180C005916E6 /* ScreenshotSafe Extension.appex */;
+			productName = "ScreenshotSafe Safari Extension (iOS)";
+			productReference = A2FB8AD32FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		A2FB8ADC2FBA180C005916E6 /* ScreenshotSafe Extension (macOS) */ = {
+		A2FB8ADC2FBA180C005916E6 /* ScreenshotSafe Safari Extension (macOS) */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A2FB8AFA2FBA180C005916E6 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (macOS)" */;
+			buildConfigurationList = A2FB8AFA2FBA180C005916E6 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Safari Extension (macOS)" */;
 			buildPhases = (
 				A2FB8AD92FBA180C005916E6 /* Sources */,
 				A2FB8ADA2FBA180C005916E6 /* Frameworks */,
@@ -399,11 +443,11 @@
 			);
 			dependencies = (
 			);
-			name = "ScreenshotSafe Extension (macOS)";
+			name = "ScreenshotSafe Safari Extension (macOS)";
 			packageProductDependencies = (
 			);
-			productName = "ScreenshotSafe Extension (macOS)";
-			productReference = A2FB8ADD2FBA180C005916E6 /* ScreenshotSafe Extension.appex */;
+			productName = "ScreenshotSafe Safari Extension (macOS)";
+			productReference = A2FB8ADD2FBA180C005916E6 /* ScreenshotSafe Safari Extension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 		C0D000152FBA999900000015 /* ScreenshotSafe Share Extension (macOS) */ = {
@@ -423,6 +467,25 @@
 			);
 			productName = "ScreenshotSafe Share";
 			productReference = C0D0000D2FBA99990000000D /* ScreenshotSafe Share.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		C0D0010D2FBAA2000000010D /* ScreenshotSafe Share Extension (iOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C0D001132FBAA20000000113 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Share Extension (iOS)" */;
+			buildPhases = (
+				C0D0010B2FBAA2000000010B /* Sources */,
+				C0D0010A2FBAA2000000010A /* Frameworks */,
+				C0D0010C2FBAA2000000010C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "ScreenshotSafe Share Extension (iOS)";
+			packageProductDependencies = (
+			);
+			productName = "ScreenshotSafe Share";
+			productReference = C0D001082FBAA20000000108 /* ScreenshotSafe Share.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -450,6 +513,9 @@
 					C0D000152FBA999900000015 = {
 						CreatedOnToolsVersion = 26.5;
 					};
+					C0D0010D2FBAA2000000010D = {
+						CreatedOnToolsVersion = 26.5;
+					};
 				};
 			};
 			buildConfigurationList = A2FB8AA52FBA180B005916E6 /* Build configuration list for PBXProject "ScreenshotSafe" */;
@@ -468,8 +534,9 @@
 			targets = (
 				A2FB8AB42FBA180C005916E6 /* ScreenshotSafe (iOS) */,
 				A2FB8AC62FBA180C005916E6 /* ScreenshotSafe (macOS) */,
-				A2FB8AD22FBA180C005916E6 /* ScreenshotSafe Extension (iOS) */,
-				A2FB8ADC2FBA180C005916E6 /* ScreenshotSafe Extension (macOS) */,
+				A2FB8AD22FBA180C005916E6 /* ScreenshotSafe Safari Extension (iOS) */,
+				A2FB8ADC2FBA180C005916E6 /* ScreenshotSafe Safari Extension (macOS) */,
+				C0D0010D2FBAA2000000010D /* ScreenshotSafe Share Extension (iOS) */,
 				C0D000152FBA999900000015 /* ScreenshotSafe Share Extension (macOS) */,
 			);
 		};
@@ -544,6 +611,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0D0010C2FBAA2000000010C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -575,6 +649,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A2FB8AEF2FBA180C005916E6 /* SafariWebExtensionHandler.swift in Sources */,
+				C0D0001C2FBA99990000001C /* ScreenshotSafeSettings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -583,6 +658,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A2FB8AF02FBA180C005916E6 /* SafariWebExtensionHandler.swift in Sources */,
+				C0D0001D2FBA99990000001D /* ScreenshotSafeSettings.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -596,23 +672,38 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C0D0010B2FBAA2000000010B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C0D001032FBAA20000000103 /* ShareViewController.swift in Sources */,
+				C0D001012FBAA20000000101 /* ScreenshotSafeSettings.swift in Sources */,
+				C0D001022FBAA20000000102 /* ScreenshotSafeUploadClient.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
 		A2FB8AD62FBA180C005916E6 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = A2FB8AD22FBA180C005916E6 /* ScreenshotSafe Extension (iOS) */;
+			target = A2FB8AD22FBA180C005916E6 /* ScreenshotSafe Safari Extension (iOS) */;
 			targetProxy = A2FB8AD52FBA180C005916E6 /* PBXContainerItemProxy */;
 		};
 		A2FB8AE02FBA180C005916E6 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = A2FB8ADC2FBA180C005916E6 /* ScreenshotSafe Extension (macOS) */;
+			target = A2FB8ADC2FBA180C005916E6 /* ScreenshotSafe Safari Extension (macOS) */;
 			targetProxy = A2FB8ADF2FBA180C005916E6 /* PBXContainerItemProxy */;
 		};
 		C0D000182FBA999900000018 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = C0D000152FBA999900000015 /* ScreenshotSafe Share Extension (macOS) */;
 			targetProxy = C0D000112FBA999900000011 /* PBXContainerItemProxy */;
+		};
+		C0D001102FBAA20000000110 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C0D0010D2FBAA2000000010D /* ScreenshotSafe Share Extension (iOS) */;
+			targetProxy = C0D001092FBAA20000000109 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -769,12 +860,13 @@
 		A2FB8AF42FBA180C005916E6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "iOS (Safari Extension)/ScreenshotSafeExtension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = V97W676S4N;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "iOS (Extension)/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Extension";
+				INFOPLIST_FILE = "iOS (Safari Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Safari Extension";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -787,8 +879,8 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari.Extension;
-				PRODUCT_NAME = "ScreenshotSafe Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.SafariExtension;
+				PRODUCT_NAME = "ScreenshotSafe Safari Extension";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -803,12 +895,13 @@
 		A2FB8AF52FBA180C005916E6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "iOS (Safari Extension)/ScreenshotSafeExtension.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = V97W676S4N;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "iOS (Extension)/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Extension";
+				INFOPLIST_FILE = "iOS (Safari Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Safari Extension";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -821,8 +914,8 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari.Extension;
-				PRODUCT_NAME = "ScreenshotSafe Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.SafariExtension;
+				PRODUCT_NAME = "ScreenshotSafe Safari Extension";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -840,6 +933,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "iOS (App)/ScreenshotSafe.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = V97W676S4N;
@@ -863,7 +957,7 @@
 					"-framework",
 					WebKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari;
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe;
 				PRODUCT_NAME = ScreenshotSafe;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -881,6 +975,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "iOS (App)/ScreenshotSafe.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = V97W676S4N;
@@ -904,7 +999,7 @@
 					"-framework",
 					WebKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari;
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe;
 				PRODUCT_NAME = ScreenshotSafe;
 				SDKROOT = iphoneos;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -921,6 +1016,7 @@
 		A2FB8AFB2FBA180C005916E6 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "macOS (Safari Extension)/ScreenshotSafeExtension.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -930,8 +1026,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "macOS (Extension)/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Extension";
+				INFOPLIST_FILE = "macOS (Safari Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Safari Extension";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -944,8 +1040,8 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari.Extension;
-				PRODUCT_NAME = "ScreenshotSafe Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.SafariExtension;
+				PRODUCT_NAME = "ScreenshotSafe Safari Extension";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -960,6 +1056,7 @@
 		A2FB8AFC2FBA180C005916E6 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "macOS (Safari Extension)/ScreenshotSafeExtension.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
@@ -969,8 +1066,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "macOS (Extension)/Info.plist";
-				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Extension";
+				INFOPLIST_FILE = "macOS (Safari Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Safari Extension";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -983,8 +1080,8 @@
 					"-framework",
 					SafariServices,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari.Extension;
-				PRODUCT_NAME = "ScreenshotSafe Extension";
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.SafariExtension;
+				PRODUCT_NAME = "ScreenshotSafe Safari Extension";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -1027,7 +1124,7 @@
 					"-framework",
 					WebKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari;
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe;
 				PRODUCT_NAME = ScreenshotSafe;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -1072,7 +1169,7 @@
 					"-framework",
 					WebKit,
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari;
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe;
 				PRODUCT_NAME = ScreenshotSafe;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -1109,7 +1206,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari.ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.ShareExtension;
 				PRODUCT_NAME = "ScreenshotSafe Share";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -1144,7 +1241,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 10.14;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.safari.ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.ShareExtension;
 				PRODUCT_NAME = "ScreenshotSafe Share";
 				SDKROOT = macosx;
 				SKIP_INSTALL = YES;
@@ -1153,6 +1250,71 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		C0D001112FBAA20000000111 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = "iOS (Share Extension)/ScreenshotSafeShare.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = V97W676S4N;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (Share Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Share";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.ShareExtension;
+				PRODUCT_NAME = "ScreenshotSafe Share";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C0D001122FBAA20000000112 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = "iOS (Share Extension)/ScreenshotSafeShare.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = V97W676S4N;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (Share Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "ScreenshotSafe Share";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.screenshotsafe.ShareExtension;
+				PRODUCT_NAME = "ScreenshotSafe Share";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
@@ -1168,7 +1330,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A2FB8AF32FBA180C005916E6 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (iOS)" */ = {
+		A2FB8AF32FBA180C005916E6 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Safari Extension (iOS)" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A2FB8AF42FBA180C005916E6 /* Debug */,
@@ -1186,7 +1348,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A2FB8AFA2FBA180C005916E6 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Extension (macOS)" */ = {
+		A2FB8AFA2FBA180C005916E6 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Safari Extension (macOS)" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A2FB8AFB2FBA180C005916E6 /* Debug */,
@@ -1209,6 +1371,15 @@
 			buildConfigurations = (
 				C0D000162FBA999900000016 /* Debug */,
 				C0D000192FBA999900000019 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C0D001132FBAA20000000113 /* Build configuration list for PBXNativeTarget "ScreenshotSafe Share Extension (iOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C0D001112FBAA20000000111 /* Debug */,
+				C0D001122FBAA20000000112 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

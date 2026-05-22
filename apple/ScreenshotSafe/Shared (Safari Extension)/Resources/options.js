@@ -1,5 +1,5 @@
 /**
- * ScreenshotSafe Extension — Options Page
+ * ScreenshotSafe Safari Extension - Options Page
  */
 
 (function () {

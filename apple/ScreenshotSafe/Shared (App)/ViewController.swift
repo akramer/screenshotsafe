@@ -16,7 +16,7 @@ import SafariServices
 typealias PlatformViewController = NSViewController
 #endif
 
-let extensionBundleIdentifier = "com.screenshotsafe.safari.Extension"
+let extensionBundleIdentifier = "com.screenshotsafe.SafariExtension"
 
 class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMessageHandler {
 
@@ -30,6 +30,14 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     private let expiryPopup = NSPopUpButton()
     private let statusLabel = NSTextField(labelWithString: "")
     private let safariStatusLabel = NSTextField(labelWithString: "")
+#elseif os(iOS)
+    private let settingsStore = ScreenshotSafeSettingsStore()
+    private let uploadClient = ScreenshotSafeUploadClient()
+    private let serverURLField = UITextField()
+    private let apiTokenField = UITextField()
+    private let expiryButton = UIButton(type: .system)
+    private let statusLabel = UILabel()
+    private var selectedExpiry = ""
 #endif
 
     override func viewDidLoad() {
@@ -45,13 +53,13 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             object: nil
         )
 #else
-        self.webView.navigationDelegate = self
-
-        self.webView.scrollView.isScrollEnabled = false
-
-        self.webView.configuration.userContentController.add(self, name: "controller")
-
-        self.webView.loadFileURL(Bundle.main.url(forResource: "Main", withExtension: "html")!, allowingReadAccessTo: Bundle.main.resourceURL!)
+        buildIOSSettingsView()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(settingsDidChange),
+            name: .screenshotSafeSettingsDidChange,
+            object: nil
+        )
 #endif
     }
 
@@ -98,6 +106,183 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     }
 
 }
+
+#if os(iOS)
+private extension ViewController {
+    var expiryOptions: [(title: String, value: String)] {
+        [
+            ("Server default", ""),
+            ("1 hour", "1h"),
+            ("24 hours", "24h"),
+            ("7 days", "7d"),
+            ("30 days", "30d"),
+            ("Never expire", "never"),
+        ]
+    }
+
+    func buildIOSSettingsView() {
+        let scrollView = UIScrollView()
+        scrollView.backgroundColor = .systemBackground
+        scrollView.keyboardDismissMode = .interactive
+        view = scrollView
+
+        let content = UIStackView()
+        content.axis = .vertical
+        content.spacing = 20
+        content.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.addSubview(content)
+
+        let titleLabel = UILabel()
+        titleLabel.text = "ScreenshotSafe"
+        titleLabel.font = .preferredFont(forTextStyle: .largeTitle)
+        titleLabel.adjustsFontForContentSizeCategory = true
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.text = "Set the upload destination used by the iOS share sheet."
+        subtitleLabel.font = .preferredFont(forTextStyle: .subheadline)
+        subtitleLabel.textColor = .secondaryLabel
+        subtitleLabel.adjustsFontForContentSizeCategory = true
+        subtitleLabel.numberOfLines = 0
+
+        configureTextField(serverURLField, placeholder: "https://screenshots.example.com", keyboardType: .URL, secure: false)
+        configureTextField(apiTokenField, placeholder: "API token", keyboardType: .default, secure: true)
+        configureExpiryMenu()
+
+        let saveButton = UIButton(type: .system)
+        saveButton.setTitle("Save and Verify", for: .normal)
+        saveButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+        saveButton.addTarget(self, action: #selector(saveAndVerifySettings), for: .touchUpInside)
+        saveButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+
+        statusLabel.textColor = .secondaryLabel
+        statusLabel.font = .preferredFont(forTextStyle: .subheadline)
+        statusLabel.adjustsFontForContentSizeCategory = true
+        statusLabel.numberOfLines = 0
+
+        content.addArrangedSubview(titleLabel)
+        content.addArrangedSubview(subtitleLabel)
+        content.addArrangedSubview(fieldStack(label: "Server URL", field: serverURLField))
+        content.addArrangedSubview(fieldStack(label: "API Token", field: apiTokenField))
+        content.addArrangedSubview(expiryStack())
+        content.addArrangedSubview(saveButton)
+        content.addArrangedSubview(statusLabel)
+
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 24),
+            content.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -24),
+            content.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 32),
+            content.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor, constant: -32),
+            content.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -48),
+        ])
+
+        loadSettingsIntoForm()
+    }
+
+    func configureTextField(_ textField: UITextField, placeholder: String, keyboardType: UIKeyboardType, secure: Bool) {
+        textField.borderStyle = .roundedRect
+        textField.placeholder = placeholder
+        textField.keyboardType = keyboardType
+        textField.autocapitalizationType = .none
+        textField.autocorrectionType = .no
+        textField.isSecureTextEntry = secure
+        textField.returnKeyType = .done
+        textField.addTarget(self, action: #selector(dismissKeyboard), for: .editingDidEndOnExit)
+        textField.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+    }
+
+    func configureExpiryMenu() {
+        expiryButton.contentHorizontalAlignment = .leading
+        expiryButton.showsMenuAsPrimaryAction = true
+        expiryButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        updateExpiryButtonTitle()
+        updateExpiryMenu()
+    }
+
+    func updateExpiryMenu() {
+        expiryButton.menu = UIMenu(children: expiryOptions.map { option in
+            UIAction(title: option.title, state: option.value == selectedExpiry ? .on : .off) { [weak self] _ in
+                self?.selectedExpiry = option.value
+                self?.updateExpiryButtonTitle()
+                self?.updateExpiryMenu()
+            }
+        })
+    }
+
+    func updateExpiryButtonTitle() {
+        let title = expiryOptions.first(where: { $0.value == selectedExpiry })?.title ?? "Server default"
+        expiryButton.setTitle(title, for: .normal)
+    }
+
+    func fieldStack(label: String, field: UITextField) -> UIStackView {
+        let labelView = formLabel(label)
+        let stack = UIStackView(arrangedSubviews: [labelView, field])
+        stack.axis = .vertical
+        stack.spacing = 8
+        return stack
+    }
+
+    func expiryStack() -> UIStackView {
+        let stack = UIStackView(arrangedSubviews: [formLabel("Default Expiry"), expiryButton])
+        stack.axis = .vertical
+        stack.spacing = 8
+        return stack
+    }
+
+    func formLabel(_ text: String) -> UILabel {
+        let label = UILabel()
+        label.text = text
+        label.textColor = .secondaryLabel
+        label.font = .preferredFont(forTextStyle: .subheadline)
+        label.adjustsFontForContentSizeCategory = true
+        return label
+    }
+
+    func loadSettingsIntoForm() {
+        let settings = settingsStore.load()
+        serverURLField.text = settings.serverURL
+        apiTokenField.text = settings.apiToken
+        selectedExpiry = settings.defaultExpiry
+        updateExpiryButtonTitle()
+        updateExpiryMenu()
+    }
+
+    @objc func saveAndVerifySettings() {
+        dismissKeyboard()
+
+        let settings = ScreenshotSafeSettings(
+            serverURL: serverURLField.text ?? "",
+            apiToken: apiTokenField.text ?? "",
+            defaultExpiry: selectedExpiry
+        )
+        settingsStore.save(settings)
+        statusLabel.text = "Checking connection..."
+        statusLabel.textColor = .secondaryLabel
+
+        uploadClient.verify(settings: settings) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self?.statusLabel.text = "Connected. The Share Extension can upload screenshots."
+                    self?.statusLabel.textColor = .systemGreen
+                case .failure(let error):
+                    self?.statusLabel.text = error.localizedDescription
+                    self?.statusLabel.textColor = .systemRed
+                }
+            }
+        }
+    }
+
+    @objc func settingsDidChange() {
+        loadSettingsIntoForm()
+        statusLabel.text = "Configuration imported from ScreenshotSafe link."
+        statusLabel.textColor = .systemGreen
+    }
+
+    @objc func dismissKeyboard() {
+        view.endEditing(true)
+    }
+}
+#endif
 
 #if os(macOS)
 private extension ViewController {

@@ -1,5 +1,5 @@
 /**
- * ScreenshotSafe Extension — Full-tab pre-upload editor.
+ * ScreenshotSafe Safari Extension - Full-tab pre-upload editor.
  */
 
 (function () {

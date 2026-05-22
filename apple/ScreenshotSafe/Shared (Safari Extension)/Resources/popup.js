@@ -1,5 +1,5 @@
 /**
- * ScreenshotSafe Extension — Popup Logic
+ * ScreenshotSafe Safari Extension - Popup Logic
  */
 
 (function () {
