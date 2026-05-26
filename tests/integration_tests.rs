@@ -1070,6 +1070,11 @@ mod tests {
         let html = String::from_utf8(body.to_vec()).unwrap();
         assert!(html.contains("Test Screenshot"));
         assert!(html.contains("og:image")); // OpenGraph meta tag
+        assert!(html.contains(&format!("/s/{}.preview.png", share_id)));
+        assert!(html.contains(r#"property="og:image:width" content="100""#));
+        assert!(html.contains(r#"property="og:image:height" content="100""#));
+        assert!(html.contains(r#"name="twitter:card" content="summary_large_image""#));
+        assert!(html.contains("twitter:image"));
         assert!(html.contains(r#"id="copy-page-link""#));
         assert!(html.contains(r#"id="copy-image""#));
         assert!(html.contains("Open Image"));
@@ -1098,6 +1103,35 @@ mod tests {
             resp.headers().get(header::CONTENT_TYPE).unwrap(),
             "image/png"
         );
+    }
+
+    #[tokio::test]
+    async fn test_share_preview_image() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let upload_body = upload_screenshot(&app, &cookie).await;
+        let share_id = upload_body["share_id"].as_str().unwrap();
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/s/{}.preview.png", share_id))
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "image/png"
+        );
+
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let image = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((image.width(), image.height()), (100, 100));
     }
 
     #[tokio::test]

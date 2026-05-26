@@ -3,16 +3,25 @@ use axum::{
     http::{header, HeaderMap},
     response::{Html, IntoResponse},
 };
+use image::GenericImageView;
+use std::io::Cursor;
 
 use crate::{AppError, SharedState};
 
-/// Dispatch handler: routes /s/{id}.png to image, /s/{id} to share page.
+const PREVIEW_MAX_DIMENSION: u32 = 1200;
+
+/// Dispatch handler: routes /s/{id}.preview.png to preview image,
+/// /s/{id}.png to full image, /s/{id} to share page.
 pub async fn share_dispatch(
     state: State<SharedState>,
     headers: HeaderMap,
     Path(share_id_or_file): Path<String>,
 ) -> crate::Result<axum::response::Response> {
-    if let Some(share_id) = share_id_or_file.strip_suffix(".png") {
+    if let Some(share_id) = share_id_or_file.strip_suffix(".preview.png") {
+        Ok(share_preview_image(state, Path(share_id.to_string()))
+            .await?
+            .into_response())
+    } else if let Some(share_id) = share_id_or_file.strip_suffix(".png") {
         Ok(share_image(state, Path(share_id.to_string()))
             .await?
             .into_response())
@@ -48,6 +57,13 @@ pub async fn share_page(
     let share_url = format!("{}/s/{}", base_url, share_id);
     let direct_image_url = format!("/s/{}.png", share_id);
     let image_url = format!("{}/s/{}.png?v={}", base_url, share_id, cache_bust);
+    let preview_url = format!("{}/s/{}.preview.png?v={}", base_url, share_id, cache_bust);
+    let (preview_width, preview_height) = preview_dimensions(
+        screenshot
+            .rendered_path
+            .as_deref()
+            .ok_or(AppError::NotFound)?,
+    )?;
     let created = screenshot.created_at.format("%B %d, %Y").to_string();
     let expires_info = screenshot
         .expires_at
@@ -69,12 +85,20 @@ pub async fn share_page(
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5">
     <title>{title}</title>
     <meta name="description" content="Screenshot shared via ScreenshotSafe">
+    <meta property="og:url" content="{share_url}">
     <meta property="og:title" content="{title}">
-    <meta property="og:image" content="{image_url}">
+    <meta property="og:description" content="Screenshot shared via ScreenshotSafe">
+    <meta property="og:site_name" content="ScreenshotSafe">
     <meta property="og:type" content="website">
+    <meta property="og:image" content="{preview_url}">
+    <meta property="og:image:secure_url" content="{preview_url}">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="{preview_width}">
+    <meta property="og:image:height" content="{preview_height}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{title}">
-    <meta name="twitter:image" content="{image_url}">
+    <meta name="twitter:description" content="Screenshot shared via ScreenshotSafe">
+    <meta name="twitter:image" content="{preview_url}">
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
@@ -274,12 +298,51 @@ pub async fn share_page(
         share_url = html_escape(&share_url),
         direct_image_url = html_escape(&direct_image_url),
         image_url = image_url,
+        preview_url = preview_url,
+        preview_width = preview_width,
+        preview_height = preview_height,
         created = created,
         expires_info = expires_info,
         source_link = source_link,
     );
 
     Ok(Html(html))
+}
+
+/// Preview PNG image — serves a max-1200px version for chat/social unfurls.
+pub async fn share_preview_image(
+    State(state): State<SharedState>,
+    Path(share_id): Path<String>,
+) -> crate::Result<impl IntoResponse> {
+    let screenshot = state
+        .db
+        .get_screenshot_by_share_id(&share_id)?
+        .ok_or(AppError::NotFound)?;
+
+    if screenshot.is_expired() {
+        return Err(AppError::Gone("This screenshot has expired".into()));
+    }
+
+    if screenshot.visibility == "private" {
+        return Err(AppError::NotFound);
+    }
+
+    let rendered_path = screenshot
+        .rendered_path
+        .as_deref()
+        .ok_or(AppError::NotFound)?;
+
+    let data = preview_png(rendered_path)?;
+    let etag = file_etag(rendered_path);
+
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/png".to_string()),
+            (header::CACHE_CONTROL, "no-cache".to_string()),
+            (header::ETAG, etag),
+        ],
+        data,
+    ))
 }
 
 /// Direct PNG image — serves the rendered screenshot file.
@@ -307,8 +370,57 @@ pub async fn share_image(
 
     let data = std::fs::read(rendered_path)?;
 
-    // Use ETag from file modification time for cache validation
-    let etag = std::fs::metadata(rendered_path)
+    let etag = file_etag(rendered_path);
+
+    Ok((
+        [
+            (header::CONTENT_TYPE, "image/png".to_string()),
+            (header::CACHE_CONTROL, "no-cache".to_string()),
+            (header::ETAG, etag),
+        ],
+        data,
+    ))
+}
+
+fn preview_dimensions(rendered_path: &str) -> crate::Result<(u32, u32)> {
+    let (width, height) = image::image_dimensions(rendered_path)?;
+    Ok(scaled_dimensions(width, height))
+}
+
+fn preview_png(rendered_path: &str) -> crate::Result<Vec<u8>> {
+    let img = image::open(rendered_path)?;
+    let (width, height) = img.dimensions();
+    let (preview_width, preview_height) = scaled_dimensions(width, height);
+
+    if (preview_width, preview_height) == (width, height) {
+        return Ok(std::fs::read(rendered_path)?);
+    }
+
+    let resized = img.resize(
+        preview_width,
+        preview_height,
+        image::imageops::FilterType::Lanczos3,
+    );
+    let mut data = Vec::new();
+    resized.write_to(&mut Cursor::new(&mut data), image::ImageFormat::Png)?;
+    Ok(data)
+}
+
+fn scaled_dimensions(width: u32, height: u32) -> (u32, u32) {
+    let max_dimension = width.max(height);
+    if max_dimension <= PREVIEW_MAX_DIMENSION {
+        return (width, height);
+    }
+
+    let scale = PREVIEW_MAX_DIMENSION as f64 / max_dimension as f64;
+    (
+        ((width as f64 * scale).round() as u32).max(1),
+        ((height as f64 * scale).round() as u32).max(1),
+    )
+}
+
+fn file_etag(path: &str) -> String {
+    std::fs::metadata(path)
         .ok()
         .and_then(|m| m.modified().ok())
         .map(|t| {
@@ -319,16 +431,7 @@ pub async fn share_image(
                     .as_secs()
             )
         })
-        .unwrap_or_default();
-
-    Ok((
-        [
-            (header::CONTENT_TYPE, "image/png".to_string()),
-            (header::CACHE_CONTROL, "no-cache".to_string()),
-            (header::ETAG, etag),
-        ],
-        data,
-    ))
+        .unwrap_or_default()
 }
 
 fn html_escape(s: &str) -> String {
@@ -400,7 +503,18 @@ fn source_url_link(url: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::render_title_markdown_links;
+    use super::{render_title_markdown_links, scaled_dimensions};
+
+    #[test]
+    fn leaves_small_preview_dimensions_unchanged() {
+        assert_eq!(scaled_dimensions(800, 600), (800, 600));
+    }
+
+    #[test]
+    fn scales_large_preview_dimensions_to_max_1200() {
+        assert_eq!(scaled_dimensions(2400, 1200), (1200, 600));
+        assert_eq!(scaled_dimensions(1000, 2000), (600, 1200));
+    }
 
     #[test]
     fn renders_safe_markdown_links() {
