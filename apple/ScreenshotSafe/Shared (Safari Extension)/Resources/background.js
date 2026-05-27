@@ -103,6 +103,12 @@ async function captureAndOpenEditor(tab) {
         return;
     }
 
+    const validation = await validateSettings(settings);
+    if (!validation.ok) {
+        await handleLoginRequired(settings, validation.reason, activeTab);
+        return;
+    }
+
     if (!activeTab || !activeTab.id) {
         throw new Error('No active tab found');
     }
@@ -132,6 +138,28 @@ function captureAfterDelay(tab, delayMs) {
             openSettings('capture-error');
         });
     }, delayMs);
+}
+
+async function validateSettings(settings) {
+    try {
+        const resp = await fetch(`${settings.serverUrl}/api/ping`, {
+            cache: 'no-store',
+            mode: 'cors',
+            credentials: 'include',
+        });
+
+        if (resp.ok) {
+            return { ok: true };
+        }
+
+        if (resp.status === 401) {
+            return { ok: false, reason: 'login-required' };
+        }
+
+        return { ok: false, reason: 'server-error' };
+    } catch (_) {
+        return { ok: false, reason: 'cannot-reach-server' };
+    }
 }
 
 async function getSettings() {
@@ -169,52 +197,10 @@ async function openSettings(reason) {
 
 async function handleLoginRequired(settings, reason, tab) {
     if (settings && settings.serverUrl) {
-        await showLoginRequiredDialog(reason, tab);
         await call(api.tabs, 'create', [{ url: settings.serverUrl }]);
     } else {
         await openSettings('missing');
     }
-}
-
-async function showLoginRequiredDialog(reason, tab) {
-    const targetTab = tab || (await queryActiveTab().catch(() => null));
-    if (!targetTab || !targetTab.id) {
-        return;
-    }
-
-    const message = loginRequiredMessage(reason);
-
-    try {
-        if (api.scripting && typeof api.scripting.executeScript === 'function') {
-            await call(api.scripting, 'executeScript', [{
-                target: { tabId: targetTab.id },
-                func: (dialogMessage) => alert(dialogMessage),
-                args: [message],
-            }]);
-            return;
-        }
-
-        if (api.tabs && typeof api.tabs.executeScript === 'function') {
-            await call(api.tabs, 'executeScript', [
-                targetTab.id,
-                { code: `alert(${JSON.stringify(message)});` },
-            ]);
-        }
-    } catch (err) {
-        console.warn('ScreenshotSafe sign-in dialog failed:', err.message);
-    }
-}
-
-function loginRequiredMessage(reason) {
-    if (reason === 'server-error') {
-        return 'ScreenshotSafe responded with an error. Check the site, then try your capture again.';
-    }
-
-    if (reason === 'cannot-reach-server') {
-        return 'ScreenshotSafe could not be reached. Confirm the address and sign in if needed.';
-    }
-
-    return 'Please sign in to ScreenshotSafe in your browser, then try your capture again.';
 }
 
 async function createSettingsMenu() {

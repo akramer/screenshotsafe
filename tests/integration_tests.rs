@@ -970,6 +970,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_cookie_api_auth_allows_chrome_extension_origin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app_with_config(dir.path(), |config| {
+            config.server.public_url = "https://screens.example".to_string();
+        });
+
+        let cookie = setup_user(&app).await;
+        let resp = upload_screenshot_response_with_origin(
+            &app,
+            &cookie,
+            &[],
+            Some("chrome-extension://abcdefghijklmnopabcdefghijklmnop"),
+        )
+        .await;
+
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
     async fn test_cors_allows_credentials_for_configured_extension_origin() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app_with_config(dir.path(), |config| {
@@ -997,6 +1016,38 @@ mod tests {
                 .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
                 .and_then(|v| v.to_str().ok()),
             Some("safari-web-extension://ABCDEF")
+        );
+        assert_eq!(
+            resp.headers()
+                .get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS)
+                .and_then(|v| v.to_str().ok()),
+            Some("true")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cors_allows_credentials_for_chrome_extension_origin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app_with_config(dir.path(), |config| {
+            config.server.public_url = "https://screens.example".to_string();
+        });
+
+        let origin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop";
+        let req = axum::http::Request::builder()
+            .method("OPTIONS")
+            .uri("/api/ping")
+            .header(header::ORIGIN, origin)
+            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                .and_then(|v| v.to_str().ok()),
+            Some(origin)
         );
         assert_eq!(
             resp.headers()

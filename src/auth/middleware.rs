@@ -98,6 +98,10 @@ pub fn session_origin_allowed(headers: &HeaderMap, state: &SharedState) -> bool 
         return true;
     }
 
+    if origin.starts_with("chrome-extension://") {
+        return true;
+    }
+
     state
         .config
         .auth
