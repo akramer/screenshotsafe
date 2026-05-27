@@ -27,7 +27,6 @@ pub struct SetupRequest {
 
 pub async fn setup(
     State(state): State<SharedState>,
-    headers: HeaderMap,
     Json(req): Json<SetupRequest>,
 ) -> crate::Result<impl IntoResponse> {
     // Only allow setup if no users exist
@@ -71,7 +70,10 @@ pub async fn setup(
         state.config.auth.session_ttl_seconds,
     );
 
-    let cookie = session_cookie(&state, &headers, &token);
+    let cookie = format!(
+        "session={}; HttpOnly; SameSite=Lax; Path=/; Max-Age={}",
+        token, state.config.auth.session_ttl_seconds
+    );
 
     Ok((
         StatusCode::CREATED,
@@ -98,7 +100,6 @@ pub struct LoginRequest {
 
 pub async fn login(
     State(state): State<SharedState>,
-    headers: HeaderMap,
     Json(req): Json<LoginRequest>,
 ) -> crate::Result<impl IntoResponse> {
     let user = state
@@ -123,7 +124,10 @@ pub async fn login(
         state.config.auth.session_ttl_seconds,
     );
 
-    let cookie = session_cookie(&state, &headers, &token);
+    let cookie = format!(
+        "session={}; HttpOnly; SameSite=Lax; Path=/; Max-Age={}",
+        token, state.config.auth.session_ttl_seconds
+    );
 
     Ok((
         [(header::SET_COOKIE, cookie)],
@@ -370,7 +374,6 @@ pub async fn oauth_callback(
         return Ok(with_session_cookie(
             Redirect::to("/settings?oauth=linked").into_response(),
             &state,
-            &headers,
             &user.id,
         ));
     }
@@ -391,7 +394,6 @@ pub async fn oauth_callback(
         return Ok(with_session_cookie(
             Redirect::to("/").into_response(),
             &state,
-            &headers,
             &user.id,
         ));
     }
@@ -432,7 +434,6 @@ pub async fn oauth_callback(
                 Ok(with_session_cookie(
                     Redirect::to("/").into_response(),
                     &state,
-                    &headers,
                     &user.id,
                 ))
             } else {
@@ -680,18 +681,16 @@ fn sanitize_username(value: &str) -> String {
     }
 }
 
-fn with_session_cookie(
-    mut response: Response,
-    state: &SharedState,
-    headers: &HeaderMap,
-    user_id: &Uuid,
-) -> Response {
+fn with_session_cookie(mut response: Response, state: &SharedState, user_id: &Uuid) -> Response {
     let token = auth::middleware::create_session_token(
         user_id,
         &state.jwt_secret,
         state.config.auth.session_ttl_seconds,
     );
-    let cookie = session_cookie(state, headers, &token);
+    let cookie = format!(
+        "session={}; HttpOnly; SameSite=Lax; Path=/; Max-Age={}",
+        token, state.config.auth.session_ttl_seconds
+    );
     response.headers_mut().append(
         header::SET_COOKIE,
         cookie.parse().expect("session cookie should be valid"),
@@ -703,20 +702,6 @@ fn with_session_cookie(
             .expect("OAuth state clearing cookie should be valid"),
     );
     response
-}
-
-fn session_cookie(state: &SharedState, headers: &HeaderMap, token: &str) -> String {
-    let base_url = crate::routes::get_base_url(&state.config.server.public_url, headers);
-    let cross_site_attrs = if base_url.starts_with("https://") {
-        "SameSite=None; Secure"
-    } else {
-        "SameSite=Lax"
-    };
-
-    format!(
-        "session={}; HttpOnly; {}; Path=/; Max-Age={}",
-        token, cross_site_attrs, state.config.auth.session_ttl_seconds
-    )
 }
 
 // ── Admin users ──
