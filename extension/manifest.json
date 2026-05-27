@@ -6,7 +6,12 @@
     "permissions": [
         "activeTab",
         "contextMenus",
+        "notifications",
         "storage"
+    ],
+    "optional_host_permissions": [
+        "http://*/*",
+        "https://*/*"
     ],
     "action": {
         "default_icon": {

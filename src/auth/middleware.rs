@@ -44,6 +44,10 @@ impl FromRequestParts<SharedState> for AuthUser {
         let state = state.clone();
         let headers = parts.headers.clone();
         async move {
+            if !session_origin_allowed(&headers, &state) {
+                return Err(AppError::Forbidden);
+            }
+
             // Try session cookie
             if let Some(cookie_header) = headers.get(header::COOKIE) {
                 if let Ok(cookie_str) = cookie_header.to_str() {
@@ -76,6 +80,22 @@ impl FromRequestParts<SharedState> for AuthUser {
             Err(AppError::Unauthorized)
         }
     }
+}
+
+fn session_origin_allowed(headers: &axum::http::HeaderMap, state: &SharedState) -> bool {
+    let Some(origin) = headers.get(header::ORIGIN).and_then(|h| h.to_str().ok()) else {
+        return true;
+    };
+
+    if origin.starts_with("chrome-extension://")
+        || origin.starts_with("moz-extension://")
+        || origin.starts_with("safari-web-extension://")
+    {
+        return true;
+    }
+
+    let base_url = crate::routes::get_base_url(&state.config.server.public_url, headers);
+    origin.trim_end_matches('/') == base_url.trim_end_matches('/')
 }
 
 /// Extractor: authenticated admin user from session cookie ONLY.

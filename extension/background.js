@@ -57,6 +57,13 @@ if (api && api.runtime) {
             return true;
         }
 
+        if (message.type === 'sss-login-required') {
+            handleLoginRequired(message.settings || {}, message.reason || 'login-required')
+                .then(() => sendResponse({ ok: true }))
+                .catch((err) => sendResponse({ ok: false, error: err.message }));
+            return true;
+        }
+
         return false;
     });
 }
@@ -92,7 +99,11 @@ async function captureAndOpenEditor(tab) {
     const settings = await getSettings();
     const validation = await validateSettings(settings);
     if (!validation.ok) {
-        await openSettings(validation.reason);
+        if (validation.reason === 'missing') {
+            await openSettings(validation.reason);
+        } else {
+            await handleLoginRequired(settings, validation.reason);
+        }
         return;
     }
 
@@ -129,13 +140,14 @@ function captureAfterDelay(tab, delayMs) {
 }
 
 async function validateSettings(settings) {
-    if (!settings.serverUrl || !settings.apiToken) {
+    if (!settings.serverUrl) {
         return { ok: false, reason: 'missing' };
     }
 
     try {
         const resp = await fetch(`${settings.serverUrl}/api/ping`, {
-            headers: { 'Authorization': `Bearer ${settings.apiToken}` },
+            cache: 'no-store',
+            credentials: 'include',
         });
 
         if (resp.ok) {
@@ -143,7 +155,7 @@ async function validateSettings(settings) {
         }
 
         if (resp.status === 401) {
-            return { ok: false, reason: 'invalid-token' };
+            return { ok: false, reason: 'login-required' };
         }
 
         return { ok: false, reason: 'server-error' };
@@ -153,31 +165,17 @@ async function validateSettings(settings) {
 }
 
 async function getSettings() {
-    return getNativeSettings();
-}
-
-async function getNativeSettings() {
-    if (!api || !api.runtime || typeof api.runtime.sendNativeMessage !== 'function') {
-        return { serverUrl: '', apiToken: '' };
+    if (!api || !api.storage || !api.storage.local) {
+        return { serverUrl: '' };
     }
 
     try {
-        const response = await sendNativeMessageToApp({ type: 'sss-get-native-settings' });
-        if (response && response.ok && response.settings) {
-            return {
-                serverUrl: response.settings.serverUrl || '',
-                apiToken: response.settings.apiToken || '',
-                defaultExpiry: response.settings.defaultExpiry || '',
-            };
-        }
-        if (response && response.error) {
-            console.error('ScreenshotSafe native settings bridge failed:', response.error);
-        }
+        const settings = await call(api.storage.local, 'get', [['serverUrl']]);
+        return { serverUrl: settings.serverUrl || '' };
     } catch (err) {
-        console.error('ScreenshotSafe native settings bridge failed:', err.message);
+        console.error('ScreenshotSafe settings load failed:', err.message);
+        return { serverUrl: '' };
     }
-
-    return { serverUrl: '', apiToken: '' };
 }
 
 async function sendNativeMessageToApp(message) {
@@ -197,6 +195,39 @@ async function openSettings(reason) {
     await call(api.tabs, 'create', [{
         url: api.runtime.getURL(`options.html?reason=${encodeURIComponent(reason)}`),
     }]);
+}
+
+async function handleLoginRequired(settings, reason) {
+    await showLoginRequiredWarning(reason);
+
+    if (settings && settings.serverUrl) {
+        await call(api.tabs, 'create', [{ url: settings.serverUrl }]);
+    } else {
+        await openSettings('missing');
+    }
+}
+
+async function showLoginRequiredWarning(reason) {
+    const message = reason === 'server-error'
+        ? 'ScreenshotSafe responded with an error. Open the site to check your session, then try again.'
+        : reason === 'cannot-reach-server'
+            ? 'ScreenshotSafe could not be reached. Open the site to confirm the address and sign in.'
+            : 'Please sign in to ScreenshotSafe in the browser, then try your capture again.';
+
+    if (!api.notifications || typeof api.notifications.create !== 'function') {
+        return;
+    }
+
+    try {
+        await call(api.notifications, 'create', [`screenshotsafe-login-${Date.now()}`, {
+            type: 'basic',
+            iconUrl: api.runtime.getURL('icons/icon128.png'),
+            title: 'ScreenshotSafe sign-in needed',
+            message,
+        }]);
+    } catch (err) {
+        console.warn('ScreenshotSafe notification failed:', err.message);
+    }
 }
 
 async function createSettingsMenu() {

@@ -84,9 +84,9 @@
                 throw new Error('Missing screenshot draft. Capture again from the extension popup.');
             }
 
-            settings = await ext.storage.get(['serverUrl', 'apiToken']);
-            if (!settings.serverUrl || !settings.apiToken) {
-                throw new Error('ScreenshotSafe is not configured. Save your server URL and API token in the extension popup.');
+            settings = await ext.storage.get(['serverUrl']);
+            if (!settings.serverUrl) {
+                throw new Error('ScreenshotSafe is not configured. Save your server domain in the extension settings.');
             }
 
             const response = await ext.runtime.sendMessage({ type: 'sss-get-draft', id });
@@ -151,11 +151,20 @@
 
         const resp = await fetch(`${settings.serverUrl}/api/screenshots`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${settings.apiToken}` },
+            credentials: 'include',
             body: formData,
         });
 
         if (!resp.ok) {
+            if (resp.status === 401) {
+                await ext.runtime.sendMessage({
+                    type: 'sss-login-required',
+                    settings,
+                    reason: 'login-required',
+                });
+                throw new Error('Please sign in to ScreenshotSafe in your browser, then try uploading again.');
+            }
+
             const errData = await resp.json().catch(() => ({}));
             throw new Error(errData.error || `Upload failed (${resp.status})`);
         }

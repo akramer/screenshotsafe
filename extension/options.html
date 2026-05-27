@@ -118,21 +118,16 @@
 <body>
     <main>
         <h1>ScreenshotSafe Settings</h1>
-        <p class="subhead">Connect the extension to your ScreenshotSafe server before capturing screenshots.</p>
+        <p class="subhead">Tell the extension where your ScreenshotSafe server lives. It will use your browser sign-in for uploads.</p>
         <div class="notice" id="notice"></div>
 
         <div class="form-group">
-            <label for="server-url">Server URL</label>
-            <input type="text" id="server-url" placeholder="https://screenshots.example.com">
-        </div>
-
-        <div class="form-group">
-            <label for="api-token">API Token</label>
-            <input type="password" id="api-token" placeholder="sss_...">
+            <label for="server-url">ScreenshotSafe Server</label>
+            <input type="text" id="server-url" placeholder="screenshots.example.com">
         </div>
 
         <div class="actions">
-            <button class="primary" id="save-btn" type="button">Save and Verify</button>
+            <button class="primary" id="save-btn" type="button">Save and Check</button>
             <button class="secondary" id="close-btn" type="button">Close</button>
         </div>
 

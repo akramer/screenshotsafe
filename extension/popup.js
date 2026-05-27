@@ -22,7 +22,7 @@
 
     async function init() {
         try {
-            settings = await ext.storage.get(['serverUrl', 'apiToken']);
+            settings = await ext.storage.get(['serverUrl']);
             await checkConnection();
         } catch (err) {
             markInvalid(err.message);
@@ -31,7 +31,7 @@
     }
 
     async function checkConnection() {
-        if (!settings.serverUrl || !settings.apiToken) {
+        if (!settings.serverUrl) {
             markInvalid('Settings required');
             openSettings('missing');
             return;
@@ -39,7 +39,8 @@
 
         try {
             const resp = await fetch(`${settings.serverUrl}/api/ping`, {
-                headers: { 'Authorization': `Bearer ${settings.apiToken}` },
+                cache: 'no-store',
+                credentials: 'include',
             });
 
             if (resp.ok) {
@@ -50,16 +51,16 @@
             }
 
             if (resp.status === 401) {
-                markInvalid('Invalid API token');
-                openSettings('invalid-token');
+                markInvalid('Sign-in needed');
+                openLoginRequired('login-required');
                 return;
             }
 
             markInvalid('Server error');
-            openSettings('server-error');
+            openLoginRequired('server-error');
         } catch (_) {
             markInvalid('Cannot reach server');
-            openSettings('cannot-reach-server');
+            openLoginRequired('cannot-reach-server');
         }
     }
 
@@ -109,6 +110,16 @@
         openedSettings = true;
         await ext.tabs.create({
             url: ext.runtime.getURL(`options.html?reason=${encodeURIComponent(reason)}`),
+        });
+    }
+
+    async function openLoginRequired(reason) {
+        if (openedSettings) return;
+        openedSettings = true;
+        await ext.runtime.sendMessage({
+            type: 'sss-login-required',
+            settings,
+            reason,
         });
     }
 
