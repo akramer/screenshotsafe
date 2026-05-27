@@ -925,6 +925,10 @@ mod tests {
         let rendered_path = screenshot.rendered_path.unwrap();
         let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
         assert!(preview_path.exists());
+        assert_eq!(
+            std::fs::metadata(&preview_path).unwrap().len(),
+            std::fs::metadata(&rendered_path).unwrap().len()
+        );
     }
 
     #[tokio::test]
@@ -1319,6 +1323,7 @@ mod tests {
         assert_eq!((image.width(), image.height()), (100, 100));
 
         std::fs::remove_file(&preview_path).unwrap();
+        assert!(!preview_path.exists());
 
         let req = axum::http::Request::builder()
             .method("GET")
@@ -1333,6 +1338,7 @@ mod tests {
             .unwrap();
         let image = image::load_from_memory(&bytes).unwrap();
         assert_eq!((image.width(), image.height()), (100, 100));
+        assert!(preview_path.exists());
     }
 
     #[tokio::test]

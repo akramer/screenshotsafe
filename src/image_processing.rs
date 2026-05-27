@@ -1,5 +1,5 @@
+use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 use image::{GenericImageView, RgbaImage};
-use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
 use crate::models::{Annotation, CropRect};
@@ -75,7 +75,9 @@ pub fn preview_png_bytes(rendered_path: &str) -> crate::Result<Vec<u8>> {
         image::imageops::FilterType::Lanczos3,
     );
     let mut data = Vec::new();
-    resized.write_to(&mut Cursor::new(&mut data), image::ImageFormat::Png)?;
+    let encoder =
+        PngEncoder::new_with_quality(&mut data, CompressionType::Best, FilterType::Adaptive);
+    resized.write_with_encoder(encoder)?;
     Ok(data)
 }
 
