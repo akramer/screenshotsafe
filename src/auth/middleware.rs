@@ -46,7 +46,9 @@ impl FromRequestParts<SharedState> for AuthUser {
         let path = parts.uri.path().to_string();
         async move {
             if path.starts_with("/api/") && !session_origin_allowed(&headers, &state) {
-                return Err(AppError::Forbidden);
+                return Err(AppError::forbidden(
+                    "cookie-authenticated API request from untrusted origin",
+                ));
             }
 
             // Try session cookie
@@ -61,14 +63,17 @@ impl FromRequestParts<SharedState> for AuthUser {
                                 &Validation::default(),
                             );
                             if let Ok(data) = token_data {
-                                let user_id: uuid::Uuid = data
-                                    .claims
-                                    .sub
-                                    .parse()
-                                    .map_err(|_| AppError::Unauthorized)?;
+                                let user_id: uuid::Uuid =
+                                    data.claims.sub.parse().map_err(|_| {
+                                        AppError::unauthorized("session token subject is invalid")
+                                    })?;
                                 if let Some(user) = state.db.get_user_by_id(&user_id)? {
                                     if !user.account_status.is_enabled() {
-                                        return Err(AppError::Forbidden);
+                                        return Err(AppError::forbidden(format!(
+                                            "session user '{}' is {}",
+                                            user.username,
+                                            user.account_status.as_str()
+                                        )));
                                     }
                                     return Ok(AuthUser(user));
                                 }
@@ -78,7 +83,9 @@ impl FromRequestParts<SharedState> for AuthUser {
                 }
             }
 
-            Err(AppError::Unauthorized)
+            Err(AppError::unauthorized(
+                "missing, invalid, expired, or unknown session cookie",
+            ))
         }
     }
 }
@@ -127,7 +134,10 @@ impl FromRequestParts<SharedState> for AdminUser {
             if user.is_admin {
                 Ok(AdminUser(user))
             } else {
-                Err(AppError::Forbidden)
+                Err(AppError::forbidden(format!(
+                    "user '{}' is not an administrator",
+                    user.username
+                )))
             }
         }
     }
@@ -178,7 +188,11 @@ impl FromRequestParts<SharedState> for ApiOrSessionUser {
                         let token_hash = crate::auth::hash_token(token);
                         if let Some((user, _)) = state.db.get_user_by_token_hash(&token_hash)? {
                             if !user.account_status.is_enabled() {
-                                return Err(AppError::Forbidden);
+                                return Err(AppError::forbidden(format!(
+                                    "bearer token user '{}' is {}",
+                                    user.username,
+                                    user.account_status.as_str()
+                                )));
                             }
                             return Ok(ApiOrSessionUser(user));
                         }

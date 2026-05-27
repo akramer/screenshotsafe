@@ -104,17 +104,21 @@ pub async fn login(
     let user = state
         .db
         .get_user_by_username(&req.username)?
-        .ok_or(AppError::Unauthorized)?;
+        .ok_or_else(|| AppError::unauthorized("login username was not found"))?;
     if !user.account_status.is_enabled() {
-        return Err(AppError::Forbidden);
+        return Err(AppError::forbidden(format!(
+            "login user '{}' is {}",
+            user.username,
+            user.account_status.as_str()
+        )));
     }
 
     let hash = user
         .password_hash
         .as_deref()
-        .ok_or(AppError::Unauthorized)?;
+        .ok_or_else(|| AppError::unauthorized("login user has no password credential"))?;
     if !auth::verify_password(&req.password, hash) {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::unauthorized("login password did not match"));
     }
 
     let token = auth::middleware::create_session_token(
@@ -204,7 +208,7 @@ pub async fn oauth_start(
         Some(
             user.0
                 .as_ref()
-                .ok_or(AppError::Unauthorized)?
+                .ok_or_else(|| AppError::unauthorized("OAuth link requested without a session"))?
                 .id
                 .to_string(),
         )
@@ -343,9 +347,13 @@ pub async fn oauth_callback(
         let user = state
             .db
             .get_user_by_id(&user_id)?
-            .ok_or(AppError::Unauthorized)?;
+            .ok_or_else(|| AppError::unauthorized("OAuth link session user was not found"))?;
         if !user.account_status.is_enabled() {
-            return Err(AppError::Forbidden);
+            return Err(AppError::forbidden(format!(
+                "OAuth link user '{}' is {}",
+                user.username,
+                user.account_status.as_str()
+            )));
         }
         if let Some((linked_user, _)) = state
             .db
@@ -984,9 +992,11 @@ pub async fn change_password(
     let hash = user
         .password_hash
         .as_deref()
-        .ok_or(AppError::Unauthorized)?;
+        .ok_or_else(|| AppError::unauthorized("password change user has no password credential"))?;
     if !auth::verify_password(&req.current_password, hash) {
-        return Err(AppError::Unauthorized);
+        return Err(AppError::unauthorized(
+            "password change current password did not match",
+        ));
     }
 
     let new_hash = auth::hash_password(&req.new_password)
