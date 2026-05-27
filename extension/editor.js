@@ -151,6 +151,7 @@
 
         const resp = await fetch(`${settings.serverUrl}/api/screenshots`, {
             method: 'POST',
+            mode: 'cors',
             credentials: 'include',
             body: formData,
         });

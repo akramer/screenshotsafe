@@ -1,6 +1,6 @@
 use axum::{
     extract::FromRequestParts,
-    http::{header, request::Parts},
+    http::{header, request::Parts, HeaderMap},
 };
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -43,7 +43,12 @@ impl FromRequestParts<SharedState> for AuthUser {
     ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
         let state = state.clone();
         let headers = parts.headers.clone();
+        let path = parts.uri.path().to_string();
         async move {
+            if path.starts_with("/api/") && !session_origin_allowed(&headers, &state) {
+                return Err(AppError::Forbidden);
+            }
+
             // Try session cookie
             if let Some(cookie_header) = headers.get(header::COOKIE) {
                 if let Ok(cookie_str) = cookie_header.to_str() {
@@ -76,6 +81,29 @@ impl FromRequestParts<SharedState> for AuthUser {
             Err(AppError::Unauthorized)
         }
     }
+}
+
+pub fn session_origin_allowed(headers: &HeaderMap, state: &SharedState) -> bool {
+    let Some(origin) = headers.get(header::ORIGIN).and_then(|h| h.to_str().ok()) else {
+        return true;
+    };
+
+    let origin = origin.trim_end_matches('/');
+    if origin.is_empty() || origin == "null" {
+        return false;
+    }
+
+    let base_url = crate::routes::get_base_url(&state.config.server.public_url, headers);
+    if origin == base_url.trim_end_matches('/') {
+        return true;
+    }
+
+    state
+        .config
+        .auth
+        .allowed_extension_origins
+        .iter()
+        .any(|allowed| origin == allowed.trim_end_matches('/'))
 }
 
 /// Extractor: authenticated admin user from session cookie ONLY.

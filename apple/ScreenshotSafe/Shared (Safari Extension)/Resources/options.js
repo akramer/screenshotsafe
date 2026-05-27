@@ -1,12 +1,11 @@
 /**
- * ScreenshotSafe Safari Extension - Options Page
+ * ScreenshotSafe Extension — Options Page
  */
 
 (function () {
     'use strict';
 
     const serverUrlInput = document.getElementById('server-url');
-    const apiTokenInput = document.getElementById('api-token');
     const saveBtn = document.getElementById('save-btn');
     const closeBtn = document.getElementById('close-btn');
     const status = document.getElementById('status');
@@ -26,43 +25,56 @@
         }
 
         try {
-            const settings = await ext.storage.get(['serverUrl', 'apiToken']);
+            const settings = await ext.storage.get(['serverUrl']);
             if (settings.serverUrl) serverUrlInput.value = settings.serverUrl;
-            if (settings.apiToken) apiTokenInput.value = settings.apiToken;
         } catch (err) {
             setStatus(err.message, false);
         }
     }
 
     async function saveAndVerify() {
-        const serverUrl = serverUrlInput.value.trim().replace(/\/+$/, '');
-        const apiToken = apiTokenInput.value.trim();
+        let serverUrl;
+        try {
+            serverUrl = normalizeServerUrl(serverUrlInput.value);
+        } catch (err) {
+            setStatus(err.message, false);
+            return;
+        }
 
-        if (!serverUrl || !apiToken) {
-            setStatus('Enter both a server URL and an API token.', false);
+        if (!serverUrl) {
+            setStatus('Enter your ScreenshotSafe server domain.', false);
             return;
         }
 
         saveBtn.disabled = true;
-        saveBtn.textContent = 'Verifying...';
+        saveBtn.textContent = 'Checking...';
         setStatus('Checking connection...', null);
 
         try {
-            await ext.storage.set({ serverUrl, apiToken });
-            const result = await verifySettings(serverUrl, apiToken);
+            const hasOriginAccess = await ext.permissions.requestOrigin(serverUrl);
+            if (!hasOriginAccess) {
+                setStatus('Chrome needs permission for that server before ScreenshotSafe can connect.', false);
+                return;
+            }
+
+            await ext.storage.set({ serverUrl });
+            serverUrlInput.value = serverUrl;
+            const result = await verifySettings(serverUrl);
             setStatus(result.message, result.ok);
         } catch (err) {
             setStatus(err.message, false);
         } finally {
             saveBtn.disabled = false;
-            saveBtn.textContent = 'Save and Verify';
+            saveBtn.textContent = 'Save and Check';
         }
     }
 
-    async function verifySettings(serverUrl, apiToken) {
+    async function verifySettings(serverUrl) {
         try {
             const resp = await fetch(`${serverUrl}/api/ping`, {
-                headers: { 'Authorization': `Bearer ${apiToken}` },
+                cache: 'no-store',
+                mode: 'cors',
+                credentials: 'include',
             });
 
             if (resp.ok) {
@@ -70,7 +82,7 @@
             }
 
             if (resp.status === 401) {
-                return { ok: false, message: 'The API token was rejected.' };
+                return { ok: false, message: 'Saved. Sign in to ScreenshotSafe in your browser, then try again.' };
             }
 
             return { ok: false, message: `Server returned ${resp.status}.` };
@@ -90,12 +102,38 @@
         status.classList.toggle('bad', ok === false);
     }
 
+    function normalizeServerUrl(value) {
+        const trimmed = value.trim();
+        if (!trimmed) return '';
+
+        const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+            ? trimmed
+            : `${looksLocal(trimmed) ? 'http' : 'https'}://${trimmed}`;
+
+        let url;
+        try {
+            url = new URL(withScheme);
+        } catch (_) {
+            throw new Error('Enter a valid domain, like screenshots.example.com.');
+        }
+
+        if (!/^https?:$/.test(url.protocol)) {
+            throw new Error('Use an http or https ScreenshotSafe server address.');
+        }
+
+        return url.origin.replace(/\/+$/, '');
+    }
+
+    function looksLocal(value) {
+        return /^(localhost|127\.|0\.0\.0\.0|\[::1\]|::1)(?::\d+)?(?:\/|$)/i.test(value);
+    }
+
     function reasonMessage(reason) {
         switch (reason) {
             case 'missing':
-                return 'Add your ScreenshotSafe server URL and API token to start capturing.';
-            case 'invalid-token':
-                return 'The saved API token was rejected. Check or replace it here.';
+                return 'Add your ScreenshotSafe server domain to start capturing.';
+            case 'login-required':
+                return 'Sign in to ScreenshotSafe in your browser, then try your capture again.';
             case 'cannot-reach-server':
                 return 'The extension could not reach the saved server URL.';
             case 'server-error':

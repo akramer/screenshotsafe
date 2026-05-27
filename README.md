@@ -68,6 +68,8 @@ path = "./data/screenshotsafe.db"
 session_ttl_seconds = 604800
 default_expiry_seconds = 2592000
 jwt_secret = "replace-with-a-long-random-secret"
+# Exact browser-extension origins allowed to use session-cookie API auth.
+allowed_extension_origins = ["safari-web-extension://YOUR_EXTENSION_ID"]
 
 [auth.oauth]
 enabled = false
@@ -97,6 +99,7 @@ SSS_MAX_EXPIRY_SECONDS=7776000
 SSS_STORAGE_PATH=/data/storage
 SSS_DATABASE_PATH=/data/screenshotsafe.db
 SSS_JWT_SECRET=replace-with-a-long-random-secret
+SSS_ALLOWED_EXTENSION_ORIGINS=safari-web-extension://YOUR_EXTENSION_ID,chrome-extension://YOUR_EXTENSION_ID
 SSS_OAUTH_ENABLED=true
 SSS_OAUTH_PROVIDER=example
 SSS_OAUTH_DISPLAY_NAME="Example SSO"
@@ -201,8 +204,7 @@ For Chrome or another Chromium browser:
 1. Open the browser extension management page.
 2. Enable developer mode.
 3. Load `extension/` as an unpacked extension.
-4. In ScreenshotSafe, create an API token from Settings.
-5. Open the extension settings and enter your server URL plus API token.
+4. Open the extension settings and enter your server URL.
 
 The extension verifies the connection with `/api/ping`, captures the visible tab, opens a local editor, and uploads the finalized screenshot to your server.
 

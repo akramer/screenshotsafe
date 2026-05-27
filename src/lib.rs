@@ -12,12 +12,12 @@ pub use error::{AppError, Result};
 use std::sync::Arc;
 
 use axum::{
-    http::{header, HeaderValue},
+    http::{header, HeaderMap, HeaderValue, Method},
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
     Router,
 };
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowHeaders, AllowOrigin, CorsLayer};
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
@@ -135,10 +135,24 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/api/auth/tokens", get(routes::api::list_tokens))
         .route("/api/auth/tokens/{id}", delete(routes::api::revoke_token));
 
+    let cors_state = state.clone();
     let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+        .allow_origin(AllowOrigin::predicate(move |origin, parts| {
+            origin
+                .to_str()
+                .map(|origin| cors_origin_allowed(origin, &parts.headers, &cors_state))
+                .unwrap_or(false)
+        }))
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+            Method::OPTIONS,
+        ])
+        .allow_headers(AllowHeaders::mirror_request())
+        .allow_credentials(true);
 
     Router::new()
         .merge(public_routes)
@@ -149,6 +163,25 @@ pub fn build_router(state: SharedState) -> Router {
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+fn cors_origin_allowed(origin: &str, headers: &HeaderMap, state: &SharedState) -> bool {
+    let origin = origin.trim_end_matches('/');
+    if origin.is_empty() || origin == "null" {
+        return false;
+    }
+
+    let base_url = routes::get_base_url(&state.config.server.public_url, headers);
+    if origin == base_url.trim_end_matches('/') {
+        return true;
+    }
+
+    state
+        .config
+        .auth
+        .allowed_extension_origins
+        .iter()
+        .any(|allowed| origin == allowed.trim_end_matches('/'))
 }
 
 async fn favicon() -> Response {

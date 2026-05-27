@@ -6,7 +6,7 @@
     "permissions": [
         "activeTab",
         "contextMenus",
-        "notifications",
+        "scripting",
         "storage"
     ],
     "optional_host_permissions": [

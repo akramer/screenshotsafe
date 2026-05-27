@@ -73,6 +73,7 @@
         try {
             const resp = await fetch(`${serverUrl}/api/ping`, {
                 cache: 'no-store',
+                mode: 'cors',
                 credentials: 'include',
             });
 

@@ -76,8 +76,8 @@ BUNDLE_IDENTIFIER=com.example.ScreenshotSafe scripts/build-safari-extension.sh -
 1. Open the generated project in Xcode.
 2. Build and run the macOS host app.
 3. Open Safari > Settings > Extensions and enable ScreenshotSafe.
-4. Create an API token from ScreenshotSafe settings.
-5. Open the extension popup, save the server URL and API token.
+4. Sign in to your ScreenshotSafe server in Safari.
+5. Open the extension popup, save the server URL, and grant website access when prompted.
 6. Capture a visible tab and confirm the share link is created and opens.
 
 ## Current Scope

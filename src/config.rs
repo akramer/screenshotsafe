@@ -44,6 +44,8 @@ pub struct AuthConfig {
     pub session_ttl_seconds: u64,
     #[serde(default = "default_expiry_seconds")]
     pub default_expiry_seconds: Option<u64>,
+    #[serde(default)]
+    pub allowed_extension_origins: Vec<String>,
     pub jwt_secret: Option<String>,
     #[serde(default)]
     pub oauth: OAuthConfig,
@@ -149,6 +151,7 @@ impl Default for AuthConfig {
         Self {
             session_ttl_seconds: default_session_ttl(),
             default_expiry_seconds: default_expiry_seconds(),
+            allowed_extension_origins: Vec::new(),
             jwt_secret: None,
             oauth: OAuthConfig::default(),
         }
@@ -251,6 +254,9 @@ impl Config {
         if let Ok(val) = std::env::var("SSS_JWT_SECRET") {
             config.auth.jwt_secret = Some(val);
         }
+        if let Ok(val) = std::env::var("SSS_ALLOWED_EXTENSION_ORIGINS") {
+            config.auth.allowed_extension_origins = parse_csv_list(&val);
+        }
         if let Ok(val) = std::env::var("SSS_OAUTH_ENABLED") {
             config.auth.oauth.enabled = parse_bool(&val);
         }
@@ -308,6 +314,12 @@ impl Config {
             .server
             .max_expiry_seconds
             .filter(|seconds| *seconds > 0 && i64::try_from(*seconds).is_ok());
+        config.auth.allowed_extension_origins = config
+            .auth
+            .allowed_extension_origins
+            .into_iter()
+            .filter_map(|origin| normalize_origin(&origin))
+            .collect();
         config.auth.oauth.provider = config.auth.oauth.provider.trim().to_string();
         config.auth.oauth.display_name = config.auth.oauth.display_name.trim().to_string();
         config.auth.oauth.issuer_url = config
@@ -346,6 +358,24 @@ fn parse_bool(value: &str) -> bool {
         value.trim().to_ascii_lowercase().as_str(),
         "1" | "true" | "yes" | "on"
     )
+}
+
+fn parse_csv_list(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+        .collect()
+}
+
+fn normalize_origin(value: &str) -> Option<String> {
+    let value = value.trim().trim_end_matches('/');
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
 }
 
 fn parse_oauth_account_mode(value: &str) -> OAuthAccountMode {

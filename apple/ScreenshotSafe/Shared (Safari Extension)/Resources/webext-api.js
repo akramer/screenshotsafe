@@ -62,69 +62,35 @@
         });
     }
 
-    function hasNativeSettingsBridge() {
-        return Boolean(api && api.runtime && typeof api.runtime.sendMessage === 'function');
-    }
-
-    async function sendNativeMessage(message) {
-        if (!api || !api.runtime || typeof api.runtime.sendMessage !== 'function') {
-            return null;
+    async function requestOrigin(serverUrl) {
+        if (!api || !api.permissions || typeof api.permissions.request !== 'function') {
+            return true;
         }
 
-        try {
-            const response = await call(api.runtime, 'sendMessage', [{
-                type: 'sss-native-message',
-                message,
-            }]);
-            if (response && response.ok) return response;
-            if (response && response.error) return response;
-        } catch (err) {
-            return { ok: false, error: err.message };
-        }
-
-        return {
-            ok: false,
-            error: 'Native ScreenshotSafe settings are unavailable. Rebuild and re-enable the Safari extension.',
-        };
-    }
-
-    async function getNativeSettings() {
-        const response = await sendNativeMessage({ type: 'sss-get-native-settings' });
-        if (!response || !response.ok) {
-            throw new Error(response && response.error ? response.error : 'Native ScreenshotSafe settings are unavailable.');
-        }
-        if (!response.settings) return {};
-
-        const settings = {};
-        if (response.settings.serverUrl) settings.serverUrl = response.settings.serverUrl;
-        if (response.settings.apiToken) settings.apiToken = response.settings.apiToken;
-        if (response.settings.defaultExpiry) settings.defaultExpiry = response.settings.defaultExpiry;
-        return settings;
-    }
-
-    async function setNativeSettings(values) {
-        const response = await sendNativeMessage({
-            type: 'sss-set-native-settings',
-            settings: values,
-        });
-        if (!response || !response.ok) {
-            throw new Error(response && response.error ? response.error : 'Native ScreenshotSafe settings are unavailable.');
-        }
+        const origin = new URL(serverUrl).origin + '/*';
+        return call(api.permissions, 'request', [{ origins: [origin] }]);
     }
 
     window.sssWebExt = {
         storage: {
             async get(keys) {
-                return getNativeSettings();
+                if (api && api.storage && api.storage.local) {
+                    return call(api.storage.local, 'get', [keys]);
+                }
+
+                return getLocal(keys);
             },
             async set(values) {
-                if (hasNativeSettingsBridge()) {
-                    await setNativeSettings(values);
+                if (api && api.storage && api.storage.local) {
+                    await call(api.storage.local, 'set', [values]);
                     return;
                 }
 
-                throw new Error('Native ScreenshotSafe settings are unavailable. Rebuild and re-enable the Safari extension.');
+                setLocal(values);
             },
+        },
+        permissions: {
+            requestOrigin,
         },
         runtime: {
             getURL(path) {

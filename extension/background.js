@@ -58,7 +58,7 @@ if (api && api.runtime) {
         }
 
         if (message.type === 'sss-login-required') {
-            handleLoginRequired(message.settings || {}, message.reason || 'login-required')
+            handleLoginRequired(message.settings || {}, message.reason || 'login-required', _sender.tab)
                 .then(() => sendResponse({ ok: true }))
                 .catch((err) => sendResponse({ ok: false, error: err.message }));
             return true;
@@ -97,17 +97,17 @@ if (api && api.contextMenus && api.contextMenus.onClicked) {
 
 async function captureAndOpenEditor(tab) {
     const settings = await getSettings();
+    const activeTab = tab || (await queryActiveTab());
     const validation = await validateSettings(settings);
     if (!validation.ok) {
         if (validation.reason === 'missing') {
             await openSettings(validation.reason);
         } else {
-            await handleLoginRequired(settings, validation.reason);
+            await handleLoginRequired(settings, validation.reason, activeTab);
         }
         return;
     }
 
-    const activeTab = tab || (await queryActiveTab());
     if (!activeTab || !activeTab.id) {
         throw new Error('No active tab found');
     }
@@ -147,6 +147,7 @@ async function validateSettings(settings) {
     try {
         const resp = await fetch(`${settings.serverUrl}/api/ping`, {
             cache: 'no-store',
+            mode: 'cors',
             credentials: 'include',
         });
 
@@ -197,37 +198,54 @@ async function openSettings(reason) {
     }]);
 }
 
-async function handleLoginRequired(settings, reason) {
-    await showLoginRequiredWarning(reason);
-
+async function handleLoginRequired(settings, reason, tab) {
     if (settings && settings.serverUrl) {
+        await showLoginRequiredDialog(reason, tab);
         await call(api.tabs, 'create', [{ url: settings.serverUrl }]);
     } else {
         await openSettings('missing');
     }
 }
 
-async function showLoginRequiredWarning(reason) {
-    const message = reason === 'server-error'
-        ? 'ScreenshotSafe responded with an error. Open the site to check your session, then try again.'
-        : reason === 'cannot-reach-server'
-            ? 'ScreenshotSafe could not be reached. Open the site to confirm the address and sign in.'
-            : 'Please sign in to ScreenshotSafe in the browser, then try your capture again.';
-
-    if (!api.notifications || typeof api.notifications.create !== 'function') {
+async function showLoginRequiredDialog(reason, tab) {
+    const targetTab = tab || (await queryActiveTab().catch(() => null));
+    if (!targetTab || !targetTab.id) {
         return;
     }
 
+    const message = loginRequiredMessage(reason);
+
     try {
-        await call(api.notifications, 'create', [`screenshotsafe-login-${Date.now()}`, {
-            type: 'basic',
-            iconUrl: api.runtime.getURL('icons/icon128.png'),
-            title: 'ScreenshotSafe sign-in needed',
-            message,
-        }]);
+        if (api.scripting && typeof api.scripting.executeScript === 'function') {
+            await call(api.scripting, 'executeScript', [{
+                target: { tabId: targetTab.id },
+                func: (dialogMessage) => alert(dialogMessage),
+                args: [message],
+            }]);
+            return;
+        }
+
+        if (api.tabs && typeof api.tabs.executeScript === 'function') {
+            await call(api.tabs, 'executeScript', [
+                targetTab.id,
+                { code: `alert(${JSON.stringify(message)});` },
+            ]);
+        }
     } catch (err) {
-        console.warn('ScreenshotSafe notification failed:', err.message);
+        console.warn('ScreenshotSafe sign-in dialog failed:', err.message);
     }
+}
+
+function loginRequiredMessage(reason) {
+    if (reason === 'server-error') {
+        return 'ScreenshotSafe responded with an error. Check the site, then try your capture again.';
+    }
+
+    if (reason === 'cannot-reach-server') {
+        return 'ScreenshotSafe could not be reached. Confirm the address and sign in if needed.';
+    }
+
+    return 'Please sign in to ScreenshotSafe in your browser, then try your capture again.';
 }
 
 async function createSettingsMenu() {

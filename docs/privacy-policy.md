@@ -23,13 +23,13 @@ The ScreenshotSafe extension may handle the following information:
 - Page metadata: the page title and source URL associated with the captured screenshot.
 - Edited screenshot content: cropped or redacted screenshot data that you choose to upload.
 
-The extension stores the server URL and API token in your browser's local extension storage. Screenshot drafts are held temporarily inside the extension while you review, crop, or redact them before upload.
+The extension stores the server URL in your browser's local extension storage. Screenshot drafts are held temporarily inside the extension while you review, crop, or redact them before upload.
 
 ## How Information Is Used
 
 ScreenshotSafe uses this information to:
 
-- verify that the configured server URL and API token work;
+- verify that the configured server URL works with your browser sign-in;
 - capture the visible tab when you request a screenshot;
 - let you crop or redact the screenshot before upload;
 - upload the finalized screenshot and metadata to your configured ScreenshotSafe server;
@@ -53,7 +53,7 @@ Screenshots uploaded to a ScreenshotSafe server may be shared through links gene
 
 ## Retention and Deletion
 
-The extension keeps the configured server URL and API token until you change or remove them from the extension settings or uninstall the extension.
+The extension keeps the configured server URL until you change or remove it from the extension settings or uninstall the extension.
 
 Temporary screenshot drafts in the extension are short-lived and are used only to support the pre-upload editing flow.
 
@@ -65,11 +65,12 @@ The extension requests browser permissions needed for its core features:
 
 - `activeTab`: to capture the currently active visible tab after you invoke the extension.
 - `contextMenus`: to provide screenshot and settings actions from the browser context menu.
-- `storage`: to save the configured server URL and API token locally in the browser.
+- `storage`: to save the configured server URL locally in the browser.
+- `scripting`: to show the sign-in prompt in the active tab when your browser session is unavailable.
 
 ## Security
 
-Treat ScreenshotSafe API tokens like passwords. Use HTTPS for any ScreenshotSafe server exposed outside local development. The extension sends your API token to the configured server when verifying the connection or uploading a screenshot.
+Use HTTPS for any ScreenshotSafe server exposed outside local development. The extension uses your browser sign-in session for authenticated requests to the configured server.
 
 ## Children's Privacy
 

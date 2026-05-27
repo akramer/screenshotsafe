@@ -14,6 +14,15 @@ mod tests {
 
     /// Create a test app with an in-memory database and temp storage.
     fn test_app(dir: &std::path::Path) -> (axum::Router, SharedState) {
+        test_app_with_config(dir, |config| {
+            config.server.public_url = "http://localhost:8080".to_string();
+        })
+    }
+
+    fn test_app_with_config(
+        dir: &std::path::Path,
+        configure: impl FnOnce(&mut Config),
+    ) -> (axum::Router, SharedState) {
         let db = Database::open_in_memory().unwrap();
         db.run_migrations().unwrap();
 
@@ -23,7 +32,7 @@ mod tests {
 
         let mut config = Config::default();
         config.storage.path = storage_path.to_string_lossy().to_string();
-        config.server.public_url = "http://localhost:8080".to_string();
+        configure(&mut config);
 
         let state = Arc::new(AppState {
             db,
@@ -207,6 +216,83 @@ mod tests {
 
         let cookie = extract_session_cookie(&resp);
         assert!(cookie.is_some(), "Login should set session cookie");
+    }
+
+    #[tokio::test]
+    async fn test_https_login_cookie_allows_cross_site_extension_use() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app_with_config(dir.path(), |config| {
+            config.server.public_url = "https://screens.example".to_string();
+        });
+
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let cookie = extract_session_cookie(&resp).unwrap();
+
+        assert!(cookie.contains("SameSite=None"));
+        assert!(cookie.contains("Secure"));
+        assert!(cookie.contains("HttpOnly"));
+    }
+
+    #[tokio::test]
+    async fn test_https_login_cookie_can_be_inferred_from_forwarded_proto() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app_with_config(dir.path(), |_| {});
+
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        )
+        .map(|body| body);
+        let (mut parts, body) = req.into_parts();
+        parts
+            .headers
+            .insert("x-forwarded-proto", "https".parse().unwrap());
+        let req = axum::http::Request::from_parts(parts, body);
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let cookie = extract_session_cookie(&resp).unwrap();
+
+        assert!(cookie.contains("SameSite=None"));
+        assert!(cookie.contains("Secure"));
+    }
+
+    #[tokio::test]
+    async fn test_https_login_cookie_can_be_inferred_from_origin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app_with_config(dir.path(), |_| {});
+
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        )
+        .map(|body| body);
+        let (mut parts, body) = req.into_parts();
+        parts
+            .headers
+            .insert(header::ORIGIN, "https://screens.example".parse().unwrap());
+        let req = axum::http::Request::from_parts(parts, body);
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let cookie = extract_session_cookie(&resp).unwrap();
+
+        assert!(cookie.contains("SameSite=None"));
+        assert!(cookie.contains("Secure"));
     }
 
     #[tokio::test]
@@ -763,6 +849,15 @@ mod tests {
         cookie: &str,
         fields: &[(&str, &str)],
     ) -> axum::http::Response<Body> {
+        upload_screenshot_response_with_origin(app, cookie, fields, None).await
+    }
+
+    async fn upload_screenshot_response_with_origin(
+        app: &axum::Router,
+        cookie: &str,
+        fields: &[(&str, &str)],
+        origin: Option<&str>,
+    ) -> axum::http::Response<Body> {
         let png_data = minimal_png();
         let boundary = "----TestBoundary";
         let body = format!(
@@ -794,16 +889,20 @@ mod tests {
             }
         }
 
-        let req = axum::http::Request::builder()
+        let mut builder = axum::http::Request::builder()
             .method("POST")
             .uri("/api/screenshots")
             .header(
                 header::CONTENT_TYPE,
                 format!("multipart/form-data; boundary={}", boundary),
             )
-            .header(header::COOKIE, cookie)
-            .body(Body::from(body_bytes))
-            .unwrap();
+            .header(header::COOKIE, cookie);
+
+        if let Some(origin) = origin {
+            builder = builder.header(header::ORIGIN, origin);
+        }
+
+        let req = builder.body(Body::from(body_bytes)).unwrap();
 
         app.clone().oneshot(req).await.unwrap()
     }
@@ -826,6 +925,81 @@ mod tests {
         let rendered_path = screenshot.rendered_path.unwrap();
         let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
         assert!(preview_path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_cookie_api_auth_rejects_untrusted_origin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let resp = upload_screenshot_response_with_origin(
+            &app,
+            &cookie,
+            &[],
+            Some("https://attacker.example"),
+        )
+        .await;
+
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn test_cookie_api_auth_allows_configured_extension_origin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app_with_config(dir.path(), |config| {
+            config.server.public_url = "https://screens.example".to_string();
+            config.auth.allowed_extension_origins =
+                vec!["safari-web-extension://ABCDEF".to_string()];
+        });
+
+        let cookie = setup_user(&app).await;
+        let resp = upload_screenshot_response_with_origin(
+            &app,
+            &cookie,
+            &[],
+            Some("safari-web-extension://ABCDEF"),
+        )
+        .await;
+
+        assert_eq!(resp.status(), StatusCode::CREATED);
+    }
+
+    #[tokio::test]
+    async fn test_cors_allows_credentials_for_configured_extension_origin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app_with_config(dir.path(), |config| {
+            config.server.public_url = "https://screens.example".to_string();
+            config.auth.allowed_extension_origins =
+                vec!["safari-web-extension://ABCDEF".to_string()];
+        });
+
+        let req = axum::http::Request::builder()
+            .method("OPTIONS")
+            .uri("/api/ping")
+            .header(header::ORIGIN, "safari-web-extension://ABCDEF")
+            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+            .header(
+                header::ACCESS_CONTROL_REQUEST_HEADERS,
+                "x-screenshotsafe-debug",
+            )
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers()
+                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                .and_then(|v| v.to_str().ok()),
+            Some("safari-web-extension://ABCDEF")
+        );
+        assert_eq!(
+            resp.headers()
+                .get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS)
+                .and_then(|v| v.to_str().ok()),
+            Some("true")
+        );
     }
 
     #[tokio::test]
