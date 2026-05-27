@@ -1,7 +1,7 @@
 use rand::Rng;
 
 const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-const SHARE_ID_LEN: usize = 8;
+const SHARE_ID_LEN: usize = 16;
 
 /// Generate a cryptographically random, URL-safe share ID.
 pub fn generate() -> String {
@@ -24,4 +24,17 @@ pub fn generate_api_token() -> String {
         })
         .collect();
     format!("sss_{}", token)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn share_ids_are_16_url_safe_chars() {
+        let id = generate();
+
+        assert_eq!(id.len(), SHARE_ID_LEN);
+        assert!(id.bytes().all(|b| CHARSET.contains(&b)));
+    }
 }
