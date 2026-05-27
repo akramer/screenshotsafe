@@ -246,7 +246,7 @@ pub async fn share_page(
         <img src="{image_url}" alt="{title}" class="share-image">
     </main>
     <footer class="share-footer">
-        Powered by <a href="https://github.com/screenshotsafe/screenshotsafe">ScreenshotSafe</a>
+        Powered by <a href="https://github.com/akramer/screenshotsafe">ScreenshotSafe</a>
     </footer>
     <script>
         const setButtonStatus = (button, text, status) => {{
