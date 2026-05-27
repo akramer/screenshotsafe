@@ -1653,6 +1653,7 @@ mod tests {
 
         let cookie = setup_user(&app).await;
         let upload_body = upload_screenshot(&app, &cookie).await;
+        let id = upload_body["id"].as_str().unwrap();
         let share_id = upload_body["share_id"].as_str().unwrap();
 
         let req = authed_request("GET", "/", &cookie);
@@ -1664,13 +1665,47 @@ mod tests {
             .unwrap();
         let html = String::from_utf8(body.to_vec()).unwrap();
 
-        assert!(html.contains(&format!(
-            r#"<img src="http://localhost:8080/s/{}.preview.png""#,
-            share_id
-        )));
+        assert!(html.contains(&format!(r#"<img src="/api/screenshots/{}/preview""#, id)));
+        assert!(!html.contains(&format!("/s/{}.preview.png", share_id)));
         assert!(html.contains(&format!(
             r#"data-url="http://localhost:8080/s/{}""#,
             share_id
         )));
+    }
+
+    #[tokio::test]
+    async fn test_dashboard_preview_works_for_private_screenshots() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let upload_body = upload_screenshot(&app, &cookie).await;
+        let id = upload_body["id"].as_str().unwrap();
+        let share_id = upload_body["share_id"].as_str().unwrap();
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/screenshots/{}", id),
+            &cookie,
+            serde_json::json!({ "visibility": "private" }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/s/{}.preview.png", share_id))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        let req = authed_request("GET", &format!("/api/screenshots/{}/preview", id), &cookie);
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get(header::CONTENT_TYPE).unwrap(),
+            "image/png"
+        );
     }
 }

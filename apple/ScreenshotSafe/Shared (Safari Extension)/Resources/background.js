@@ -98,13 +98,8 @@ if (api && api.contextMenus && api.contextMenus.onClicked) {
 async function captureAndOpenEditor(tab) {
     const settings = await getSettings();
     const activeTab = tab || (await queryActiveTab());
-    const validation = await validateSettings(settings);
-    if (!validation.ok) {
-        if (validation.reason === 'missing') {
-            await openSettings(validation.reason);
-        } else {
-            await handleLoginRequired(settings, validation.reason, activeTab);
-        }
+    if (!settings.serverUrl) {
+        await openSettings('missing');
         return;
     }
 
@@ -137,32 +132,6 @@ function captureAfterDelay(tab, delayMs) {
             openSettings('capture-error');
         });
     }, delayMs);
-}
-
-async function validateSettings(settings) {
-    if (!settings.serverUrl) {
-        return { ok: false, reason: 'missing' };
-    }
-
-    try {
-        const resp = await fetch(`${settings.serverUrl}/api/ping`, {
-            cache: 'no-store',
-            mode: 'cors',
-            credentials: 'include',
-        });
-
-        if (resp.ok) {
-            return { ok: true };
-        }
-
-        if (resp.status === 401) {
-            return { ok: false, reason: 'login-required' };
-        }
-
-        return { ok: false, reason: 'server-error' };
-    } catch (_) {
-        return { ok: false, reason: 'cannot-reach-server' };
-    }
 }
 
 async function getSettings() {

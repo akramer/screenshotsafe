@@ -49,7 +49,7 @@ pub async fn dashboard(
             .map(|s| {
                 let title = s.display_title();
                 let share_url = format!("{}/s/{}", base_url, s.share_id);
-                let preview_url = format!("{}/s/{}.preview.png", base_url, s.share_id);
+                let preview_url = format!("/api/screenshots/{}/preview", s.id);
                 let expired_class = if s.is_expired() { " expired" } else { "" };
                 let expires_info = s.expires_at
                     .map(|e| format!("<span class=\"meta-item\">Expires: {}</span>", e.format("%b %d, %Y")))

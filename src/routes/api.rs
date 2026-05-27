@@ -1606,6 +1606,33 @@ pub async fn serve_original(
     Ok(([(header::CONTENT_TYPE, "image/png".to_string())], data))
 }
 
+pub async fn serve_preview(
+    State(state): State<SharedState>,
+    AuthUser(user): AuthUser,
+    Path(id): Path<Uuid>,
+) -> crate::Result<impl IntoResponse> {
+    let screenshot = state
+        .db
+        .get_screenshot_by_id(&id)?
+        .ok_or(AppError::NotFound)?;
+
+    if screenshot.user_id != user.id {
+        return Err(AppError::NotFound);
+    }
+
+    let rendered_path = screenshot
+        .rendered_path
+        .as_deref()
+        .ok_or(AppError::NotFound)?;
+    let preview_path = image_processing::preview_path_for_rendered_path(rendered_path);
+    if !preview_path.exists() {
+        image_processing::render_preview_image(rendered_path, &preview_path.to_string_lossy())?;
+    }
+
+    let data = std::fs::read(preview_path)?;
+    Ok(([(header::CONTENT_TYPE, "image/png".to_string())], data))
+}
+
 // ── API Tokens ──
 
 #[derive(Deserialize)]

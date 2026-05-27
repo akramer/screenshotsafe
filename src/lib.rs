@@ -131,6 +131,10 @@ pub fn build_router(state: SharedState) -> Router {
             "/api/screenshots/{id}/original",
             get(routes::api::serve_original),
         )
+        .route(
+            "/api/screenshots/{id}/preview",
+            get(routes::api::serve_preview),
+        )
         .route("/api/auth/tokens", post(routes::api::create_token))
         .route("/api/auth/tokens", get(routes::api::list_tokens))
         .route("/api/auth/tokens/{id}", delete(routes::api::revoke_token));
