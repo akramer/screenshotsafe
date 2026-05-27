@@ -3,12 +3,8 @@ use axum::{
     http::{header, HeaderMap},
     response::{Html, IntoResponse},
 };
-use image::GenericImageView;
-use std::io::Cursor;
 
-use crate::{AppError, SharedState};
-
-const PREVIEW_MAX_DIMENSION: u32 = 1200;
+use crate::{image_processing, AppError, SharedState};
 
 /// Dispatch handler: routes /s/{id}.preview.png to preview image,
 /// /s/{id}.png to full image, /s/{id} to share page.
@@ -58,7 +54,7 @@ pub async fn share_page(
     let direct_image_url = format!("/s/{}.png", share_id);
     let image_url = format!("{}/s/{}.png?v={}", base_url, share_id, cache_bust);
     let preview_url = format!("{}/s/{}.preview.png?v={}", base_url, share_id, cache_bust);
-    let (preview_width, preview_height) = preview_dimensions(
+    let (preview_width, preview_height) = image_processing::preview_dimensions(
         screenshot
             .rendered_path
             .as_deref()
@@ -332,8 +328,16 @@ pub async fn share_preview_image(
         .as_deref()
         .ok_or(AppError::NotFound)?;
 
-    let data = preview_png(rendered_path)?;
-    let etag = file_etag(rendered_path);
+    let preview_path = image_processing::preview_path_for_rendered_path(rendered_path);
+    let (data, etag_path) = match std::fs::read(&preview_path) {
+        Ok(data) => (data, preview_path.to_string_lossy().to_string()),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => (
+            image_processing::preview_png_bytes(rendered_path)?,
+            rendered_path.to_string(),
+        ),
+        Err(err) => return Err(err.into()),
+    };
+    let etag = file_etag(&etag_path);
 
     Ok((
         [
@@ -380,43 +384,6 @@ pub async fn share_image(
         ],
         data,
     ))
-}
-
-fn preview_dimensions(rendered_path: &str) -> crate::Result<(u32, u32)> {
-    let (width, height) = image::image_dimensions(rendered_path)?;
-    Ok(scaled_dimensions(width, height))
-}
-
-fn preview_png(rendered_path: &str) -> crate::Result<Vec<u8>> {
-    let img = image::open(rendered_path)?;
-    let (width, height) = img.dimensions();
-    let (preview_width, preview_height) = scaled_dimensions(width, height);
-
-    if (preview_width, preview_height) == (width, height) {
-        return Ok(std::fs::read(rendered_path)?);
-    }
-
-    let resized = img.resize(
-        preview_width,
-        preview_height,
-        image::imageops::FilterType::Lanczos3,
-    );
-    let mut data = Vec::new();
-    resized.write_to(&mut Cursor::new(&mut data), image::ImageFormat::Png)?;
-    Ok(data)
-}
-
-fn scaled_dimensions(width: u32, height: u32) -> (u32, u32) {
-    let max_dimension = width.max(height);
-    if max_dimension <= PREVIEW_MAX_DIMENSION {
-        return (width, height);
-    }
-
-    let scale = PREVIEW_MAX_DIMENSION as f64 / max_dimension as f64;
-    (
-        ((width as f64 * scale).round() as u32).max(1),
-        ((height as f64 * scale).round() as u32).max(1),
-    )
 }
 
 fn file_etag(path: &str) -> String {
@@ -503,17 +470,18 @@ fn source_url_link(url: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{render_title_markdown_links, scaled_dimensions};
+    use super::render_title_markdown_links;
+    use crate::image_processing::scaled_preview_dimensions;
 
     #[test]
     fn leaves_small_preview_dimensions_unchanged() {
-        assert_eq!(scaled_dimensions(800, 600), (800, 600));
+        assert_eq!(scaled_preview_dimensions(800, 600), (800, 600));
     }
 
     #[test]
     fn scales_large_preview_dimensions_to_max_1200() {
-        assert_eq!(scaled_dimensions(2400, 1200), (1200, 600));
-        assert_eq!(scaled_dimensions(1000, 2000), (600, 1200));
+        assert_eq!(scaled_preview_dimensions(2400, 1200), (1200, 600));
+        assert_eq!(scaled_preview_dimensions(1000, 2000), (600, 1200));
     }
 
     #[test]

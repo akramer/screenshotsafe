@@ -41,6 +41,8 @@ pub fn cleanup_expired_screenshots(state: &AppState) -> Result<usize> {
         remove_screenshot_file(&original_path);
         if let Some(path) = rendered_path {
             remove_screenshot_file(&path);
+            let preview_path = image_processing::preview_path_for_rendered_path(&path);
+            remove_screenshot_file(&preview_path.to_string_lossy());
         }
     }
 

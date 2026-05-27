@@ -811,15 +811,21 @@ mod tests {
     #[tokio::test]
     async fn test_upload_screenshot() {
         let dir = tempfile::tempdir().unwrap();
-        let (app, _state) = test_app(dir.path());
+        let (app, state) = test_app(dir.path());
 
         let cookie = setup_user(&app).await;
         let body = upload_screenshot(&app, &cookie).await;
+        let id: uuid::Uuid = body["id"].as_str().unwrap().parse().unwrap();
 
         assert!(body["id"].is_string());
         assert!(body["share_id"].is_string());
         assert!(body["share_url"].as_str().unwrap().contains("/s/"));
         assert!(body["raw_url"].as_str().unwrap().ends_with(".png"));
+
+        let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
+        let rendered_path = screenshot.rendered_path.unwrap();
+        let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
+        assert!(preview_path.exists());
     }
 
     #[tokio::test]
@@ -1108,11 +1114,16 @@ mod tests {
     #[tokio::test]
     async fn test_share_preview_image() {
         let dir = tempfile::tempdir().unwrap();
-        let (app, _state) = test_app(dir.path());
+        let (app, state) = test_app(dir.path());
 
         let cookie = setup_user(&app).await;
         let upload_body = upload_screenshot(&app, &cookie).await;
+        let id: uuid::Uuid = upload_body["id"].as_str().unwrap().parse().unwrap();
         let share_id = upload_body["share_id"].as_str().unwrap();
+        let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
+        let rendered_path = screenshot.rendered_path.unwrap();
+        let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
+        assert!(preview_path.exists());
 
         let req = axum::http::Request::builder()
             .method("GET")
@@ -1127,6 +1138,22 @@ mod tests {
             "image/png"
         );
 
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let image = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((image.width(), image.height()), (100, 100));
+
+        std::fs::remove_file(&preview_path).unwrap();
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/s/{}.preview.png", share_id))
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
         let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
             .await
             .unwrap();
@@ -1152,12 +1179,17 @@ mod tests {
     #[tokio::test]
     async fn test_delete_screenshot() {
         let dir = tempfile::tempdir().unwrap();
-        let (app, _state) = test_app(dir.path());
+        let (app, state) = test_app(dir.path());
 
         let cookie = setup_user(&app).await;
         let upload_body = upload_screenshot(&app, &cookie).await;
         let id = upload_body["id"].as_str().unwrap();
+        let parsed_id: uuid::Uuid = id.parse().unwrap();
         let share_id = upload_body["share_id"].as_str().unwrap();
+        let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
+        let rendered_path = screenshot.rendered_path.unwrap();
+        let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
+        assert!(preview_path.exists());
 
         // Delete
         let req = axum::http::Request::builder()
@@ -1169,6 +1201,7 @@ mod tests {
 
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+        assert!(!preview_path.exists());
 
         // Should no longer be accessible
         let req = axum::http::Request::builder()
@@ -1193,8 +1226,10 @@ mod tests {
         let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
         let original_path = screenshot.original_path.clone();
         let rendered_path = screenshot.rendered_path.clone().unwrap();
+        let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
         assert!(std::path::Path::new(&original_path).exists());
         assert!(std::path::Path::new(&rendered_path).exists());
+        assert!(preview_path.exists());
 
         state
             .db
@@ -1212,6 +1247,7 @@ mod tests {
         assert_eq!(deleted, 1);
         assert!(!std::path::Path::new(&original_path).exists());
         assert!(!std::path::Path::new(&rendered_path).exists());
+        assert!(!preview_path.exists());
         assert!(state.db.get_screenshot_by_id(&id).unwrap().is_none());
 
         let req = axum::http::Request::builder()
@@ -1348,11 +1384,16 @@ mod tests {
     #[tokio::test]
     async fn test_save_annotations() {
         let dir = tempfile::tempdir().unwrap();
-        let (app, _state) = test_app(dir.path());
+        let (app, state) = test_app(dir.path());
 
         let cookie = setup_user(&app).await;
         let upload_body = upload_screenshot(&app, &cookie).await;
         let id = upload_body["id"].as_str().unwrap();
+        let parsed_id: uuid::Uuid = id.parse().unwrap();
+        let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
+        let rendered_path = screenshot.rendered_path.unwrap();
+        let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
+        std::fs::remove_file(&preview_path).unwrap();
 
         // Save annotations
         let req = axum::http::Request::builder()
@@ -1376,6 +1417,7 @@ mod tests {
         let body = body_json(resp).await;
         assert_eq!(body["ok"], true);
         assert!(body["rendered_url"].as_str().unwrap().ends_with(".png"));
+        assert!(preview_path.exists());
     }
 
     // ── Page redirect tests ──
@@ -1422,5 +1464,33 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::SEE_OTHER);
         assert_eq!(resp.headers().get(header::LOCATION).unwrap(), "/login");
+    }
+
+    #[tokio::test]
+    async fn test_dashboard_uses_preview_images() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let upload_body = upload_screenshot(&app, &cookie).await;
+        let share_id = upload_body["share_id"].as_str().unwrap();
+
+        let req = authed_request("GET", "/", &cookie);
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let html = String::from_utf8(body.to_vec()).unwrap();
+
+        assert!(html.contains(&format!(
+            r#"<img src="http://localhost:8080/s/{}.preview.png""#,
+            share_id
+        )));
+        assert!(html.contains(&format!(
+            r#"data-url="http://localhost:8080/s/{}""#,
+            share_id
+        )));
     }
 }

@@ -876,6 +876,8 @@ pub async fn admin_delete_user(
         remove_file_if_present(&original_path);
         if let Some(path) = rendered_path {
             remove_file_if_present(&path);
+            let preview_path = image_processing::preview_path_for_rendered_path(&path);
+            remove_file_if_present(&preview_path.to_string_lossy());
         }
     }
 
@@ -892,6 +894,14 @@ fn remove_file_if_present(path: &str) {
             err
         ),
     }
+}
+
+fn bake_preview_for_rendered(rendered_path: &std::path::Path) -> crate::Result<()> {
+    let preview_path = image_processing::preview_path_for_rendered(rendered_path);
+    image_processing::render_preview_image(
+        &rendered_path.to_string_lossy(),
+        &preview_path.to_string_lossy(),
+    )
 }
 
 // ── Logout ──
@@ -1061,6 +1071,7 @@ pub async fn upload_screenshot(
         .rendered_path()
         .join(format!("{}.png", sid));
     std::fs::write(&rendered_path, &image_data)?;
+    bake_preview_for_rendered(&rendered_path)?;
 
     let created_at = Utc::now();
 
@@ -1430,6 +1441,7 @@ pub async fn update_screenshot(
             &screenshot.crop_rect,
             image_dpi,
         )?;
+        bake_preview_for_rendered(&rendered_path)?;
 
         state
             .db
@@ -1459,6 +1471,7 @@ pub async fn delete_screenshot(
     let _ = std::fs::remove_file(&screenshot.original_path);
     if let Some(rp) = &screenshot.rendered_path {
         let _ = std::fs::remove_file(rp);
+        let _ = std::fs::remove_file(image_processing::preview_path_for_rendered_path(rp));
     }
 
     state.db.delete_screenshot(&id)?;
@@ -1511,6 +1524,7 @@ pub async fn save_annotations(
         &req.crop,
         screenshot.image_dpi,
     )?;
+    bake_preview_for_rendered(&rendered_path)?;
 
     state
         .db

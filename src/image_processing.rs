@@ -1,7 +1,10 @@
 use image::{GenericImageView, RgbaImage};
-use std::path::Path;
+use std::io::Cursor;
+use std::path::{Path, PathBuf};
 
 use crate::models::{Annotation, CropRect};
+
+pub const PREVIEW_MAX_DIMENSION: u32 = 1200;
 
 /// Render a screenshot with annotations burned in.
 ///
@@ -44,6 +47,72 @@ pub fn render_screenshot(
 
     canvas.save(output_path)?;
     Ok(())
+}
+
+/// Render the chat/social preview PNG for an already-rendered screenshot.
+pub fn render_preview_image(rendered_path: &str, preview_path: &str) -> crate::Result<()> {
+    let data = preview_png_bytes(rendered_path)?;
+    if let Some(parent) = Path::new(preview_path).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(preview_path, data)?;
+    Ok(())
+}
+
+/// Return preview PNG bytes, scaling down only when a dimension exceeds 1200px.
+pub fn preview_png_bytes(rendered_path: &str) -> crate::Result<Vec<u8>> {
+    let img = image::open(rendered_path)?;
+    let (width, height) = img.dimensions();
+    let (preview_width, preview_height) = scaled_preview_dimensions(width, height);
+
+    if (preview_width, preview_height) == (width, height) {
+        return Ok(std::fs::read(rendered_path)?);
+    }
+
+    let resized = img.resize(
+        preview_width,
+        preview_height,
+        image::imageops::FilterType::Lanczos3,
+    );
+    let mut data = Vec::new();
+    resized.write_to(&mut Cursor::new(&mut data), image::ImageFormat::Png)?;
+    Ok(data)
+}
+
+pub fn preview_dimensions(rendered_path: &str) -> crate::Result<(u32, u32)> {
+    let (width, height) = image::image_dimensions(rendered_path)?;
+    Ok(scaled_preview_dimensions(width, height))
+}
+
+pub fn scaled_preview_dimensions(width: u32, height: u32) -> (u32, u32) {
+    let max_dimension = width.max(height);
+    if max_dimension <= PREVIEW_MAX_DIMENSION {
+        return (width, height);
+    }
+
+    let scale = PREVIEW_MAX_DIMENSION as f64 / max_dimension as f64;
+    (
+        ((width as f64 * scale).round() as u32).max(1),
+        ((height as f64 * scale).round() as u32).max(1),
+    )
+}
+
+pub fn preview_path_for_rendered_path(rendered_path: &str) -> PathBuf {
+    preview_path_for_rendered(Path::new(rendered_path))
+}
+
+pub fn preview_path_for_rendered(rendered_path: &Path) -> PathBuf {
+    let file_name = rendered_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("preview.png");
+
+    let preview_name = file_name
+        .strip_suffix(".png")
+        .map(|stem| format!("{stem}.preview.png"))
+        .unwrap_or_else(|| format!("{file_name}.preview.png"));
+
+    rendered_path.with_file_name(preview_name)
 }
 
 /// Build an SVG document string from a list of annotations.
