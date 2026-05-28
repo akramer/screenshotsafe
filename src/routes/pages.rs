@@ -9,6 +9,34 @@ use crate::auth::middleware::{AdminUser, AuthUser, MaybeAuthUser};
 use crate::{AppError, SharedState};
 
 const FAVICON_LINK: &str = r#"<link rel="icon" type="image/x-icon" href="/favicon.ico">"#;
+const LOCAL_TIME_SCRIPT: &str = r#"<script>
+        (() => {
+            const formats = {
+                date: { month: 'short', day: 'numeric', year: 'numeric' },
+                datetime: {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    timeZoneName: 'short'
+                },
+                'long-date': { month: 'long', day: 'numeric', year: 'numeric' }
+            };
+
+            document.querySelectorAll('[data-local-time]').forEach((el) => {
+                const value = el.getAttribute('datetime') || el.dataset.datetime;
+                if (!value) return;
+
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) return;
+
+                const options = formats[el.dataset.localFormat] || formats.datetime;
+                const formatted = new Intl.DateTimeFormat(undefined, options).format(date);
+                el.textContent = `${el.dataset.localPrefix || ''}${formatted}${el.dataset.localSuffix || ''}`;
+            });
+        })();
+    </script>"#;
 
 /// Dashboard page — lists all screenshots for the logged-in user.
 /// Redirects to /setup if no users exist, or /login if not authenticated.
@@ -52,7 +80,10 @@ pub async fn dashboard(
                 let preview_url = format!("/api/screenshots/{}/preview", s.id);
                 let expired_class = if s.is_expired() { " expired" } else { "" };
                 let expires_info = s.expires_at
-                    .map(|e| format!("<span class=\"meta-item\">Expires: {}</span>", e.format("%b %d, %Y")))
+                    .map(|e| format!(
+                        "<span class=\"meta-item\">Expires: {}</span>",
+                        local_time(e, "date", "%b %d, %Y")
+                    ))
                     .unwrap_or_default();
                 format!(
                     r#"<div class="screenshot-card{}">
@@ -77,7 +108,7 @@ pub async fn dashboard(
                     preview_url,
                     html_escape(title),
                     html_escape(title),
-                    s.created_at.format("%b %d, %Y %H:%M"),
+                    local_time(s.created_at, "datetime", "%b %d, %Y %H:%M UTC"),
                     expires_info,
                     share_url,
                     share_url,
@@ -116,6 +147,7 @@ pub async fn dashboard(
             {screenshot_cards}
         </div>
     </main>
+    {local_time_script}
     <script>
         document.getElementById('logout-btn')?.addEventListener('click', async () => {{
             await fetch('/api/auth/logout', {{ method: 'POST' }});
@@ -144,6 +176,7 @@ pub async fn dashboard(
         display_name = html_escape(&user.display_name),
         admin_link = admin_link,
         screenshot_cards = screenshot_cards,
+        local_time_script = LOCAL_TIME_SCRIPT,
     );
 
     Ok(Html(html).into_response())
@@ -381,6 +414,10 @@ pub async fn editor_page(
         .expires_at
         .map(|d| format!("Keep current ({})", d.format("%b %d, %Y %H:%M UTC")))
         .unwrap_or_else(|| "Keep current (never)".to_string());
+    let expiration_keep_datetime = screenshot
+        .expires_at
+        .map(|d| d.to_rfc3339())
+        .unwrap_or_default();
     let expires_never_selected = if screenshot.expires_at.is_none() {
         "selected"
     } else {
@@ -439,6 +476,7 @@ pub async fn editor_page(
             "{{EXPIRATION_KEEP_LABEL}}",
             &html_escape(&expiration_keep_label),
         )
+        .replace("{{EXPIRATION_KEEP_DATETIME}}", &expiration_keep_datetime)
         .replace("{{EXPIRES_NEVER_SELECTED}}", expires_never_selected)
         .replace("{{SHARE_URL}}", &share_url)
         .replace("{{RAW_URL}}", &raw_url)
@@ -572,7 +610,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
             <div class="form-group">
                 <label for="screenshot-expires-in">Expires</label>
                 <select id="screenshot-expires-in">
-                    <option value="">{{EXPIRATION_KEEP_LABEL}}</option>
+                    <option value="" data-local-time data-local-format="datetime" data-local-prefix="Keep current (" data-local-suffix=")" data-datetime="{{EXPIRATION_KEEP_DATETIME}}">{{EXPIRATION_KEEP_LABEL}}</option>
                     <option value="never" {{EXPIRES_NEVER_SELECTED}}>Never</option>
                     <option value="1h">In 1 hour</option>
                     <option value="24h">In 24 hours</option>
@@ -597,6 +635,32 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
         </div>
     </main>
     <script src="/static/js/fabric.min.js"></script>
+    <script>
+        (() => {
+            const formats = {
+                datetime: {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    timeZoneName: 'short'
+                }
+            };
+
+            document.querySelectorAll('[data-local-time]').forEach((el) => {
+                const value = el.getAttribute('datetime') || el.dataset.datetime;
+                if (!value) return;
+
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) return;
+
+                const options = formats[el.dataset.localFormat] || formats.datetime;
+                const formatted = new Intl.DateTimeFormat(undefined, options).format(date);
+                el.textContent = `${el.dataset.localPrefix || ''}${formatted}${el.dataset.localSuffix || ''}`;
+            });
+        })();
+    </script>
     <script>
         window.SCREENSHOT_ID = "{{ID}}";
         window.ORIGINAL_IMAGE_URL = "/api/screenshots/{{ID}}/original";
@@ -625,7 +689,7 @@ pub async fn settings_page(
             .map(|t| {
                 let last_used = t
                     .last_used_at
-                    .map(|d| d.format("%b %d, %Y %H:%M").to_string())
+                    .map(|d| local_time(d, "datetime", "%b %d, %Y %H:%M UTC"))
                     .unwrap_or_else(|| "Never".to_string());
                 format!(
                     r#"<tr>
@@ -635,7 +699,7 @@ pub async fn settings_page(
                         <td><button class="btn btn-sm btn-danger revoke-btn" data-id="{}">Revoke</button></td>
                     </tr>"#,
                     html_escape(&t.label),
-                    t.created_at.format("%b %d, %Y"),
+                    local_time(t.created_at, "date", "%b %d, %Y"),
                     last_used,
                     t.id,
                 )
@@ -677,7 +741,7 @@ pub async fn settings_page(
                 .map(|identity| {
                     let last_login = identity
                         .last_login_at
-                        .map(|d| d.format("%b %d, %Y %H:%M").to_string())
+                        .map(|d| local_time(d, "datetime", "%b %d, %Y %H:%M UTC"))
                         .unwrap_or_else(|| "Never".to_string());
                     format!(
                         r#"<tr>
@@ -689,7 +753,7 @@ pub async fn settings_page(
                         </tr>"#,
                         html_escape(&identity.provider),
                         html_escape(identity.email.as_deref().unwrap_or(&identity.subject)),
-                        identity.created_at.format("%b %d, %Y"),
+                        local_time(identity.created_at, "date", "%b %d, %Y"),
                         last_login,
                         identity.id,
                     )
@@ -795,6 +859,7 @@ pub async fn settings_page(
             </table>
         </section>
     </main>
+    {local_time_script}
     <script>
         const passwordForm = document.getElementById('password-form');
         const passwordMessage = document.getElementById('password-message');
@@ -863,7 +928,7 @@ pub async fn settings_page(
                 if (emptyCell) emptyCell.closest('tr').remove();
 
                 const tr = document.createElement('tr');
-                const created = new Date(data.created_at).toLocaleDateString('en-US', {{ month: 'short', day: 'numeric', year: 'numeric' }});
+                const created = new Date(data.created_at).toLocaleDateString(undefined, {{ month: 'short', day: 'numeric', year: 'numeric' }});
                 tr.innerHTML = `<td>${{data.label || ''}}</td><td>${{created}}</td><td>Never</td><td><button class="btn btn-sm btn-danger revoke-btn" data-id="${{data.id}}">Revoke</button></td>`;
                 tbody.prepend(tr);
                 tr.querySelector('.revoke-btn').addEventListener('click', async () => {{
@@ -913,6 +978,7 @@ pub async fn settings_page(
         favicon = FAVICON_LINK,
         token_rows = token_rows,
         oauth_section = oauth_section,
+        local_time_script = LOCAL_TIME_SCRIPT,
     );
 
     Ok(Html(html).into_response())
@@ -969,7 +1035,7 @@ pub async fn admin_page(
                 if user.is_admin { " role-pill-admin" } else { "" },
                 role,
                 status,
-                user.created_at.format("%b %d, %Y"),
+                local_time(user.created_at, "date", "%b %d, %Y"),
                 user.id,
                 status_button,
                 delete_button,
@@ -1046,6 +1112,7 @@ pub async fn admin_page(
             </table>
         </section>
     </main>
+    {local_time_script}
     <script>
         const form = document.getElementById('user-form');
         const message = document.getElementById('user-message');
@@ -1122,6 +1189,7 @@ pub async fn admin_page(
 </html>"#,
         favicon = FAVICON_LINK,
         user_rows = user_rows,
+        local_time_script = LOCAL_TIME_SCRIPT,
     );
 
     Ok(Html(html).into_response())
@@ -1221,6 +1289,7 @@ pub async fn admin_edit_user_page(
             </form>
         </section>
     </main>
+    {local_time_script}
     <script>
         const userId = "{id}";
         const message = document.getElementById('user-message');
@@ -1315,7 +1384,8 @@ pub async fn admin_edit_user_page(
         } else {
             ""
         },
-        created_at = user.created_at.format("%b %d, %Y"),
+        created_at = local_time(user.created_at, "date", "%b %d, %Y"),
+        local_time_script = LOCAL_TIME_SCRIPT,
         size_limit = size_limit,
         expiry_limit = expiry_limit,
         server_size = state.config.server.max_screenshot_size_bytes,
@@ -1331,6 +1401,19 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#x27;")
+}
+
+fn local_time(
+    datetime: chrono::DateTime<chrono::Utc>,
+    local_format: &str,
+    fallback_format: &str,
+) -> String {
+    format!(
+        r#"<time datetime="{}" data-local-time data-local-format="{}">{}</time>"#,
+        datetime.to_rfc3339(),
+        html_escape(local_format),
+        html_escape(&datetime.format(fallback_format).to_string()),
+    )
 }
 
 fn is_safe_external_url(url: &str) -> bool {

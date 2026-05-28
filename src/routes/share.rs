@@ -6,6 +6,26 @@ use axum::{
 
 use crate::{image_processing, AppError, SharedState};
 
+const LOCAL_TIME_SCRIPT: &str = r#"<script>
+        (() => {
+            const formats = {
+                'long-date': { month: 'long', day: 'numeric', year: 'numeric' }
+            };
+
+            document.querySelectorAll('[data-local-time]').forEach((el) => {
+                const value = el.getAttribute('datetime') || el.dataset.datetime;
+                if (!value) return;
+
+                const date = new Date(value);
+                if (Number.isNaN(date.getTime())) return;
+
+                const options = formats[el.dataset.localFormat] || formats['long-date'];
+                const formatted = new Intl.DateTimeFormat(undefined, options).format(date);
+                el.textContent = `${el.dataset.localPrefix || ''}${formatted}${el.dataset.localSuffix || ''}`;
+            });
+        })();
+    </script>"#;
+
 /// Dispatch handler: routes /s/{id}.preview.png to preview image,
 /// /s/{id}.png to full image, /s/{id} to share page.
 pub async fn share_dispatch(
@@ -60,10 +80,10 @@ pub async fn share_page(
             .as_deref()
             .ok_or(AppError::NotFound)?,
     )?;
-    let created = screenshot.created_at.format("%B %d, %Y").to_string();
+    let created = local_time(screenshot.created_at, "long-date", "%B %d, %Y");
     let expires_info = screenshot
         .expires_at
-        .map(|e| format!("Expires {}", e.format("%B %d, %Y")))
+        .map(|e| format!("Expires {}", local_time(e, "long-date", "%B %d, %Y")))
         .unwrap_or_else(|| "Does not expire".to_string());
     let title_html = render_title_markdown_links(&title);
     let source_link = screenshot
@@ -244,6 +264,7 @@ pub async fn share_page(
     <footer class="share-footer">
         Powered by <a href="https://github.com/akramer/screenshotsafe">ScreenshotSafe</a>
     </footer>
+    {local_time_script}
     <script>
         const setButtonStatus = (button, text, status) => {{
             const original = button.dataset.label || button.textContent;
@@ -300,6 +321,7 @@ pub async fn share_page(
         created = created,
         expires_info = expires_info,
         source_link = source_link,
+        local_time_script = LOCAL_TIME_SCRIPT,
     );
 
     Ok(Html(html))
@@ -408,6 +430,19 @@ fn html_escape(s: &str) -> String {
         .replace('>', "&gt;")
         .replace('"', "&quot;")
         .replace('\'', "&#x27;")
+}
+
+fn local_time(
+    datetime: chrono::DateTime<chrono::Utc>,
+    local_format: &str,
+    fallback_format: &str,
+) -> String {
+    format!(
+        r#"<time datetime="{}" data-local-time data-local-format="{}">{}</time>"#,
+        datetime.to_rfc3339(),
+        html_escape(local_format),
+        html_escape(&datetime.format(fallback_format).to_string()),
+    )
 }
 
 fn render_title_markdown_links(input: &str) -> String {
