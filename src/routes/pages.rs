@@ -266,7 +266,7 @@ pub async fn login_page(
     };
     let extension_message = match params.get("extension").map(String::as_str) {
         Some("login_required") => {
-            r#"<div class="settings-message">Extension not able to access ScreenshotSafe. Please log in and try again.</div>"#
+            r#"<div class="settings-message settings-message-error auth-message">Extension not able to access ScreenshotSafe. Please log in and try again.</div>"#
                 .to_string()
         }
         _ => String::new(),
@@ -291,13 +291,13 @@ pub async fn login_page(
 </head>
 <body>
     <div class="auth-container">
+        {{EXTENSION_MESSAGE}}
         <div class="auth-card">
             <div class="auth-header">
                 <h1>📸 ScreenshotSafe</h1>
                 <p>Sign in to manage your screenshots.</p>
             </div>
             {{OAUTH_MESSAGE}}
-            {{EXTENSION_MESSAGE}}
             <form id="login-form">
                 <div class="form-group">
                     <label for="username">Username</label>
