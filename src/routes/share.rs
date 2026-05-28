@@ -151,8 +151,12 @@ pub async fn share_page(
         }}
         .share-meta {{
             margin-top: 0.5rem;
-            font-size: 0.85rem;
+            font-size: 0.78rem;
+            line-height: 1.3;
             color: #888;
+        }}
+        .share-meta time {{
+            white-space: nowrap;
         }}
         .share-meta a {{
             color: #8ea8ff;

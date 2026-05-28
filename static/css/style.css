@@ -304,11 +304,22 @@ body {
 }
 
 .card-meta {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
+    line-height: 1.25;
     color: var(--text-muted);
     margin-bottom: 0.75rem;
     display: flex;
-    gap: 1rem;
+    gap: 0.65rem;
+    min-width: 0;
+}
+
+.meta-item,
+[data-local-time] {
+    white-space: nowrap;
+}
+
+.card-meta .meta-item {
+    min-width: 0;
 }
 
 .card-actions {
