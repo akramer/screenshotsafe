@@ -89,6 +89,8 @@
                 throw new Error('ScreenshotSafe is not configured. Save your server domain in the extension settings.');
             }
 
+            await redirectToLoginIfNeeded();
+
             const response = await ext.runtime.sendMessage({ type: 'sss-get-draft', id });
             if (!response || !response.ok) {
                 throw new Error(response && response.error ? response.error : 'Could not load screenshot draft.');
@@ -171,6 +173,24 @@
         }
 
         return resp.json();
+    }
+
+    async function redirectToLoginIfNeeded() {
+        try {
+            const resp = await fetch(`${settings.serverUrl}/api/ping`, {
+                cache: 'no-store',
+                mode: 'cors',
+                credentials: 'include',
+            });
+
+            if (resp.ok) {
+                return;
+            }
+        } catch (_) {
+            // A blocked CORS/cookie request looks like a failed fetch here.
+        }
+
+        window.location.href = `${settings.serverUrl}/login?extension=login_required`;
     }
 
     async function renderEditedBlob() {

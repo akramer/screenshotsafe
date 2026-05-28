@@ -103,12 +103,6 @@ async function captureAndOpenEditor(tab) {
         return;
     }
 
-    const validation = await validateSettings(settings);
-    if (!validation.ok) {
-        await handleLoginRequired(settings, validation.reason, activeTab);
-        return;
-    }
-
     if (!activeTab || !activeTab.id) {
         throw new Error('No active tab found');
     }
@@ -138,28 +132,6 @@ function captureAfterDelay(tab, delayMs) {
             openSettings('capture-error');
         });
     }, delayMs);
-}
-
-async function validateSettings(settings) {
-    try {
-        const resp = await fetch(`${settings.serverUrl}/api/ping`, {
-            cache: 'no-store',
-            mode: 'cors',
-            credentials: 'include',
-        });
-
-        if (resp.ok) {
-            return { ok: true };
-        }
-
-        if (resp.status === 401) {
-            return { ok: false, reason: 'login-required' };
-        }
-
-        return { ok: false, reason: 'server-error' };
-    } catch (_) {
-        return { ok: false, reason: 'cannot-reach-server' };
-    }
 }
 
 async function getSettings() {

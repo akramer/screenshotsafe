@@ -87,6 +87,14 @@ mod tests {
         serde_json::from_slice(&bytes).unwrap()
     }
 
+    /// Helper: get response body as text.
+    async fn body_text(response: axum::http::Response<Body>) -> String {
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        String::from_utf8(bytes.to_vec()).unwrap()
+    }
+
     /// Helper: extract session cookie from response.
     fn extract_session_cookie(response: &axum::http::Response<Body>) -> Option<String> {
         response
@@ -216,6 +224,34 @@ mod tests {
 
         let cookie = extract_session_cookie(&resp);
         assert!(cookie.is_some(), "Login should set session cookie");
+    }
+
+    #[tokio::test]
+    async fn test_login_page_shows_extension_login_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
+        app.clone().oneshot(req).await.unwrap();
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/login?extension=login_required")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let body = body_text(resp).await;
+        assert!(body.contains("Extension not able to access ScreenshotSafe"));
     }
 
     #[tokio::test]

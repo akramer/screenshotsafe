@@ -264,6 +264,13 @@ pub async fn login_page(
         }
         _ => String::new(),
     };
+    let extension_message = match params.get("extension").map(String::as_str) {
+        Some("login_required") => {
+            r#"<div class="settings-message">Extension not able to access ScreenshotSafe. Please log in and try again.</div>"#
+                .to_string()
+        }
+        _ => String::new(),
+    };
     let oauth_button = if state.config.auth.oauth.enabled {
         format!(
             r#"<a class="btn btn-outline btn-full oauth-login-btn" href="/api/auth/oauth/start">Sign in with {}</a>"#,
@@ -290,6 +297,7 @@ pub async fn login_page(
                 <p>Sign in to manage your screenshots.</p>
             </div>
             {{OAUTH_MESSAGE}}
+            {{EXTENSION_MESSAGE}}
             <form id="login-form">
                 <div class="form-group">
                     <label for="username">Username</label>
@@ -333,6 +341,7 @@ pub async fn login_page(
 </body>
 </html>"#
     .replace("{{OAUTH_MESSAGE}}", &oauth_message)
+    .replace("{{EXTENSION_MESSAGE}}", &extension_message)
     .replace("{{OAUTH_BUTTON}}", &oauth_button);
 
     Ok(Html(html).into_response())
