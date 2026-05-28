@@ -949,22 +949,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cookie_api_auth_allows_configured_extension_origin() {
+    async fn test_cookie_api_auth_allows_safari_extension_origin() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app_with_config(dir.path(), |config| {
             config.server.public_url = "https://screens.example".to_string();
-            config.auth.allowed_extension_origins =
-                vec!["safari-web-extension://ABCDEF".to_string()];
         });
 
+        let origin = "safari-web-extension://d644d2b6-fa70-416c-b57f-79871710eed6";
         let cookie = setup_user(&app).await;
-        let resp = upload_screenshot_response_with_origin(
-            &app,
-            &cookie,
-            &[],
-            Some("safari-web-extension://ABCDEF"),
-        )
-        .await;
+        let resp = upload_screenshot_response_with_origin(&app, &cookie, &[], Some(origin)).await;
 
         assert_eq!(resp.status(), StatusCode::CREATED);
     }
@@ -989,18 +982,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cors_allows_credentials_for_configured_extension_origin() {
+    async fn test_cors_allows_credentials_for_safari_extension_origin() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app_with_config(dir.path(), |config| {
             config.server.public_url = "https://screens.example".to_string();
-            config.auth.allowed_extension_origins =
-                vec!["safari-web-extension://ABCDEF".to_string()];
         });
 
+        let origin = "safari-web-extension://d644d2b6-fa70-416c-b57f-79871710eed6";
         let req = axum::http::Request::builder()
             .method("OPTIONS")
             .uri("/api/ping")
-            .header(header::ORIGIN, "safari-web-extension://ABCDEF")
+            .header(header::ORIGIN, origin)
             .header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
             .header(
                 header::ACCESS_CONTROL_REQUEST_HEADERS,
@@ -1015,7 +1007,7 @@ mod tests {
             resp.headers()
                 .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
                 .and_then(|v| v.to_str().ok()),
-            Some("safari-web-extension://ABCDEF")
+            Some(origin)
         );
         assert_eq!(
             resp.headers()

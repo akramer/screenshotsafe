@@ -105,7 +105,7 @@ pub fn session_origin_allowed(headers: &HeaderMap, state: &SharedState) -> bool 
         return true;
     }
 
-    if origin.starts_with("chrome-extension://") {
+    if origin.starts_with("chrome-extension://") || origin.starts_with("safari-web-extension://") {
         return true;
     }
 
