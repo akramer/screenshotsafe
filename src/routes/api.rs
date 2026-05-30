@@ -6,6 +6,7 @@ use axum::{
 };
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
+use qrcode::{render::svg, QrCode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -1652,6 +1653,7 @@ pub struct CreateTokenRequest {
 
 pub async fn create_token(
     State(state): State<SharedState>,
+    headers: HeaderMap,
     AuthUser(user): AuthUser,
     Json(req): Json<CreateTokenRequest>,
 ) -> crate::Result<impl IntoResponse> {
@@ -1670,12 +1672,28 @@ pub async fn create_token(
 
     state.db.create_api_token(&token)?;
 
+    let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
+    let configure_url = format!(
+        "screenshotsafe://configure?server_url={}&token={}",
+        urlencoding::encode(&base_url),
+        urlencoding::encode(&raw_token)
+    );
+    let configure_qr_svg = QrCode::new(configure_url.as_bytes())
+        .map_err(|e| AppError::Internal(format!("QR code generation failed: {}", e)))?
+        .render::<svg::Color<'_>>()
+        .min_dimensions(220, 220)
+        .dark_color(svg::Color("#0f0f13"))
+        .light_color(svg::Color("#ffffff"))
+        .build();
+
     // Return the raw token only this once — it's stored hashed
     Ok((
         StatusCode::CREATED,
         Json(serde_json::json!({
             "id": token.id,
             "token": raw_token,
+            "configure_url": configure_url,
+            "configure_qr_svg": configure_qr_svg,
             "label": token.label,
             "created_at": token.created_at,
         })),

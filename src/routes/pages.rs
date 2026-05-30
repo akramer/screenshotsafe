@@ -839,10 +839,15 @@ pub async fn settings_page(
                 <button class="btn btn-primary" id="create-token-btn">Create Token</button>
             </div>
             <div id="new-token-display" class="new-token-display" style="display:none">
-                <strong>Your new token (copy it now — it won't be shown again):</strong>
-                <code id="new-token-value"></code>
-                <button class="btn btn-sm" id="copy-token-btn">Copy</button>
-                <a class="btn btn-sm btn-primary" id="open-native-app-btn" href="" style="display:none">Open in ScreenshotSafe</a>
+                <div class="new-token-details">
+                    <strong>Your new token (copy it now — it won't be shown again):</strong>
+                    <code id="new-token-value"></code>
+                    <div class="token-actions">
+                        <button class="btn btn-sm" id="copy-token-btn">Copy Token</button>
+                        <a class="btn btn-sm btn-primary" id="open-native-app-btn" href="" style="display:none">Open in ScreenshotSafe</a>
+                    </div>
+                </div>
+                <div class="token-qr" id="token-qr" aria-label="QR code for ScreenshotSafe iOS setup"></div>
             </div>
             <table class="tokens-table">
                 <thead>
@@ -914,10 +919,13 @@ pub async fn settings_page(
             if (resp.ok) {{
                 const data = await resp.json();
                 document.getElementById('new-token-value').textContent = data.token;
-                const configureUrl = `screenshotsafe://configure?server_url=${{encodeURIComponent(window.location.origin)}}&token=${{encodeURIComponent(data.token)}}`;
+                const configureUrl = data.configure_url || `screenshotsafe://configure?server_url=${{encodeURIComponent(window.location.origin)}}&token=${{encodeURIComponent(data.token)}}`;
                 const openNativeAppBtn = document.getElementById('open-native-app-btn');
                 openNativeAppBtn.href = configureUrl;
                 openNativeAppBtn.style.display = 'inline-flex';
+                const qr = document.getElementById('token-qr');
+                qr.innerHTML = data.configure_qr_svg || '';
+                qr.style.display = data.configure_qr_svg ? 'flex' : 'none';
                 document.getElementById('new-token-display').style.display = 'block';
                 document.getElementById('token-label').value = '';
 
@@ -929,9 +937,21 @@ pub async fn settings_page(
 
                 const tr = document.createElement('tr');
                 const created = new Date(data.created_at).toLocaleDateString(undefined, {{ month: 'short', day: 'numeric', year: 'numeric' }});
-                tr.innerHTML = `<td>${{data.label || ''}}</td><td>${{created}}</td><td>Never</td><td><button class="btn btn-sm btn-danger revoke-btn" data-id="${{data.id}}">Revoke</button></td>`;
+                const labelCell = document.createElement('td');
+                labelCell.textContent = data.label || '';
+                const createdCell = document.createElement('td');
+                createdCell.textContent = created;
+                const lastUsedCell = document.createElement('td');
+                lastUsedCell.textContent = 'Never';
+                const actionsCell = document.createElement('td');
+                const revokeButton = document.createElement('button');
+                revokeButton.className = 'btn btn-sm btn-danger revoke-btn';
+                revokeButton.dataset.id = data.id;
+                revokeButton.textContent = 'Revoke';
+                actionsCell.append(revokeButton);
+                tr.append(labelCell, createdCell, lastUsedCell, actionsCell);
                 tbody.prepend(tr);
-                tr.querySelector('.revoke-btn').addEventListener('click', async () => {{
+                revokeButton.addEventListener('click', async () => {{
                     if (!confirm('Revoke this token?')) return;
                     const r = await fetch(`/api/auth/tokens/${{data.id}}`, {{ method: 'DELETE' }});
                     if (r.ok) window.location.reload();
@@ -944,7 +964,7 @@ pub async fn settings_page(
             navigator.clipboard.writeText(token);
             const btn = document.getElementById('copy-token-btn');
             btn.textContent = 'Copied!';
-            setTimeout(() => btn.textContent = 'Copy', 2000);
+            setTimeout(() => btn.textContent = 'Copy Token', 2000);
         }});
 
         document.querySelectorAll('.disconnect-oauth-btn').forEach(btn => {{

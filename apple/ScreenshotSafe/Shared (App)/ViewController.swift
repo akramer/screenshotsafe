@@ -8,6 +8,7 @@
 import WebKit
 
 #if os(iOS)
+import AVFoundation
 import UIKit
 typealias PlatformViewController = UIViewController
 #elseif os(macOS)
@@ -121,10 +122,15 @@ private extension ViewController {
     }
 
     func buildIOSSettingsView() {
+        let root = UIView()
+        root.backgroundColor = .systemBackground
+
         let scrollView = UIScrollView()
         scrollView.backgroundColor = .systemBackground
         scrollView.keyboardDismissMode = .interactive
-        view = scrollView
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(scrollView)
+        view = root
 
         let content = UIStackView()
         content.axis = .vertical
@@ -148,6 +154,12 @@ private extension ViewController {
         configureTextField(apiTokenField, placeholder: "API token", keyboardType: .default, secure: true)
         configureExpiryMenu()
 
+        let scanButton = UIButton(type: .system)
+        scanButton.setTitle("Scan Setup QR Code", for: .normal)
+        scanButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+        scanButton.addTarget(self, action: #selector(scanSetupQRCode), for: .touchUpInside)
+        scanButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+
         let saveButton = UIButton(type: .system)
         saveButton.setTitle("Save and Verify", for: .normal)
         saveButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
@@ -164,10 +176,15 @@ private extension ViewController {
         content.addArrangedSubview(fieldStack(label: "Server URL", field: serverURLField))
         content.addArrangedSubview(fieldStack(label: "API Token", field: apiTokenField))
         content.addArrangedSubview(expiryStack())
+        content.addArrangedSubview(scanButton)
         content.addArrangedSubview(saveButton)
         content.addArrangedSubview(statusLabel)
 
         NSLayoutConstraint.activate([
+            scrollView.leadingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: root.safeAreaLayoutGuide.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: root.safeAreaLayoutGuide.bottomAnchor),
             content.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor, constant: 24),
             content.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor, constant: -24),
             content.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor, constant: 32),
@@ -237,6 +254,50 @@ private extension ViewController {
         return label
     }
 
+    @objc func scanSetupQRCode() {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            presentQRCodeScanner()
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    if granted {
+                        self?.presentQRCodeScanner()
+                    } else {
+                        self?.showQRScanError("Camera access is needed to scan setup QR codes.")
+                    }
+                }
+            }
+        default:
+            showQRScanError("Camera access is needed to scan setup QR codes.")
+        }
+    }
+
+    func presentQRCodeScanner() {
+        let scanner = QRCodeScannerViewController()
+        scanner.onCodeScanned = { [weak self] value in
+            self?.handleScannedQRCode(value)
+        }
+        scanner.modalPresentationStyle = .fullScreen
+        present(scanner, animated: true)
+    }
+
+    func handleScannedQRCode(_ value: String) {
+        guard let url = URL(string: value), settingsStore.saveConfiguration(from: url) else {
+            showQRScanError("That QR code is not a ScreenshotSafe setup code.")
+            return
+        }
+
+        loadSettingsIntoForm()
+        statusLabel.text = "Configuration imported from QR code."
+        statusLabel.textColor = .systemGreen
+    }
+
+    func showQRScanError(_ message: String) {
+        statusLabel.text = message
+        statusLabel.textColor = .systemRed
+    }
+
     func loadSettingsIntoForm() {
         let settings = settingsStore.load()
         serverURLField.text = settings.serverURL
@@ -280,6 +341,133 @@ private extension ViewController {
 
     @objc func dismissKeyboard() {
         view.endEditing(true)
+    }
+}
+
+private final class QRCodeScannerViewController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+    var onCodeScanned: ((String) -> Void)?
+
+    private let session = AVCaptureSession()
+    private var previewLayer: AVCaptureVideoPreviewLayer?
+    private let statusLabel = UILabel()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        view.backgroundColor = .black
+        configureScanner()
+        configureOverlay()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        previewLayer?.frame = view.bounds
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        if !session.isRunning {
+            DispatchQueue.global(qos: .userInitiated).async { [session] in
+                session.startRunning()
+            }
+        }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if session.isRunning {
+            session.stopRunning()
+        }
+    }
+
+    private func configureScanner() {
+        guard
+            let device = AVCaptureDevice.default(for: .video),
+            let input = try? AVCaptureDeviceInput(device: device),
+            session.canAddInput(input)
+        else {
+            showScannerUnavailable()
+            return
+        }
+
+        session.addInput(input)
+
+        let output = AVCaptureMetadataOutput()
+        guard session.canAddOutput(output) else {
+            showScannerUnavailable()
+            return
+        }
+
+        session.addOutput(output)
+        output.setMetadataObjectsDelegate(self, queue: .main)
+        output.metadataObjectTypes = [.qr]
+
+        let previewLayer = AVCaptureVideoPreviewLayer(session: session)
+        previewLayer.videoGravity = .resizeAspectFill
+        previewLayer.frame = view.bounds
+        view.layer.insertSublayer(previewLayer, at: 0)
+        self.previewLayer = previewLayer
+    }
+
+    private func configureOverlay() {
+        let cancelButton = UIButton(type: .system)
+        cancelButton.setTitle("Cancel", for: .normal)
+        cancelButton.tintColor = .white
+        cancelButton.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        cancelButton.layer.cornerRadius = 8
+        cancelButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
+        cancelButton.addTarget(self, action: #selector(cancelScan), for: .touchUpInside)
+        cancelButton.translatesAutoresizingMaskIntoConstraints = false
+
+        if statusLabel.text == nil {
+            statusLabel.text = "Scan the ScreenshotSafe setup QR code."
+        }
+        statusLabel.textColor = .white
+        statusLabel.font = .preferredFont(forTextStyle: .headline)
+        statusLabel.adjustsFontForContentSizeCategory = true
+        statusLabel.textAlignment = .center
+        statusLabel.numberOfLines = 0
+        statusLabel.backgroundColor = UIColor.black.withAlphaComponent(0.45)
+        statusLabel.layer.cornerRadius = 8
+        statusLabel.layer.masksToBounds = true
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(cancelButton)
+        view.addSubview(statusLabel)
+
+        NSLayoutConstraint.activate([
+            cancelButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            cancelButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            statusLabel.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 24),
+            statusLabel.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -24),
+            statusLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -32),
+        ])
+    }
+
+    private func showScannerUnavailable() {
+        statusLabel.text = "QR scanning is unavailable on this device."
+    }
+
+    @objc private func cancelScan() {
+        dismiss(animated: true)
+    }
+
+    func metadataOutput(
+        _ output: AVCaptureMetadataOutput,
+        didOutput metadataObjects: [AVMetadataObject],
+        from connection: AVCaptureConnection
+    ) {
+        guard
+            let code = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
+            let value = code.stringValue
+        else {
+            return
+        }
+
+        session.stopRunning()
+        dismiss(animated: true) { [onCodeScanned] in
+            onCodeScanned?(value)
+        }
     }
 }
 #endif
