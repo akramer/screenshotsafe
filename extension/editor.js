@@ -71,9 +71,7 @@
 
     openServerEditorBtn.addEventListener('click', () => {
         if (currentResult) {
-            ext.tabs.create({
-                url: `${settings.serverUrl}/screenshots/${currentResult.id}/edit`,
-            });
+            window.location.replace(`${settings.serverUrl}/screenshots/${currentResult.id}/edit`);
         }
     });
 
