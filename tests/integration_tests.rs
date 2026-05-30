@@ -1583,6 +1583,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_create_api_token_requires_name() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+
+        for body in [
+            serde_json::json!({}),
+            serde_json::json!({ "label": "" }),
+            serde_json::json!({ "label": "   " }),
+        ] {
+            let req = authed_json_request("POST", "/api/auth/tokens", &cookie, body);
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+            let body = body_json(resp).await;
+            assert_eq!(body["error"], "Token name is required.");
+        }
+    }
+
+    #[tokio::test]
     async fn test_revoke_api_token() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app(dir.path());

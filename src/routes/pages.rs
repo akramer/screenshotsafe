@@ -833,18 +833,19 @@ pub async fn settings_page(
 
         <section class="settings-section">
             <h2>API Tokens</h2>
-            <p>Use API tokens to authenticate the Chrome extension or other clients.</p>
+            <p>Use API Tokens to authenticate with apps and other clients.</p>
             <div class="token-create">
                 <input type="text" id="token-label" placeholder="Token label (e.g. Chrome Extension)">
                 <button class="btn btn-primary" id="create-token-btn">Create Token</button>
             </div>
+            <div id="token-message" class="settings-message" style="display:none"></div>
             <div id="new-token-display" class="new-token-display" style="display:none">
                 <div class="new-token-details">
                     <strong>Your new token (copy it now — it won't be shown again):</strong>
                     <code id="new-token-value"></code>
                     <div class="token-actions">
                         <button class="btn btn-sm" id="copy-token-btn">Copy Token</button>
-                        <a class="btn btn-sm btn-primary" id="open-native-app-btn" href="" style="display:none">Open in ScreenshotSafe</a>
+                        <a class="btn btn-sm btn-primary" id="open-native-app-btn" href="" style="display:none">Configure ScreenshotSafe Desktop App</a>
                     </div>
                 </div>
                 <div class="token-qr" id="token-qr" aria-label="QR code for ScreenshotSafe iOS setup"></div>
@@ -868,11 +869,18 @@ pub async fn settings_page(
     <script>
         const passwordForm = document.getElementById('password-form');
         const passwordMessage = document.getElementById('password-message');
+        const tokenMessage = document.getElementById('token-message');
 
         function showPasswordMessage(text, isError) {{
             passwordMessage.textContent = text;
             passwordMessage.className = `settings-message ${{isError ? 'settings-message-error' : 'settings-message-success'}}`;
             passwordMessage.style.display = 'block';
+        }}
+
+        function showTokenMessage(text, isError) {{
+            tokenMessage.textContent = text;
+            tokenMessage.className = `settings-message ${{isError ? 'settings-message-error' : 'settings-message-success'}}`;
+            tokenMessage.style.display = 'block';
         }}
 
         passwordForm.addEventListener('submit', async (event) => {{
@@ -910,13 +918,21 @@ pub async fn settings_page(
         }});
 
         document.getElementById('create-token-btn').addEventListener('click', async () => {{
-            const label = document.getElementById('token-label').value;
+            const labelInput = document.getElementById('token-label');
+            const label = labelInput.value.trim();
+            if (!label) {{
+                showTokenMessage('Token name is required.', true);
+                labelInput.focus();
+                return;
+            }}
+
             const resp = await fetch('/api/auth/tokens', {{
                 method: 'POST',
                 headers: {{ 'Content-Type': 'application/json' }},
                 body: JSON.stringify({{ label }}),
             }});
             if (resp.ok) {{
+                tokenMessage.style.display = 'none';
                 const data = await resp.json();
                 document.getElementById('new-token-value').textContent = data.token;
                 const configureUrl = data.configure_url || `screenshotsafe://configure?server_url=${{encodeURIComponent(window.location.origin)}}&token=${{encodeURIComponent(data.token)}}`;
@@ -956,6 +972,13 @@ pub async fn settings_page(
                     const r = await fetch(`/api/auth/tokens/${{data.id}}`, {{ method: 'DELETE' }});
                     if (r.ok) window.location.reload();
                 }});
+            }} else {{
+                let message = 'Unable to create token.';
+                try {{
+                    const data = await resp.json();
+                    if (data.error) message = data.error;
+                }} catch (_) {{}}
+                showTokenMessage(message, true);
             }}
         }});
 

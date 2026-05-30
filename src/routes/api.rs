@@ -1657,6 +1657,12 @@ pub async fn create_token(
     AuthUser(user): AuthUser,
     Json(req): Json<CreateTokenRequest>,
 ) -> crate::Result<impl IntoResponse> {
+    let label = req
+        .label
+        .map(|label| label.trim().to_string())
+        .filter(|label| !label.is_empty())
+        .ok_or_else(|| AppError::BadRequest("Token name is required.".to_string()))?;
+
     let raw_token = share_id::generate_api_token();
     let token_hash = auth::hash_token(&raw_token);
 
@@ -1664,7 +1670,7 @@ pub async fn create_token(
         id: Uuid::new_v4(),
         user_id: user.id,
         token_hash,
-        label: req.label.unwrap_or_default(),
+        label,
         created_at: Utc::now(),
         last_used_at: None,
         expires_at: None,

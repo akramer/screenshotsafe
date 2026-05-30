@@ -176,6 +176,7 @@ final class ShareViewController: UIViewController {
             filename: filename,
             title: titleField.text ?? "Screenshot",
             sourceURL: nil,
+            imageDPI: UIScreen.main.scale * 100,
             settings: settings
         ) { [weak self] result in
             DispatchQueue.main.async {

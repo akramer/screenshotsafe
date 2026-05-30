@@ -81,6 +81,7 @@ final class ScreenshotSafeUploadClient {
         filename: String,
         title: String,
         sourceURL: String?,
+        imageDPI: Double? = nil,
         settings: ScreenshotSafeSettings,
         completion: @escaping (Result<ScreenshotSafeUploadResult, Error>) -> Void
     ) {
@@ -106,6 +107,7 @@ final class ScreenshotSafeUploadClient {
             filename: filename,
             title: title,
             sourceURL: sourceURL,
+            imageDPI: imageDPI,
             expiresIn: settings.defaultExpiry
         )
         request.setValue(String(body.count), forHTTPHeaderField: "Content-Length")
@@ -150,6 +152,7 @@ final class ScreenshotSafeUploadClient {
         filename: String,
         title: String,
         sourceURL: String?,
+        imageDPI: Double?,
         expiresIn: String
     ) -> Data {
         var body = Data()
@@ -157,7 +160,9 @@ final class ScreenshotSafeUploadClient {
         if let sourceURL = sourceURL, !sourceURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             body.appendField("source_url", value: sourceURL, boundary: boundary)
         }
-        body.appendField("image_dpi", value: "100", boundary: boundary)
+        if let imageDPI = imageDPI, imageDPI.isFinite, imageDPI > 0 {
+            body.appendField("image_dpi", value: Self.formattedDPI(imageDPI), boundary: boundary)
+        }
         if !expiresIn.isEmpty {
             body.appendField("expires_in", value: expiresIn, boundary: boundary)
         }
@@ -176,6 +181,14 @@ final class ScreenshotSafeUploadClient {
         let withoutExtension = (base as NSString).deletingPathExtension
         let safeBase = withoutExtension.isEmpty ? "screenshot" : withoutExtension
         return "\(safeBase).png"
+    }
+
+    private static func formattedDPI(_ dpi: Double) -> String {
+        let clamped = min(max(dpi, 1), 2400)
+        if clamped.rounded() == clamped {
+            return String(Int(clamped))
+        }
+        return String(format: "%.2f", clamped)
     }
 
     private static func serverErrorMessage(from data: Data) -> String? {
