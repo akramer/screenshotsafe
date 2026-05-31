@@ -59,6 +59,20 @@
     border-color: var(--accent);
 }
 
+.tool-btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+}
+
+.tool-btn:disabled:hover {
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.mobile-delete-btn {
+    display: none;
+}
+
 .tool-btn.btn-primary {
     width: auto;
     padding: 0 1rem;
@@ -235,6 +249,10 @@
         height: 44px;
         border-color: var(--border);
         background: rgba(255, 255, 255, 0.02);
+    }
+
+    .mobile-delete-btn {
+        display: inline-flex;
     }
 
     .tool-btn.btn-primary,

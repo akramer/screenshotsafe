@@ -578,6 +578,11 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
             <div class="tool-group editor-actions">
                 <button class="tool-btn" id="undo-btn" title="Undo">↩</button>
                 <button class="tool-btn" id="redo-btn" title="Redo">↪</button>
+                <button class="tool-btn mobile-delete-btn" id="delete-selected-btn" title="Delete selected" aria-label="Delete selected" disabled>
+                    <svg class="tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 4h6M5 7h14M8 7l1 13h6l1-13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
                 <button class="tool-btn" id="reset-btn" title="Reset all">Reset</button>
                 <button class="save-btn-compat" id="save-btn" type="button" hidden aria-hidden="true" tabindex="-1">Save</button>
                 <span class="save-status" id="save-status" aria-live="polite">Saved</span>

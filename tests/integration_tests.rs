@@ -1231,6 +1231,7 @@ mod tests {
         let html = String::from_utf8(bytes.to_vec()).unwrap();
         assert!(html.contains(r#"id="save-status""#));
         assert!(html.contains(r#"id="save-btn""#));
+        assert!(html.contains(r#"id="delete-selected-btn""#));
         assert!(html.contains(r#"/static/css/editor.css?v=touch-editor-1"#));
         assert!(html.contains(r#"/static/js/editor.js?v=touch-editor-1"#));
 
@@ -1240,6 +1241,7 @@ mod tests {
         assert!(editor_css.contains("@media (max-width: 640px)"));
         assert!(editor_css.contains("height: calc(100dvh - 52px);"));
         assert!(editor_css.contains("touch-action: none;"));
+        assert!(editor_css.contains(".mobile-delete-btn"));
 
         let editor_js = std::fs::read_to_string("static/js/editor.js").unwrap();
         assert!(editor_js.contains("const AUTOSAVE_DELAY_MS = 5000;"));
@@ -1249,6 +1251,8 @@ mod tests {
         assert!(editor_js.contains("ResizeObserver"));
         assert!(editor_js.contains("touchstart"));
         assert!(editor_js.contains("getTouchDistance"));
+        assert!(editor_js.contains("function deleteSelectedObjects()"));
+        assert!(editor_js.contains("delete-selected-btn"));
     }
 
     #[tokio::test]

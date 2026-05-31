@@ -584,6 +584,47 @@
         return selectedAnnotationObjects;
     }
 
+    function getDeletableSelection() {
+        const activeObjects = canvas.getActiveObjects();
+        if (activeObjects.length === 1 && activeObjects[0].isHandle) {
+            return activeObjects[0].targetObj ? [activeObjects[0].targetObj] : [];
+        }
+
+        return activeObjects.filter(function(obj) {
+            return obj && (obj.annotationType || obj._isCropIndicator);
+        });
+    }
+
+    function updateDeleteButtonState() {
+        const deleteBtn = document.getElementById('delete-selected-btn');
+        if (!deleteBtn) return;
+        deleteBtn.disabled = getDeletableSelection().length === 0;
+    }
+
+    function deleteSelectedObjects() {
+        const deletable = getDeletableSelection();
+        if (deletable.length === 0) return;
+
+        const activeObject = canvas.getActiveObject();
+        if (activeObject && activeObject.type === 'activeSelection') {
+            canvas.discardActiveObject();
+        }
+
+        clearHandles();
+        deletable.forEach(function(obj) {
+            if (obj._isCropIndicator) {
+                window.CROP_RECT = null;
+            }
+            canvas.remove(obj);
+        });
+
+        selectedAnnotationObjects = [];
+        canvas.discardActiveObject();
+        canvas.requestRenderAll();
+        updateDeleteButtonState();
+        saveUndoState();
+    }
+
     function getLogicalStrokeControlValue(obj) {
         if (!obj) return null;
         if (obj.annotationType === 'arrow' && obj._arrowData) {
@@ -835,6 +876,7 @@
 
         document.getElementById('undo-btn').addEventListener('click', undo);
         document.getElementById('redo-btn').addEventListener('click', redo);
+        document.getElementById('delete-selected-btn').addEventListener('click', deleteSelectedObjects);
         document.getElementById('reset-btn').addEventListener('click', resetAll);
         const legacySaveBtn = document.getElementById('save-btn');
         if (legacySaveBtn) legacySaveBtn.addEventListener('click', flushAutosave);
@@ -915,6 +957,7 @@
         function onSelection() {
             const activeObjs = canvas.getActiveObjects();
             if (activeObjs.length === 1 && activeObjs[0].isHandle) {
+                updateDeleteButtonState();
                 return;
             }
 
@@ -932,6 +975,8 @@
                     setupHandles(obj);
                 }
             }
+
+            updateDeleteButtonState();
         }
 
         canvas.on('selection:created', onSelection);
@@ -1323,6 +1368,7 @@
         });
         window.CROP_RECT = null;
         canvas.renderAll();
+        updateDeleteButtonState();
         saveUndoState();
     }
 
@@ -1530,9 +1576,7 @@
         if (e.key === 'Delete' || e.key === 'Backspace') {
             const active = canvas.getActiveObject();
             if (active && !active.isEditing) {
-                canvas.remove(active);
-                canvas.renderAll();
-                saveUndoState();
+                deleteSelectedObjects();
             }
         }
     });
