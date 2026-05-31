@@ -1231,12 +1231,24 @@ mod tests {
         let html = String::from_utf8(bytes.to_vec()).unwrap();
         assert!(html.contains(r#"id="save-status""#));
         assert!(html.contains(r#"id="save-btn""#));
-        assert!(html.contains(r#"/static/js/editor.js?v=autosave-delay-1"#));
+        assert!(html.contains(r#"/static/css/editor.css?v=touch-editor-1"#));
+        assert!(html.contains(r#"/static/js/editor.js?v=touch-editor-1"#));
+
+        let editor_css = std::fs::read_to_string("static/css/editor.css").unwrap();
+        assert!(editor_css.contains("grid-template-columns: 1fr 300px;"));
+        assert!(editor_css.contains("@media (max-width: 900px)"));
+        assert!(editor_css.contains("@media (max-width: 640px)"));
+        assert!(editor_css.contains("height: calc(100dvh - 52px);"));
+        assert!(editor_css.contains("touch-action: none;"));
 
         let editor_js = std::fs::read_to_string("static/js/editor.js").unwrap();
         assert!(editor_js.contains("const AUTOSAVE_DELAY_MS = 5000;"));
         assert!(editor_js.contains("window.addEventListener('pagehide', flushAutosaveOnPageExit);"));
         assert!(editor_js.contains("keepalive: true"));
+        assert!(editor_js.contains("function setupTouchGestures()"));
+        assert!(editor_js.contains("ResizeObserver"));
+        assert!(editor_js.contains("touchstart"));
+        assert!(editor_js.contains("getTouchDistance"));
     }
 
     #[tokio::test]

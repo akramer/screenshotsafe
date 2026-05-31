@@ -25,6 +25,8 @@
     let saveInFlight = false;
     let saveAgainAfterCurrent = false;
     let lastSavedSnapshot = null;
+    let resizeObserver = null;
+    let touchGesture = null;
     let imageDpi = getImageDpi();
     let visualScale = dpiToVisualScale(imageDpi);
     const AUTOSAVE_DELAY_MS = 5000;
@@ -45,6 +47,35 @@
 
     function dpiToVisualScale(dpi) {
         return Math.max(0.1, Math.min(10, dpi / 100));
+    }
+
+    function isTouchLikeInput() {
+        return window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+    }
+
+    function clampZoom(zoom) {
+        return Math.max(0.05, Math.min(20, zoom));
+    }
+
+    function getCanvasPointFromClient(clientX, clientY) {
+        const rect = canvas.upperCanvasEl.getBoundingClientRect();
+        return {
+            x: clientX - rect.left,
+            y: clientY - rect.top,
+        };
+    }
+
+    function getTouchCenter(touches) {
+        return {
+            clientX: (touches[0].clientX + touches[1].clientX) / 2,
+            clientY: (touches[0].clientY + touches[1].clientY) / 2,
+        };
+    }
+
+    function getTouchDistance(touches) {
+        const dx = touches[0].clientX - touches[1].clientX;
+        const dy = touches[0].clientY - touches[1].clientY;
+        return Math.sqrt(dx * dx + dy * dy);
     }
 
     function isObjectInteractiveInSelectMode(obj) {
@@ -180,12 +211,18 @@
 
     // ── Initialize ──
     function init() {
+        if (isTouchLikeInput()) {
+            fabric.Object.prototype.cornerSize = 18;
+            fabric.Object.prototype.touchCornerSize = 32;
+            fabric.Object.prototype.padding = 4;
+        }
+
         canvas = new fabric.Canvas('editor-canvas', {
             selection: true,
             preserveObjectStacking: true,
             uniformScaling: false,
             uniScaleTransform: false,
-            targetFindTolerance: 15,
+            targetFindTolerance: isTouchLikeInput() ? 28 : 15,
         });
 
         // Load the original image as background
@@ -225,12 +262,7 @@
             saveUndoState({ autosave: false });
             lastSavedSnapshot = getSaveSnapshot();
 
-            window.addEventListener('resize', function() {
-                const wrapper = document.querySelector('.editor-canvas-wrap');
-                canvas.setWidth(wrapper.clientWidth);
-                canvas.setHeight(wrapper.clientHeight);
-                canvas.requestRenderAll();
-            });
+            setupCanvasResize(wrapper);
         }, { crossOrigin: 'anonymous' });
 
         setupToolbar();
@@ -253,6 +285,42 @@
             (wrapper.clientHeight - backgroundImage.height * scale) / 2
         ]);
         canvas.requestRenderAll();
+    }
+
+    function resizeCanvasToWrapper(wrapper) {
+        if (!canvas || !wrapper) return;
+        const width = Math.max(1, Math.floor(wrapper.clientWidth));
+        const height = Math.max(1, Math.floor(wrapper.clientHeight));
+        const previousWidth = canvas.getWidth();
+        const previousHeight = canvas.getHeight();
+
+        if (width === previousWidth && height === previousHeight) return;
+
+        canvas.setWidth(width);
+        canvas.setHeight(height);
+
+        if (!previousWidth || !previousHeight) {
+            zoomToFit();
+        } else {
+            canvas.requestRenderAll();
+        }
+    }
+
+    function setupCanvasResize(wrapper) {
+        const resize = function() {
+            window.requestAnimationFrame(function() {
+                resizeCanvasToWrapper(wrapper);
+            });
+        };
+
+        if (resizeObserver) resizeObserver.disconnect();
+        if ('ResizeObserver' in window) {
+            resizeObserver = new ResizeObserver(resize);
+            resizeObserver.observe(wrapper);
+        }
+
+        window.addEventListener('resize', resize);
+        window.visualViewport?.addEventListener('resize', resize);
     }
 
     // ── Load annotations from JSON into Fabric objects ──
@@ -752,14 +820,12 @@
         });
 
         document.getElementById('zoom-in-btn').addEventListener('click', function() {
-            let zoom = canvas.getZoom() * 1.2;
-            if (zoom > 20) zoom = 20;
+            let zoom = clampZoom(canvas.getZoom() * 1.2);
             canvas.zoomToPoint({ x: canvas.width / 2, y: canvas.height / 2 }, zoom);
         });
 
         document.getElementById('zoom-out-btn').addEventListener('click', function() {
-            let zoom = canvas.getZoom() / 1.2;
-            if (zoom < 0.05) zoom = 0.05;
+            let zoom = clampZoom(canvas.getZoom() / 1.2);
             canvas.zoomToPoint({ x: canvas.width / 2, y: canvas.height / 2 }, zoom);
         });
 
@@ -774,8 +840,78 @@
         if (legacySaveBtn) legacySaveBtn.addEventListener('click', flushAutosave);
     }
 
+    function setupTouchGestures() {
+        if (!isTouchLikeInput() || !canvas.upperCanvasEl) return;
+
+        const element = canvas.upperCanvasEl;
+
+        element.addEventListener('touchstart', function(e) {
+            if (e.touches.length < 2) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (previewObj) {
+                canvas.remove(previewObj);
+                previewObj = null;
+            }
+
+            isDrawing = false;
+            drawStart = null;
+            canvas.isDragging = false;
+            canvas.selection = false;
+
+            const center = getTouchCenter(e.touches);
+            touchGesture = {
+                active: true,
+                startDistance: Math.max(1, getTouchDistance(e.touches)),
+                startZoom: canvas.getZoom(),
+                lastCenter: center,
+            };
+        }, { passive: false });
+
+        element.addEventListener('touchmove', function(e) {
+            if (!touchGesture || !touchGesture.active || e.touches.length < 2) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const center = getTouchCenter(e.touches);
+            const distance = Math.max(1, getTouchDistance(e.touches));
+            const zoom = clampZoom(touchGesture.startZoom * (distance / touchGesture.startDistance));
+            const canvasPoint = getCanvasPointFromClient(center.clientX, center.clientY);
+
+            canvas.zoomToPoint(canvasPoint, zoom);
+
+            const vpt = canvas.viewportTransform;
+            vpt[4] += center.clientX - touchGesture.lastCenter.clientX;
+            vpt[5] += center.clientY - touchGesture.lastCenter.clientY;
+            canvas.setViewportTransform(vpt);
+
+            touchGesture.lastCenter = center;
+            canvas.requestRenderAll();
+        }, { passive: false });
+
+        element.addEventListener('touchend', function(e) {
+            if (!touchGesture || !touchGesture.active || e.touches.length >= 2) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            touchGesture.active = false;
+            canvas.selection = currentTool === 'select';
+        }, { passive: false });
+
+        element.addEventListener('touchcancel', function() {
+            if (!touchGesture) return;
+            touchGesture.active = false;
+            canvas.selection = currentTool === 'select';
+        }, { passive: false });
+    }
+
     // ── Canvas drawing events ──
     function setupCanvasEvents() {
+        setupTouchGestures();
+
         function onSelection() {
             const activeObjs = canvas.getActiveObjects();
             if (activeObjs.length === 1 && activeObjs[0].isHandle) {
@@ -871,10 +1007,7 @@
 
         canvas.on('mouse:wheel', function(opt) {
             let delta = opt.e.deltaY;
-            let zoom = canvas.getZoom();
-            zoom *= 0.999 ** delta;
-            if (zoom > 20) zoom = 20;
-            if (zoom < 0.05) zoom = 0.05;
+            let zoom = clampZoom(canvas.getZoom() * (0.999 ** delta));
             canvas.zoomToPoint({ x: opt.e.offsetX, y: opt.e.offsetY }, zoom);
             opt.e.preventDefault();
             opt.e.stopPropagation();
@@ -882,6 +1015,17 @@
 
         canvas.on('mouse:down', function (opt) {
             const evt = opt.e;
+            if ((evt.touches && evt.touches.length > 1) || (touchGesture && touchGesture.active)) {
+                isDrawing = false;
+                drawStart = null;
+                if (previewObj) {
+                    canvas.remove(previewObj);
+                    previewObj = null;
+                    canvas.requestRenderAll();
+                }
+                return;
+            }
+
             if (evt.altKey === true || evt.button === 1 || evt.button === 2) {
                 canvas.isDragging = true;
                 canvas.selection = false;
@@ -924,6 +1068,8 @@
         });
 
         canvas.on('mouse:move', function (opt) {
+            if (touchGesture && touchGesture.active) return;
+
             if (canvas.isDragging) {
                 const e = opt.e;
                 const vpt = canvas.viewportTransform;
@@ -994,6 +1140,8 @@
         });
 
         canvas.on('mouse:up', function (opt) {
+            if (touchGesture && touchGesture.active) return;
+
             if (canvas.isDragging) {
                 canvas.setViewportTransform(canvas.viewportTransform);
                 canvas.isDragging = false;

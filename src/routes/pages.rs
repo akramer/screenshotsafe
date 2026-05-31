@@ -496,7 +496,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
     <title>Edit — {{TITLE}}</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/editor.css?v=toolbar-icons-1">
+    <link rel="stylesheet" href="/static/css/editor.css?v=touch-editor-1">
 </head>
 <body>
     <nav class="navbar">
@@ -668,7 +668,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
         window.CROP_RECT = {{CROP}};
         window.IMAGE_DPI = {{IMAGE_DPI}};
     </script>
-    <script src="/static/js/editor.js?v=autosave-delay-1"></script>
+    <script src="/static/js/editor.js?v=touch-editor-1"></script>
 </body>
 </html>"##;
 
