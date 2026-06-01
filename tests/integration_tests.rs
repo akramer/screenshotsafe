@@ -1232,8 +1232,8 @@ mod tests {
         assert!(html.contains(r#"id="save-status""#));
         assert!(html.contains(r#"id="save-btn""#));
         assert!(html.contains(r#"id="delete-selected-btn""#));
-        assert!(html.contains(r#"/static/css/editor.css?v=touch-editor-1"#));
-        assert!(html.contains(r#"/static/js/editor.js?v=touch-editor-1"#));
+        assert!(html.contains(r#"/static/css/editor.css?v=touch-editor-2"#));
+        assert!(html.contains(r#"/static/js/editor.js?v=touch-editor-2"#));
 
         let editor_css = std::fs::read_to_string("static/css/editor.css").unwrap();
         assert!(editor_css.contains("grid-template-columns: 1fr 300px;"));
@@ -1244,7 +1244,7 @@ mod tests {
         assert!(editor_css.contains(".mobile-delete-btn"));
 
         let editor_js = std::fs::read_to_string("static/js/editor.js").unwrap();
-        assert!(editor_js.contains("const AUTOSAVE_DELAY_MS = 5000;"));
+        assert!(editor_js.contains("const AUTOSAVE_DELAY_MS = 2000;"));
         assert!(editor_js.contains("window.addEventListener('pagehide', flushAutosaveOnPageExit);"));
         assert!(editor_js.contains("keepalive: true"));
         assert!(editor_js.contains("function setupTouchGestures()"));

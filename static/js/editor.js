@@ -29,7 +29,7 @@
     let touchGesture = null;
     let imageDpi = getImageDpi();
     let visualScale = dpiToVisualScale(imageDpi);
-    const AUTOSAVE_DELAY_MS = 5000;
+    const AUTOSAVE_DELAY_MS = 2000;
     const CROP_STROKE = '#ffcc00';
     const CROP_FILL = 'rgba(255, 204, 0, 0.08)';
 

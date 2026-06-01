@@ -251,10 +251,6 @@
         background: rgba(255, 255, 255, 0.02);
     }
 
-    .mobile-delete-btn {
-        display: inline-flex;
-    }
-
     .tool-btn.btn-primary,
     #reset-btn {
         width: auto;
@@ -310,6 +306,10 @@
 }
 
 @media (hover: none) and (pointer: coarse) {
+    .mobile-delete-btn {
+        display: inline-flex;
+    }
+
     .tool-btn:hover {
         transform: none;
     }
