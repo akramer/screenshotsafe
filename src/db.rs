@@ -192,11 +192,8 @@ impl Database {
              FROM users ORDER BY created_at ASC",
         )?;
         let rows = stmt.query_map([], Self::user_from_row)?;
-        let mut users = Vec::new();
-        for row in rows {
-            users.push(row?);
-        }
-        Ok(users)
+        let users: std::result::Result<Vec<_>, _> = rows.collect();
+        Ok(users?)
     }
 
     pub fn get_user_by_username(&self, username: &str) -> Result<Option<User>> {
@@ -292,11 +289,8 @@ impl Database {
              FROM oauth_identities WHERE user_id = ?1 ORDER BY created_at ASC",
         )?;
         let rows = stmt.query_map(params![user_id.to_string()], Self::oauth_identity_from_row)?;
-        let mut identities = Vec::new();
-        for row in rows {
-            identities.push(row?);
-        }
-        Ok(identities)
+        let identities: std::result::Result<Vec<_>, _> = rows.collect();
+        Ok(identities?)
     }
 
     pub fn create_oauth_identity(&self, identity: &OAuthIdentity) -> Result<()> {
@@ -584,11 +578,8 @@ impl Database {
                 })
             },
         )?;
-        let mut screenshots = Vec::new();
-        for row in rows {
-            screenshots.push(row?);
-        }
-        Ok(screenshots)
+        let screenshots: std::result::Result<Vec<_>, _> = rows.collect();
+        Ok(screenshots?)
     }
 
     pub fn update_screenshot_annotations(
@@ -763,11 +754,8 @@ impl Database {
                 expires_at: expires_str.and_then(|s| parse_datetime_opt(&s)),
             })
         })?;
-        let mut tokens = Vec::new();
-        for row in rows {
-            tokens.push(row?);
-        }
-        Ok(tokens)
+        let tokens: std::result::Result<Vec<_>, _> = rows.collect();
+        Ok(tokens?)
     }
 
     pub fn delete_token(&self, id: &uuid::Uuid, user_id: &uuid::Uuid) -> Result<bool> {
