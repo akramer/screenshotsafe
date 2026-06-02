@@ -15,24 +15,13 @@
     const discardBtn = document.getElementById('discard-btn');
     const editorHint = document.getElementById('editor-hint');
     const errorMsg = document.getElementById('error-msg');
-    const resultDiv = document.getElementById('result');
-    const shareUrlInput = document.getElementById('share-url');
-    const rawUrlInput = document.getElementById('raw-url');
-    const copyShareBtn = document.getElementById('copy-share-btn');
-    const copyRawBtn = document.getElementById('copy-raw-btn');
-    const openServerEditorBtn = document.getElementById('open-server-editor-btn');
     const pageTitleInput = document.getElementById('page-title');
     const imageUrlInput = document.getElementById('image-url');
-    const preUploadControls = document.getElementById('pre-upload-controls');
-    const metadataControls = document.getElementById('metadata-controls');
-    const editControls = document.getElementById('edit-controls');
-    const uploadControls = document.getElementById('upload-controls');
     const expiresInSelect = document.getElementById('expires-in');
 
     const ext = window.sssWebExt;
 
     let settings = null;
-    let currentResult = null;
     let draft = null;
     let activeTool = 'crop';
     let dragStart = null;
@@ -57,22 +46,6 @@
     canvas.addEventListener('pointercancel', cancelDrag);
     window.addEventListener('resize', () => {
         if (draft) renderEditor();
-    });
-
-    copyShareBtn.addEventListener('click', async () => {
-        copyShareBtn.textContent = await copyText(shareUrlInput.value) ? '✓' : '!';
-        setTimeout(() => { copyShareBtn.textContent = 'Copy Share Link'; }, 1500);
-    });
-
-    copyRawBtn.addEventListener('click', async () => {
-        copyRawBtn.textContent = await copyText(rawUrlInput.value) ? '✓' : '!';
-        setTimeout(() => { copyRawBtn.textContent = 'Copy Direct Link'; }, 1500);
-    });
-
-    openServerEditorBtn.addEventListener('click', () => {
-        if (currentResult) {
-            window.location.replace(`${settings.serverUrl}/screenshots/${currentResult.id}/edit`);
-        }
     });
 
     async function init() {
@@ -123,15 +96,8 @@
         try {
             const blob = await renderEditedBlob();
             const result = await uploadBlob(blob);
-            currentResult = result;
             finalized = true;
-
-            shareUrlInput.value = result.share_url;
-            rawUrlInput.value = result.raw_url;
-            resultDiv.classList.add('show');
-
-            const copied = await copyText(result.share_url);
-            lockEditor(copied ? 'Finalized, uploaded, and copied.' : 'Finalized and uploaded.');
+            window.location.replace(editorUrlForResult(result));
         } catch (err) {
             showError(err.message);
             uploadBtn.disabled = false;
@@ -171,6 +137,10 @@
         }
 
         return resp.json();
+    }
+
+    function editorUrlForResult(result) {
+        return `${settings.serverUrl}/screenshots/${result.id}/edit`;
     }
 
     async function redirectToLoginIfNeeded() {
@@ -347,21 +317,6 @@
         draft.sourceUrl = imageUrlInput.value.trim();
     }
 
-    function lockEditor(message) {
-        cropToolBtn.disabled = true;
-        redactToolBtn.disabled = true;
-        undoEditBtn.disabled = true;
-        resetEditBtn.disabled = true;
-        uploadBtn.disabled = true;
-        uploadBtn.textContent = 'Finalized and Uploaded';
-        preUploadControls.classList.add('is-hidden');
-        metadataControls.classList.add('is-hidden');
-        editControls.classList.add('is-hidden');
-        uploadControls.classList.add('is-hidden');
-        canvas.classList.add('locked');
-        editorHint.textContent = message;
-    }
-
     function canvasToImagePoint(event) {
         const bounds = canvas.getBoundingClientRect();
         const scaleX = draft.image.naturalWidth / bounds.width;
@@ -518,12 +473,4 @@
         return Math.min(Math.max(value, min), max);
     }
 
-    async function copyText(text) {
-        try {
-            await navigator.clipboard.writeText(text);
-            return true;
-        } catch (_) {
-            return false;
-        }
-    }
 })();
