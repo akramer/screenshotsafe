@@ -53,9 +53,4 @@ mime_guess = "2"
 reqwest = { version = "0.12", features = ["json"] }
 
 [dev-dependencies]
-criterion = "0.8.2"
 tempfile = "3"
-
-[[bench]]
-name = "db_bench"
-harness = false
