@@ -763,11 +763,8 @@ impl Database {
                 expires_at: expires_str.and_then(|s| parse_datetime_opt(&s)),
             })
         })?;
-        let mut tokens = Vec::new();
-        for row in rows {
-            tokens.push(row?);
-        }
-        Ok(tokens)
+        let tokens: std::result::Result<Vec<_>, _> = rows.collect();
+        Ok(tokens?)
     }
 
     pub fn delete_token(&self, id: &uuid::Uuid, user_id: &uuid::Uuid) -> Result<bool> {
