@@ -98,7 +98,6 @@ pub async fn dashboard(
                             </div>
                             <div class="card-actions">
                                 <a href="/screenshots/{}/edit" class="btn btn-sm btn-outline">Edit</a>
-                                <a href="{}" class="btn btn-sm" target="_blank">Open Shared</a>
                                 <button class="btn btn-sm btn-outline copy-btn" data-url="{}">Copy Shared Link</button>
                                 <button class="btn btn-sm btn-danger delete-btn" data-id="{}">Delete</button>
                             </div>
@@ -112,7 +111,6 @@ pub async fn dashboard(
                     local_time(s.created_at, "datetime", "%b %d, %Y %H:%M UTC"),
                     expires_info,
                     s.id,
-                    share_url,
                     share_url,
                     s.id,
                 )
@@ -141,7 +139,7 @@ pub async fn dashboard(
             <button id="logout-btn" class="btn btn-sm btn-outline">Logout</button>
         </div>
     </nav>
-    <main class="container">
+    <main class="container dashboard-container">
         <div class="page-header">
             <h1>Your Screenshots</h1>
         </div>

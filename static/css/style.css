@@ -76,6 +76,10 @@ body {
     padding: 2rem;
 }
 
+.dashboard-container {
+    max-width: none;
+}
+
 /* ── Buttons ── */
 .btn {
     display: inline-flex;
