@@ -355,16 +355,16 @@ pub async fn share_preview_image(
         .ok_or(AppError::NotFound)?;
 
     let preview_path = image_processing::preview_path_for_rendered_path(rendered_path);
-    let (data, etag_path) = match std::fs::read(&preview_path) {
+    let (data, etag_path) = match tokio::fs::read(&preview_path).await {
         Ok(data) => (data, preview_path.to_string_lossy().to_string()),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             let preview_path_str = preview_path.to_string_lossy().to_string();
-            image_processing::render_preview_image(rendered_path, &preview_path_str)?;
-            (std::fs::read(&preview_path)?, preview_path_str)
+            image_processing::render_preview_image(rendered_path, &preview_path_str).await?;
+            (tokio::fs::read(&preview_path).await?, preview_path_str)
         }
         Err(err) => return Err(err.into()),
     };
-    let etag = file_etag(&etag_path);
+    let etag = file_etag(&etag_path).await;
 
     Ok((
         [
@@ -399,9 +399,9 @@ pub async fn share_image(
         .as_deref()
         .ok_or(AppError::NotFound)?;
 
-    let data = std::fs::read(rendered_path)?;
+    let data = tokio::fs::read(rendered_path).await?;
 
-    let etag = file_etag(rendered_path);
+    let etag = file_etag(rendered_path).await;
 
     Ok((
         [
@@ -413,8 +413,9 @@ pub async fn share_image(
     ))
 }
 
-fn file_etag(path: &str) -> String {
-    std::fs::metadata(path)
+async fn file_etag(path: &str) -> String {
+    tokio::fs::metadata(path)
+        .await
         .ok()
         .and_then(|m| m.modified().ok())
         .map(|t| {

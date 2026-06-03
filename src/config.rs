@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::path::PathBuf;
 
 /// Top-level application configuration, loaded from TOML.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct Config {
     #[serde(default)]
     pub server: ServerConfig,
@@ -85,7 +85,9 @@ pub struct OAuthConfig {
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum OAuthAccountMode {
+    #[default]
     LinkOnly,
     Pending,
     AutoEnabled,
@@ -186,12 +188,6 @@ impl OAuthConfig {
         } else {
             &self.display_name
         }
-    }
-}
-
-impl Default for OAuthAccountMode {
-    fn default() -> Self {
-        Self::LinkOnly
     }
 }
 
@@ -383,17 +379,6 @@ fn parse_oauth_account_mode(value: &str) -> OAuthAccountMode {
         "pending" => OAuthAccountMode::Pending,
         "auto_enabled" | "auto-enabled" | "auto" => OAuthAccountMode::AutoEnabled,
         _ => OAuthAccountMode::LinkOnly,
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            server: ServerConfig::default(),
-            storage: StorageConfig::default(),
-            database: DatabaseConfig::default(),
-            auth: AuthConfig::default(),
-        }
     }
 }
 

@@ -18,8 +18,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Loaded config, binding to {}", config.server.bind);
 
     // Ensure storage directories exist
-    std::fs::create_dir_all(&config.storage.originals_path())?;
-    std::fs::create_dir_all(&config.storage.rendered_path())?;
+    std::fs::create_dir_all(config.storage.originals_path())?;
+    std::fs::create_dir_all(config.storage.rendered_path())?;
 
     let database = db::Database::open(&config.database.path)?;
     database.run_migrations()?;

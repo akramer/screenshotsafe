@@ -1518,7 +1518,7 @@ mod tests {
             )
             .unwrap();
 
-        let deleted = cleanup_expired_screenshots(&state).unwrap();
+        let deleted = cleanup_expired_screenshots(&state).await.unwrap();
         assert_eq!(deleted, 1);
         assert!(!std::path::Path::new(&original_path).exists());
         assert!(!std::path::Path::new(&rendered_path).exists());

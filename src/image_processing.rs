@@ -14,14 +14,15 @@ pub const PREVIEW_MAX_DIMENSION: u32 = 1200;
 /// 4. Render the SVG with resvg (proper antialiasing, text, filled arrowheads)
 /// 5. Composite the SVG layer onto the cropped image
 /// 6. Save to the output path
-pub fn render_screenshot(
+pub async fn render_screenshot(
     original_path: &str,
     output_path: &str,
     annotations: &[Annotation],
     crop_rect: &Option<CropRect>,
     image_dpi: f64,
 ) -> crate::Result<()> {
-    let img = image::open(original_path)?;
+    let bytes = tokio::fs::read(original_path).await?;
+    let img = image::load_from_memory(&bytes)?;
 
     // Apply crop
     let img = if let Some(crop) = crop_rect {
@@ -42,7 +43,7 @@ pub fn render_screenshot(
 
     // Ensure output directory exists
     if let Some(parent) = Path::new(output_path).parent() {
-        std::fs::create_dir_all(parent)?;
+        tokio::fs::create_dir_all(parent).await?;
     }
 
     canvas.save(output_path)?;
@@ -50,23 +51,24 @@ pub fn render_screenshot(
 }
 
 /// Render the chat/social preview PNG for an already-rendered screenshot.
-pub fn render_preview_image(rendered_path: &str, preview_path: &str) -> crate::Result<()> {
-    let data = preview_png_bytes(rendered_path)?;
+pub async fn render_preview_image(rendered_path: &str, preview_path: &str) -> crate::Result<()> {
+    let data = preview_png_bytes(rendered_path).await?;
     if let Some(parent) = Path::new(preview_path).parent() {
-        std::fs::create_dir_all(parent)?;
+        tokio::fs::create_dir_all(parent).await?;
     }
-    std::fs::write(preview_path, data)?;
+    tokio::fs::write(preview_path, data).await?;
     Ok(())
 }
 
 /// Return preview PNG bytes, scaling down only when a dimension exceeds 1200px.
-pub fn preview_png_bytes(rendered_path: &str) -> crate::Result<Vec<u8>> {
-    let img = image::open(rendered_path)?;
+pub async fn preview_png_bytes(rendered_path: &str) -> crate::Result<Vec<u8>> {
+    let bytes = tokio::fs::read(rendered_path).await?;
+    let img = image::load_from_memory(&bytes)?;
     let (width, height) = img.dimensions();
     let (preview_width, preview_height) = scaled_preview_dimensions(width, height);
 
     if (preview_width, preview_height) == (width, height) {
-        return Ok(std::fs::read(rendered_path)?);
+        return Ok(tokio::fs::read(rendered_path).await?);
     }
 
     let resized = img.resize(
