@@ -85,7 +85,7 @@
 }
 
 .save-status {
-    min-width: 4.5rem;
+    min-width: 6.5rem;
     margin-left: 0.35rem;
     padding-left: 0.85rem;
     border-left: 1px solid var(--border);
@@ -276,7 +276,7 @@
     }
 
     .save-status {
-        min-width: 3.5rem;
+        min-width: 6rem;
         padding-left: 0.65rem;
     }
 

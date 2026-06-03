@@ -22,6 +22,8 @@
     let selectedAnnotationObjects = [];
     let lastToolbarInteractionAt = 0;
     let autosaveTimer = null;
+    let autosaveCountdownTimer = null;
+    let autosaveDeadline = 0;
     let saveInFlight = false;
     let saveAgainAfterCurrent = false;
     let lastSavedSnapshot = null;
@@ -1381,6 +1383,26 @@
         if (statusClass) status.classList.add(statusClass);
     }
 
+    function clearAutosaveCountdown() {
+        clearInterval(autosaveCountdownTimer);
+        autosaveCountdownTimer = null;
+        autosaveDeadline = 0;
+    }
+
+    function updateAutosaveCountdown() {
+        if (!autosaveDeadline) return;
+        const remainingMs = Math.max(0, autosaveDeadline - Date.now());
+        const remainingSeconds = Math.max(1, Math.ceil(remainingMs / 1000));
+        setSaveStatus(`Saving in ${remainingSeconds}s`, 'is-saving');
+    }
+
+    function startAutosaveCountdown(delay) {
+        clearAutosaveCountdown();
+        autosaveDeadline = Date.now() + delay;
+        updateAutosaveCountdown();
+        autosaveCountdownTimer = setInterval(updateAutosaveCountdown, 250);
+    }
+
     function getSavePayload() {
         const title = document.getElementById('screenshot-title').value;
         const sourceUrl = document.getElementById('screenshot-source-url').value;
@@ -1429,13 +1451,14 @@
 
     function scheduleAutosave(delay = AUTOSAVE_DELAY_MS) {
         if (!canvas) return;
-        setSaveStatus('Saving...', 'is-saving');
         clearTimeout(autosaveTimer);
+        startAutosaveCountdown(delay);
         autosaveTimer = setTimeout(save, delay);
     }
 
     async function flushAutosave() {
         clearTimeout(autosaveTimer);
+        clearAutosaveCountdown();
         await save();
     }
 
@@ -1454,6 +1477,7 @@
 
     function flushAutosaveOnPageExit() {
         clearTimeout(autosaveTimer);
+        clearAutosaveCountdown();
         const snapshot = getSaveSnapshot();
         if (snapshot === lastSavedSnapshot) return;
 
@@ -1467,6 +1491,7 @@
     }
 
     async function save() {
+        clearAutosaveCountdown();
         const snapshot = getSaveSnapshot();
         if (snapshot === lastSavedSnapshot && !saveAgainAfterCurrent) {
             setSaveStatus('Saved');
