@@ -97,8 +97,9 @@ pub async fn dashboard(
                                 {}
                             </div>
                             <div class="card-actions">
-                                <a href="{}" class="btn btn-sm" target="_blank">Share</a>
-                                <button class="btn btn-sm btn-outline copy-btn" data-url="{}">Copy Link</button>
+                                <a href="/screenshots/{}/edit" class="btn btn-sm btn-outline">Edit</a>
+                                <a href="{}" class="btn btn-sm" target="_blank">Open Shared</a>
+                                <button class="btn btn-sm btn-outline copy-btn" data-url="{}">Copy Shared Link</button>
                                 <button class="btn btn-sm btn-danger delete-btn" data-id="{}">Delete</button>
                             </div>
                         </div>
@@ -110,6 +111,7 @@ pub async fn dashboard(
                     html_escape(title),
                     local_time(s.created_at, "datetime", "%b %d, %Y %H:%M UTC"),
                     expires_info,
+                    s.id,
                     share_url,
                     share_url,
                     s.id,
@@ -158,7 +160,7 @@ pub async fn dashboard(
             btn.addEventListener('click', () => {{
                 navigator.clipboard.writeText(btn.dataset.url);
                 btn.textContent = 'Copied!';
-                setTimeout(() => btn.textContent = 'Copy Link', 2000);
+                setTimeout(() => btn.textContent = 'Copy Shared Link', 2000);
             }});
         }});
 

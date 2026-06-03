@@ -1784,6 +1784,12 @@ mod tests {
         assert!(html.contains(&format!(r#"<img src="/api/screenshots/{}/preview""#, id)));
         assert!(!html.contains(&format!("/s/{}.preview.png", share_id)));
         assert!(html.contains(&format!(
+            r#"<a href="/screenshots/{}/edit" class="btn btn-sm btn-outline">Edit</a>"#,
+            id
+        )));
+        assert!(html.contains(r#">Open Shared</a>"#));
+        assert!(html.contains(r#">Copy Shared Link</button>"#));
+        assert!(html.contains(&format!(
             r#"data-url="http://localhost:8080/s/{}""#,
             share_id
         )));
