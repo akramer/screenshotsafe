@@ -18,8 +18,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Loaded config, binding to {}", config.server.bind);
 
     // Ensure storage directories exist
-    std::fs::create_dir_all(&config.storage.originals_path())?;
-    std::fs::create_dir_all(&config.storage.rendered_path())?;
+    tokio::fs::create_dir_all(&config.storage.originals_path()).await?;
+    tokio::fs::create_dir_all(&config.storage.rendered_path()).await?;
 
     let database = db::Database::open(&config.database.path)?;
     database.run_migrations()?;
@@ -33,11 +33,14 @@ async fn main() -> anyhow::Result<()> {
                 .parent()
                 .unwrap_or(std::path::Path::new("."))
                 .join(".jwt_secret");
-            if secret_path.exists() {
-                std::fs::read_to_string(&secret_path)?.trim().to_string()
+            if tokio::fs::try_exists(&secret_path).await? {
+                tokio::fs::read_to_string(&secret_path)
+                    .await?
+                    .trim()
+                    .to_string()
             } else {
                 let secret = uuid::Uuid::new_v4().to_string();
-                std::fs::write(&secret_path, &secret)?;
+                tokio::fs::write(&secret_path, &secret).await?;
                 tracing::info!("Generated new JWT secret at {}", secret_path.display());
                 secret
             }

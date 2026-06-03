@@ -27,9 +27,6 @@ mod tests {
         db.run_migrations().unwrap();
 
         let storage_path = dir.join("storage");
-        std::fs::create_dir_all(storage_path.join("originals")).unwrap();
-        std::fs::create_dir_all(storage_path.join("rendered")).unwrap();
-
         let mut config = Config::default();
         config.storage.path = storage_path.to_string_lossy().to_string();
         configure(&mut config);
@@ -960,10 +957,10 @@ mod tests {
         let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
         let rendered_path = screenshot.rendered_path.unwrap();
         let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
-        assert!(preview_path.exists());
+        assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
         assert_eq!(
-            std::fs::metadata(&preview_path).unwrap().len(),
-            std::fs::metadata(&rendered_path).unwrap().len()
+            tokio::fs::metadata(&preview_path).await.unwrap().len(),
+            tokio::fs::metadata(&rendered_path).await.unwrap().len()
         );
     }
 
@@ -1235,7 +1232,9 @@ mod tests {
         assert!(html.contains(r#"/static/css/editor.css?v=touch-editor-2"#));
         assert!(html.contains(r#"/static/js/editor.js?v=touch-editor-2"#));
 
-        let editor_css = std::fs::read_to_string("static/css/editor.css").unwrap();
+        let editor_css = tokio::fs::read_to_string("static/css/editor.css")
+            .await
+            .unwrap();
         assert!(editor_css.contains("grid-template-columns: 1fr 300px;"));
         assert!(editor_css.contains("@media (max-width: 900px)"));
         assert!(editor_css.contains("@media (max-width: 640px)"));
@@ -1243,7 +1242,9 @@ mod tests {
         assert!(editor_css.contains("touch-action: none;"));
         assert!(editor_css.contains(".mobile-delete-btn"));
 
-        let editor_js = std::fs::read_to_string("static/js/editor.js").unwrap();
+        let editor_js = tokio::fs::read_to_string("static/js/editor.js")
+            .await
+            .unwrap();
         assert!(editor_js.contains("const AUTOSAVE_DELAY_MS = 2000;"));
         assert!(editor_js.contains("window.addEventListener('pagehide', flushAutosaveOnPageExit);"));
         assert!(editor_js.contains("keepalive: true"));
@@ -1276,7 +1277,9 @@ mod tests {
         let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
             .await
             .unwrap();
-        let expected = std::fs::read("extension/icons/favicon.ico").unwrap();
+        let expected = tokio::fs::read("extension/icons/favicon.ico")
+            .await
+            .unwrap();
         assert_eq!(bytes.as_ref(), expected.as_slice());
     }
 
@@ -1396,7 +1399,7 @@ mod tests {
         let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
         let rendered_path = screenshot.rendered_path.unwrap();
         let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
-        assert!(preview_path.exists());
+        assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
 
         let req = axum::http::Request::builder()
             .method("GET")
@@ -1417,8 +1420,8 @@ mod tests {
         let image = image::load_from_memory(&bytes).unwrap();
         assert_eq!((image.width(), image.height()), (100, 100));
 
-        std::fs::remove_file(&preview_path).unwrap();
-        assert!(!preview_path.exists());
+        tokio::fs::remove_file(&preview_path).await.unwrap();
+        assert!(!tokio::fs::try_exists(&preview_path).await.unwrap());
 
         let req = axum::http::Request::builder()
             .method("GET")
@@ -1433,7 +1436,7 @@ mod tests {
             .unwrap();
         let image = image::load_from_memory(&bytes).unwrap();
         assert_eq!((image.width(), image.height()), (100, 100));
-        assert!(preview_path.exists());
+        assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
     }
 
     #[tokio::test]
@@ -1464,7 +1467,7 @@ mod tests {
         let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
         let rendered_path = screenshot.rendered_path.unwrap();
         let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
-        assert!(preview_path.exists());
+        assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
 
         // Delete
         let req = axum::http::Request::builder()
@@ -1476,7 +1479,7 @@ mod tests {
 
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        assert!(!preview_path.exists());
+        assert!(!tokio::fs::try_exists(&preview_path).await.unwrap());
 
         // Should no longer be accessible
         let req = axum::http::Request::builder()
@@ -1502,9 +1505,13 @@ mod tests {
         let original_path = screenshot.original_path.clone();
         let rendered_path = screenshot.rendered_path.clone().unwrap();
         let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
-        assert!(std::path::Path::new(&original_path).exists());
-        assert!(std::path::Path::new(&rendered_path).exists());
-        assert!(preview_path.exists());
+        assert!(tokio::fs::try_exists(std::path::Path::new(&original_path))
+            .await
+            .unwrap());
+        assert!(tokio::fs::try_exists(std::path::Path::new(&rendered_path))
+            .await
+            .unwrap());
+        assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
 
         state
             .db
@@ -1518,11 +1525,15 @@ mod tests {
             )
             .unwrap();
 
-        let deleted = cleanup_expired_screenshots(&state).unwrap();
+        let deleted = cleanup_expired_screenshots(&state).await.unwrap();
         assert_eq!(deleted, 1);
-        assert!(!std::path::Path::new(&original_path).exists());
-        assert!(!std::path::Path::new(&rendered_path).exists());
-        assert!(!preview_path.exists());
+        assert!(!tokio::fs::try_exists(std::path::Path::new(&original_path))
+            .await
+            .unwrap());
+        assert!(!tokio::fs::try_exists(std::path::Path::new(&rendered_path))
+            .await
+            .unwrap());
+        assert!(!tokio::fs::try_exists(&preview_path).await.unwrap());
         assert!(state.db.get_screenshot_by_id(&id).unwrap().is_none());
 
         let req = axum::http::Request::builder()
@@ -1689,7 +1700,7 @@ mod tests {
         let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
         let rendered_path = screenshot.rendered_path.unwrap();
         let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
-        std::fs::remove_file(&preview_path).unwrap();
+        tokio::fs::remove_file(&preview_path).await.unwrap();
 
         // Save annotations
         let req = axum::http::Request::builder()
@@ -1713,7 +1724,7 @@ mod tests {
         let body = body_json(resp).await;
         assert_eq!(body["ok"], true);
         assert!(body["rendered_url"].as_str().unwrap().ends_with(".png"));
-        assert!(preview_path.exists());
+        assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
     }
 
     // ── Page redirect tests ──

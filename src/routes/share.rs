@@ -1,8 +1,10 @@
 use axum::{
+    body::Body,
     extract::{Path, State},
     http::{header, HeaderMap},
     response::{Html, IntoResponse},
 };
+use tokio_util::io::ReaderStream;
 
 use crate::{image_processing, AppError, SharedState};
 
@@ -79,7 +81,8 @@ pub async fn share_page(
             .rendered_path
             .as_deref()
             .ok_or(AppError::NotFound)?,
-    )?;
+    )
+    .await?;
     let created = local_time(screenshot.created_at, "long-date", "%B %d, %Y");
     let expires_info = screenshot
         .expires_at
@@ -355,16 +358,16 @@ pub async fn share_preview_image(
         .ok_or(AppError::NotFound)?;
 
     let preview_path = image_processing::preview_path_for_rendered_path(rendered_path);
-    let (data, etag_path) = match std::fs::read(&preview_path) {
-        Ok(data) => (data, preview_path.to_string_lossy().to_string()),
+    let (body, etag_path) = match stream_png_file(&preview_path).await {
+        Ok(body) => (body, preview_path.to_string_lossy().to_string()),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             let preview_path_str = preview_path.to_string_lossy().to_string();
-            image_processing::render_preview_image(rendered_path, &preview_path_str)?;
-            (std::fs::read(&preview_path)?, preview_path_str)
+            image_processing::render_preview_image(rendered_path, &preview_path_str).await?;
+            (stream_png_file(&preview_path).await?, preview_path_str)
         }
         Err(err) => return Err(err.into()),
     };
-    let etag = file_etag(&etag_path);
+    let etag = file_etag(&etag_path).await;
 
     Ok((
         [
@@ -372,7 +375,7 @@ pub async fn share_preview_image(
             (header::CACHE_CONTROL, "no-cache".to_string()),
             (header::ETAG, etag),
         ],
-        data,
+        body,
     ))
 }
 
@@ -399,9 +402,8 @@ pub async fn share_image(
         .as_deref()
         .ok_or(AppError::NotFound)?;
 
-    let data = std::fs::read(rendered_path)?;
-
-    let etag = file_etag(rendered_path);
+    let etag = file_etag(rendered_path).await;
+    let body = stream_png_file(rendered_path).await?;
 
     Ok((
         [
@@ -409,12 +411,18 @@ pub async fn share_image(
             (header::CACHE_CONTROL, "no-cache".to_string()),
             (header::ETAG, etag),
         ],
-        data,
+        body,
     ))
 }
 
-fn file_etag(path: &str) -> String {
-    std::fs::metadata(path)
+async fn stream_png_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Body> {
+    let file = tokio::fs::File::open(path).await?;
+    Ok(Body::from_stream(ReaderStream::new(file)))
+}
+
+async fn file_etag(path: &str) -> String {
+    tokio::fs::metadata(path)
+        .await
         .ok()
         .and_then(|m| m.modified().ok())
         .map(|t| {

@@ -1,5 +1,5 @@
 use image::codecs::png::{CompressionType, FilterType, PngEncoder};
-use image::{GenericImageView, RgbaImage};
+use image::{DynamicImage, GenericImageView, RgbaImage};
 use std::path::{Path, PathBuf};
 
 use crate::models::{Annotation, CropRect};
@@ -14,76 +14,97 @@ pub const PREVIEW_MAX_DIMENSION: u32 = 1200;
 /// 4. Render the SVG with resvg (proper antialiasing, text, filled arrowheads)
 /// 5. Composite the SVG layer onto the cropped image
 /// 6. Save to the output path
-pub fn render_screenshot(
+pub async fn render_screenshot(
     original_path: &str,
     output_path: &str,
     annotations: &[Annotation],
     crop_rect: &Option<CropRect>,
     image_dpi: f64,
 ) -> crate::Result<()> {
-    let img = image::open(original_path)?;
+    let image_data = tokio::fs::read(original_path).await?;
+    let annotations = annotations.to_vec();
+    let crop_rect = crop_rect.clone();
+    let data = spawn_image_task(move || {
+        let img = image::load_from_memory(&image_data)?;
 
-    // Apply crop
-    let img = if let Some(crop) = crop_rect {
-        img.crop_imm(crop.x, crop.y, crop.w, crop.h)
-    } else {
-        img
-    };
+        // Apply crop
+        let img = if let Some(crop) = &crop_rect {
+            img.crop_imm(crop.x, crop.y, crop.w, crop.h)
+        } else {
+            img
+        };
 
-    let (width, height) = img.dimensions();
-    let mut canvas = img.to_rgba8();
+        let (width, height) = img.dimensions();
+        let mut canvas = img.to_rgba8();
 
-    // If there are annotations, render them as SVG and composite
-    if !annotations.is_empty() {
-        let svg_str = build_svg(width, height, annotations, crop_rect, image_dpi);
-        let overlay = render_svg_to_pixmap(&svg_str, width, height)?;
-        composite_overlay(&mut canvas, &overlay);
-    }
+        // If there are annotations, render them as SVG and composite
+        if !annotations.is_empty() {
+            let svg_str = build_svg(width, height, &annotations, &crop_rect, image_dpi);
+            let overlay = render_svg_to_pixmap(&svg_str, width, height)?;
+            composite_overlay(&mut canvas, &overlay);
+        }
+
+        let mut data = Vec::new();
+        let encoder =
+            PngEncoder::new_with_quality(&mut data, CompressionType::Best, FilterType::Adaptive);
+        DynamicImage::ImageRgba8(canvas).write_with_encoder(encoder)?;
+        Ok(data)
+    })
+    .await?;
 
     // Ensure output directory exists
     if let Some(parent) = Path::new(output_path).parent() {
-        std::fs::create_dir_all(parent)?;
+        tokio::fs::create_dir_all(parent).await?;
     }
 
-    canvas.save(output_path)?;
+    tokio::fs::write(output_path, data).await?;
     Ok(())
 }
 
 /// Render the chat/social preview PNG for an already-rendered screenshot.
-pub fn render_preview_image(rendered_path: &str, preview_path: &str) -> crate::Result<()> {
-    let data = preview_png_bytes(rendered_path)?;
+pub async fn render_preview_image(rendered_path: &str, preview_path: &str) -> crate::Result<()> {
+    let data = preview_png_bytes(rendered_path).await?;
     if let Some(parent) = Path::new(preview_path).parent() {
-        std::fs::create_dir_all(parent)?;
+        tokio::fs::create_dir_all(parent).await?;
     }
-    std::fs::write(preview_path, data)?;
+    tokio::fs::write(preview_path, data).await?;
     Ok(())
 }
 
 /// Return preview PNG bytes, scaling down only when a dimension exceeds 1200px.
-pub fn preview_png_bytes(rendered_path: &str) -> crate::Result<Vec<u8>> {
-    let img = image::open(rendered_path)?;
-    let (width, height) = img.dimensions();
-    let (preview_width, preview_height) = scaled_preview_dimensions(width, height);
+pub async fn preview_png_bytes(rendered_path: &str) -> crate::Result<Vec<u8>> {
+    let image_data = tokio::fs::read(rendered_path).await?;
+    spawn_image_task(move || {
+        let img = image::load_from_memory(&image_data)?;
+        let (width, height) = img.dimensions();
+        let (preview_width, preview_height) = scaled_preview_dimensions(width, height);
 
-    if (preview_width, preview_height) == (width, height) {
-        return Ok(std::fs::read(rendered_path)?);
-    }
+        if (preview_width, preview_height) == (width, height) {
+            return Ok(image_data);
+        }
 
-    let resized = img.resize(
-        preview_width,
-        preview_height,
-        image::imageops::FilterType::Lanczos3,
-    );
-    let mut data = Vec::new();
-    let encoder =
-        PngEncoder::new_with_quality(&mut data, CompressionType::Best, FilterType::Adaptive);
-    resized.write_with_encoder(encoder)?;
-    Ok(data)
+        let resized = img.resize(
+            preview_width,
+            preview_height,
+            image::imageops::FilterType::Lanczos3,
+        );
+        let mut data = Vec::new();
+        let encoder =
+            PngEncoder::new_with_quality(&mut data, CompressionType::Best, FilterType::Adaptive);
+        resized.write_with_encoder(encoder)?;
+        Ok(data)
+    })
+    .await
 }
 
-pub fn preview_dimensions(rendered_path: &str) -> crate::Result<(u32, u32)> {
-    let (width, height) = image::image_dimensions(rendered_path)?;
-    Ok(scaled_preview_dimensions(width, height))
+pub async fn preview_dimensions(rendered_path: &str) -> crate::Result<(u32, u32)> {
+    let image_data = tokio::fs::read(rendered_path).await?;
+    spawn_image_task(move || {
+        let img = image::load_from_memory(&image_data)?;
+        let (width, height) = img.dimensions();
+        Ok(scaled_preview_dimensions(width, height))
+    })
+    .await
 }
 
 pub fn scaled_preview_dimensions(width: u32, height: u32) -> (u32, u32) {
@@ -115,6 +136,25 @@ pub fn preview_path_for_rendered(rendered_path: &Path) -> PathBuf {
         .unwrap_or_else(|| format!("{file_name}.preview.png"));
 
     rendered_path.with_file_name(preview_name)
+}
+
+pub async fn validate_image_data(image_data: Vec<u8>) -> crate::Result<()> {
+    spawn_image_task(move || {
+        image::load_from_memory(&image_data)?;
+        Ok(())
+    })
+    .await
+}
+
+async fn spawn_image_task<T>(
+    task: impl FnOnce() -> crate::Result<T> + Send + 'static,
+) -> crate::Result<T>
+where
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(task)
+        .await
+        .map_err(|err| crate::AppError::Internal(format!("Image task failed: {}", err)))?
 }
 
 /// Build an SVG document string from a list of annotations.
