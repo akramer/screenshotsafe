@@ -404,7 +404,6 @@ pub async fn editor_page(
         .unwrap_or("null".into());
     let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
     let share_url = format!("{}/s/{}", base_url, screenshot.share_id);
-    let raw_url = format!("{}/s/{}.png", base_url, screenshot.share_id);
     let image_dpi = if screenshot.image_dpi.fract().abs() < f64::EPSILON {
         format!("{:.0}", screenshot.image_dpi)
     } else {
@@ -478,8 +477,7 @@ pub async fn editor_page(
         )
         .replace("{{EXPIRATION_KEEP_DATETIME}}", &expiration_keep_datetime)
         .replace("{{EXPIRES_NEVER_SELECTED}}", expires_never_selected)
-        .replace("{{SHARE_URL}}", &share_url)
-        .replace("{{RAW_URL}}", &raw_url)
+        .replace("{{SHARE_URL}}", &html_escape(&share_url))
         .replace("{{ID}}", &screenshot.id.to_string())
         .replace("{{ANNOTATIONS}}", &annotations_json)
         .replace("{{CROP}}", &crop_json)
@@ -624,18 +622,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
                 </select>
             </div>
             <div class="form-group">
-                <label>Share Link</label>
-                <div class="input-group">
-                    <input type="text" id="share-url" value="{{SHARE_URL}}" readonly>
-                    <button class="btn btn-sm" id="copy-share-btn">Copy</button>
-                </div>
-            </div>
-            <div class="form-group">
-                <label>Direct Image</label>
-                <div class="input-group">
-                    <input type="text" id="raw-url" value="{{RAW_URL}}" readonly>
-                    <button class="btn btn-sm" id="copy-raw-btn">Copy</button>
-                </div>
+                <button class="btn btn-full" id="copy-share-btn" type="button" data-url="{{SHARE_URL}}">Copy Share Link</button>
             </div>
         </div>
     </main>

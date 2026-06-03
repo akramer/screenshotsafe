@@ -1543,15 +1543,9 @@
         });
 
         document.getElementById('copy-share-btn').addEventListener('click', function () {
-            navigator.clipboard.writeText(document.getElementById('share-url').value);
+            navigator.clipboard.writeText(this.dataset.url || '');
             this.textContent = 'Copied!';
-            setTimeout(() => { this.textContent = 'Copy'; }, 2000);
-        });
-
-        document.getElementById('copy-raw-btn').addEventListener('click', function () {
-            navigator.clipboard.writeText(document.getElementById('raw-url').value);
-            this.textContent = 'Copied!';
-            setTimeout(() => { this.textContent = 'Copy'; }, 2000);
+            setTimeout(() => { this.textContent = 'Copy Share Link'; }, 2000);
         });
 
         updateSourceUrlLink();
