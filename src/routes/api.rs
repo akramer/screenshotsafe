@@ -930,19 +930,19 @@ pub async fn admin_delete_user(
 
     let paths = state.db.delete_user(&id)?.ok_or(AppError::NotFound)?;
     for (original_path, rendered_path) in paths {
-        remove_file_if_present(&original_path);
+        remove_file_if_present(&original_path).await;
         if let Some(path) = rendered_path {
-            remove_file_if_present(&path);
+            remove_file_if_present(&path).await;
             let preview_path = image_processing::preview_path_for_rendered_path(&path);
-            remove_file_if_present(&preview_path.to_string_lossy());
+            remove_file_if_present(&preview_path.to_string_lossy()).await;
         }
     }
 
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
-fn remove_file_if_present(path: &str) {
-    match std::fs::remove_file(path) {
+async fn remove_file_if_present(path: &str) {
+    match tokio::fs::remove_file(path).await {
         Ok(()) => {}
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => tracing::warn!(
@@ -953,12 +953,13 @@ fn remove_file_if_present(path: &str) {
     }
 }
 
-fn bake_preview_for_rendered(rendered_path: &std::path::Path) -> crate::Result<()> {
+async fn bake_preview_for_rendered(rendered_path: &std::path::Path) -> crate::Result<()> {
     let preview_path = image_processing::preview_path_for_rendered(rendered_path);
     image_processing::render_preview_image(
         &rendered_path.to_string_lossy(),
         &preview_path.to_string_lossy(),
     )
+    .await
 }
 
 // ── Logout ──
@@ -1121,7 +1122,7 @@ pub async fn upload_screenshot(
         .storage
         .originals_path()
         .join(format!("{}.png", id));
-    std::fs::write(&original_path, &image_data)?;
+    tokio::fs::write(&original_path, &image_data).await?;
 
     // Copy as initial rendered version
     let rendered_path = state
@@ -1129,8 +1130,8 @@ pub async fn upload_screenshot(
         .storage
         .rendered_path()
         .join(format!("{}.png", sid));
-    std::fs::write(&rendered_path, &image_data)?;
-    bake_preview_for_rendered(&rendered_path)?;
+    tokio::fs::write(&rendered_path, &image_data).await?;
+    bake_preview_for_rendered(&rendered_path).await?;
 
     let created_at = Utc::now();
 
@@ -1499,8 +1500,8 @@ pub async fn update_screenshot(
             &screenshot.annotations,
             &screenshot.crop_rect,
             image_dpi,
-        )?;
-        bake_preview_for_rendered(&rendered_path)?;
+        )
+        .await?;
 
         state
             .db
@@ -1527,10 +1528,10 @@ pub async fn delete_screenshot(
     }
 
     // Delete files
-    let _ = std::fs::remove_file(&screenshot.original_path);
+    let _ = tokio::fs::remove_file(&screenshot.original_path).await;
     if let Some(rp) = &screenshot.rendered_path {
-        let _ = std::fs::remove_file(rp);
-        let _ = std::fs::remove_file(image_processing::preview_path_for_rendered_path(rp));
+        let _ = tokio::fs::remove_file(rp).await;
+        let _ = tokio::fs::remove_file(image_processing::preview_path_for_rendered_path(rp)).await;
     }
 
     state.db.delete_screenshot(&id)?;
@@ -1582,8 +1583,9 @@ pub async fn save_annotations(
         &req.annotations,
         &req.crop,
         screenshot.image_dpi,
-    )?;
-    bake_preview_for_rendered(&rendered_path)?;
+    )
+    .await?;
+    bake_preview_for_rendered(&rendered_path).await?;
 
     state
         .db
@@ -1612,7 +1614,7 @@ pub async fn serve_original(
         return Err(AppError::NotFound);
     }
 
-    let data = std::fs::read(&screenshot.original_path)?;
+    let data = tokio::fs::read(&screenshot.original_path).await?;
 
     Ok(([(header::CONTENT_TYPE, "image/png".to_string())], data))
 }
@@ -1636,11 +1638,12 @@ pub async fn serve_preview(
         .as_deref()
         .ok_or(AppError::NotFound)?;
     let preview_path = image_processing::preview_path_for_rendered_path(rendered_path);
-    if !preview_path.exists() {
-        image_processing::render_preview_image(rendered_path, &preview_path.to_string_lossy())?;
+    if !tokio::fs::try_exists(&preview_path).await.unwrap_or(false) {
+        image_processing::render_preview_image(rendered_path, &preview_path.to_string_lossy())
+            .await?;
     }
 
-    let data = std::fs::read(preview_path)?;
+    let data = tokio::fs::read(preview_path).await?;
     Ok(([(header::CONTENT_TYPE, "image/png".to_string())], data))
 }
 

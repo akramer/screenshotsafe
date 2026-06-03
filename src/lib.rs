@@ -33,24 +33,24 @@ pub struct AppState {
 pub type SharedState = Arc<AppState>;
 
 /// Remove expired screenshot records and their backing image files.
-pub fn cleanup_expired_screenshots(state: &AppState) -> Result<usize> {
+pub async fn cleanup_expired_screenshots(state: &AppState) -> Result<usize> {
     let paths = state.db.delete_expired_screenshots()?;
     let deleted_count = paths.len();
 
     for (original_path, rendered_path) in paths {
-        remove_screenshot_file(&original_path);
+        remove_screenshot_file(&original_path).await;
         if let Some(path) = rendered_path {
-            remove_screenshot_file(&path);
+            remove_screenshot_file(&path).await;
             let preview_path = image_processing::preview_path_for_rendered_path(&path);
-            remove_screenshot_file(&preview_path.to_string_lossy());
+            remove_screenshot_file(&preview_path.to_string_lossy()).await;
         }
     }
 
     Ok(deleted_count)
 }
 
-fn remove_screenshot_file(path: &str) {
-    match std::fs::remove_file(path) {
+async fn remove_screenshot_file(path: &str) {
+    match tokio::fs::remove_file(path).await {
         Ok(()) => {}
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
         Err(err) => tracing::warn!("Failed to remove expired screenshot file {}: {}", path, err),
@@ -65,7 +65,7 @@ pub fn spawn_expired_screenshot_cleanup(state: SharedState) {
 
         loop {
             interval.tick().await;
-            match cleanup_expired_screenshots(&state) {
+            match cleanup_expired_screenshots(&state).await {
                 Ok(0) => {}
                 Ok(count) => tracing::info!("Deleted {} expired screenshots", count),
                 Err(err) => tracing::warn!("Failed to delete expired screenshots: {}", err),
