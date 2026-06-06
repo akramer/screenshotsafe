@@ -29,6 +29,7 @@ pub async fn render_screenshot(
 
         // Apply crop
         let img = if let Some(crop) = &crop_rect {
+            validate_crop_rect(crop, img.width(), img.height())?;
             img.crop_imm(crop.x, crop.y, crop.w, crop.h)
         } else {
             img
@@ -58,6 +59,35 @@ pub async fn render_screenshot(
     }
 
     tokio::fs::write(output_path, data).await?;
+    Ok(())
+}
+
+fn validate_crop_rect(crop: &CropRect, image_width: u32, image_height: u32) -> crate::Result<()> {
+    if crop.w == 0 || crop.h == 0 {
+        return Err(crate::AppError::BadRequest(
+            "Crop width and height must be greater than zero".into(),
+        ));
+    }
+
+    let crop_right = crop
+        .x
+        .checked_add(crop.w)
+        .ok_or_else(|| crate::AppError::BadRequest("Crop rectangle exceeds image bounds".into()))?;
+    let crop_bottom = crop
+        .y
+        .checked_add(crop.h)
+        .ok_or_else(|| crate::AppError::BadRequest("Crop rectangle exceeds image bounds".into()))?;
+
+    if crop.x >= image_width
+        || crop.y >= image_height
+        || crop_right > image_width
+        || crop_bottom > image_height
+    {
+        return Err(crate::AppError::BadRequest(
+            "Crop rectangle exceeds image bounds".into(),
+        ));
+    }
+
     Ok(())
 }
 

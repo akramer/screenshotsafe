@@ -975,6 +975,53 @@ async fn bake_preview_for_rendered(rendered_path: &std::path::Path) -> crate::Re
     .await
 }
 
+async fn render_screenshot_artifacts(
+    original_path: &str,
+    rendered_path: &std::path::Path,
+    annotations: &[Annotation],
+    crop_rect: &Option<CropRect>,
+    image_dpi: f64,
+) -> crate::Result<()> {
+    let temp_rendered_path = staged_render_path(rendered_path);
+    let temp_preview_path = image_processing::preview_path_for_rendered(&temp_rendered_path);
+    let final_preview_path = image_processing::preview_path_for_rendered(rendered_path);
+
+    let result = async {
+        image_processing::render_screenshot(
+            original_path,
+            &temp_rendered_path.to_string_lossy(),
+            annotations,
+            crop_rect,
+            image_dpi,
+        )
+        .await?;
+        bake_preview_for_rendered(&temp_rendered_path).await?;
+
+        if let Some(parent) = rendered_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        tokio::fs::rename(&temp_rendered_path, rendered_path).await?;
+        tokio::fs::rename(&temp_preview_path, &final_preview_path).await?;
+        Ok(())
+    }
+    .await;
+
+    if result.is_err() {
+        let _ = tokio::fs::remove_file(&temp_rendered_path).await;
+        let _ = tokio::fs::remove_file(&temp_preview_path).await;
+    }
+
+    result
+}
+
+fn staged_render_path(rendered_path: &std::path::Path) -> std::path::PathBuf {
+    let file_name = rendered_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("rendered.png");
+    rendered_path.with_file_name(format!(".{file_name}.{}.tmp", Uuid::new_v4()))
+}
+
 // ── Logout ──
 
 pub async fn logout() -> impl IntoResponse {
@@ -1515,7 +1562,7 @@ pub async fn update_screenshot(
         source_url,
         req.visibility.as_deref(),
         expires_at,
-        image_dpi,
+        None,
     )?;
 
     if let Some(image_dpi) = image_dpi.filter(|_| dpi_changed) {
@@ -1526,16 +1573,18 @@ pub async fn update_screenshot(
             .join(format!("{}.png", screenshot.share_id));
         let rendered_path_str = rendered_path.to_string_lossy().to_string();
 
-        image_processing::render_screenshot(
+        render_screenshot_artifacts(
             &screenshot.original_path,
-            &rendered_path_str,
+            &rendered_path,
             &screenshot.annotations,
             &screenshot.crop_rect,
             image_dpi,
         )
         .await?;
-        bake_preview_for_rendered(&rendered_path).await?;
 
+        state
+            .db
+            .update_screenshot_metadata(&id, None, None, None, None, Some(image_dpi))?;
         state
             .db
             .update_screenshot_rendered_path(&id, &rendered_path_str)?;
@@ -1596,11 +1645,6 @@ pub async fn save_annotations(
         return Err(AppError::NotFound);
     }
 
-    // Save annotations to DB
-    state
-        .db
-        .update_screenshot_annotations(&id, &req.annotations, &req.crop)?;
-
     // Re-render the public image
     let rendered_path = state
         .config
@@ -1610,16 +1654,18 @@ pub async fn save_annotations(
 
     let rendered_path_str = rendered_path.to_string_lossy().to_string();
 
-    image_processing::render_screenshot(
+    render_screenshot_artifacts(
         &screenshot.original_path,
-        &rendered_path_str,
+        &rendered_path,
         &req.annotations,
         &req.crop,
         screenshot.image_dpi,
     )
     .await?;
-    bake_preview_for_rendered(&rendered_path).await?;
 
+    state
+        .db
+        .update_screenshot_annotations(&id, &req.annotations, &req.crop)?;
     state
         .db
         .update_screenshot_rendered_path(&id, &rendered_path_str)?;

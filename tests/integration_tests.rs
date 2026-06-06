@@ -9,7 +9,7 @@ mod tests {
 
     use screenshotsafe::config::Config;
     use screenshotsafe::db::Database;
-    use screenshotsafe::models::{AccountStatus, OAuthIdentity, User};
+    use screenshotsafe::models::{AccountStatus, CropRect, OAuthIdentity, User};
     use screenshotsafe::*;
 
     /// Create a test app with an in-memory database and temp storage.
@@ -1846,6 +1846,79 @@ mod tests {
         assert_eq!(body["ok"], true);
         assert!(body["rendered_url"].as_str().unwrap().ends_with(".png"));
         assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_save_annotations_rejects_invalid_crop_without_db_update() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let upload_body = upload_screenshot(&app, &cookie).await;
+        let id = upload_body["id"].as_str().unwrap();
+        let parsed_id: uuid::Uuid = id.parse().unwrap();
+
+        let req = authed_json_request(
+            "PUT",
+            &format!("/api/screenshots/{}/annotations", id),
+            &cookie,
+            serde_json::json!({
+                "annotations": [
+                    { "type": "redact", "x": 10, "y": 10, "w": 50, "h": 30 }
+                ],
+                "crop": { "x": 90, "y": 90, "w": 20, "h": 20 }
+            }),
+        );
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
+        assert!(screenshot.annotations.is_empty());
+        assert!(screenshot.crop_rect.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_update_screenshot_dpi_not_saved_when_rerender_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let upload_body = upload_screenshot(&app, &cookie).await;
+        let id = upload_body["id"].as_str().unwrap();
+        let parsed_id: uuid::Uuid = id.parse().unwrap();
+        let original_dpi = state
+            .db
+            .get_screenshot_by_id(&parsed_id)
+            .unwrap()
+            .unwrap()
+            .image_dpi;
+        state
+            .db
+            .update_screenshot_annotations(
+                &parsed_id,
+                &[],
+                &Some(CropRect {
+                    x: 90,
+                    y: 90,
+                    w: 20,
+                    h: 20,
+                }),
+            )
+            .unwrap();
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/screenshots/{}", id),
+            &cookie,
+            serde_json::json!({ "image_dpi": original_dpi + 100.0 }),
+        );
+
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
+        assert_eq!(screenshot.image_dpi, original_dpi);
     }
 
     // ── Page redirect tests ──
