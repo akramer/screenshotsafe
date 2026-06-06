@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::auth::middleware::{AdminUser, ApiOrSessionUser, AuthUser, MaybeAuthUser};
 use crate::config::OAuthAccountMode;
 use crate::models::{
-    AccountStatus, Annotation, ApiToken, CropRect, OAuthIdentity, Screenshot, User,
+    AccountStatus, Annotation, ApiToken, CropRect, OAuthIdentity, Screenshot, ThemePreference, User,
 };
 use crate::{auth, image_processing, share_id, AppError, SharedState};
 
@@ -56,6 +56,7 @@ pub async fn setup(
         account_status: AccountStatus::Enabled,
         max_screenshot_size_bytes: None,
         max_expiry_seconds: None,
+        theme_preference: ThemePreference::Dark,
         created_at: Utc::now(),
     };
 
@@ -422,6 +423,7 @@ pub async fn oauth_callback(
                 account_status,
                 max_screenshot_size_bytes: None,
                 max_expiry_seconds: None,
+                theme_preference: ThemePreference::Dark,
                 created_at: Utc::now(),
             };
             let identity = OAuthIdentity {
@@ -834,6 +836,7 @@ pub async fn admin_create_user(
         account_status: AccountStatus::Enabled,
         max_screenshot_size_bytes: normalize_user_limit(req.max_screenshot_size_bytes),
         max_expiry_seconds: normalize_user_limit(req.max_expiry_seconds),
+        theme_preference: ThemePreference::Dark,
         created_at: Utc::now(),
     };
 
@@ -1063,6 +1066,29 @@ pub async fn change_password(
     state.db.update_user_password_hash(&user.id, &new_hash)?;
 
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+#[derive(Deserialize)]
+pub struct UpdateUserPreferencesRequest {
+    pub theme_preference: ThemePreference,
+}
+
+pub async fn update_user_preferences(
+    State(state): State<SharedState>,
+    AuthUser(user): AuthUser,
+    Json(req): Json<UpdateUserPreferencesRequest>,
+) -> crate::Result<Json<serde_json::Value>> {
+    let updated = state
+        .db
+        .update_user_theme_preference(&user.id, req.theme_preference)?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
+
+    Ok(Json(serde_json::json!({
+        "ok": true,
+        "theme_preference": req.theme_preference,
+    })))
 }
 
 pub async fn disconnect_oauth_identity(

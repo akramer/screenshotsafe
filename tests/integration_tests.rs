@@ -9,7 +9,7 @@ mod tests {
 
     use screenshotsafe::config::Config;
     use screenshotsafe::db::Database;
-    use screenshotsafe::models::{AccountStatus, CropRect, OAuthIdentity, User};
+    use screenshotsafe::models::{AccountStatus, CropRect, OAuthIdentity, ThemePreference, User};
     use screenshotsafe::*;
 
     /// Create a test app with an in-memory database and temp storage.
@@ -1003,6 +1003,7 @@ mod tests {
             account_status: AccountStatus::Enabled,
             max_screenshot_size_bytes: None,
             max_expiry_seconds: None,
+            theme_preference: ThemePreference::Dark,
             created_at: Utc::now(),
         };
         let identity = OAuthIdentity {
@@ -1041,6 +1042,38 @@ mod tests {
                 .len(),
             1
         );
+    }
+
+    #[tokio::test]
+    async fn test_user_theme_preference_persists_and_renders() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "PUT",
+            "/api/user/preferences",
+            &cookie,
+            serde_json::json!({ "theme_preference": "light" }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let user = state.db.get_user_by_username("admin").unwrap().unwrap();
+        assert_eq!(user.theme_preference, ThemePreference::Light);
+
+        let resp = app
+            .clone()
+            .oneshot(authed_request("GET", "/", &cookie))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let html = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(html.contains(r#"<html lang="en" data-theme="light">"#));
+        assert!(html.contains(r#"data-theme-toggle"#));
     }
 
     // ── Screenshot Tests ──

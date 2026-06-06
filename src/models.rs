@@ -44,6 +44,53 @@ impl FromStr for AccountStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThemePreference {
+    Dark,
+    Light,
+}
+
+impl ThemePreference {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Dark => "dark",
+            Self::Light => "light",
+        }
+    }
+
+    pub fn toggle_label(self) -> &'static str {
+        match self {
+            Self::Dark => "Light",
+            Self::Light => "Dark",
+        }
+    }
+
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Dark => Self::Light,
+            Self::Light => Self::Dark,
+        }
+    }
+}
+
+impl From<&str> for ThemePreference {
+    fn from(value: &str) -> Self {
+        match value {
+            "light" => Self::Light,
+            _ => Self::Dark,
+        }
+    }
+}
+
+impl FromStr for ThemePreference {
+    type Err = Infallible;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(value))
+    }
+}
+
 /// A registered user.
 #[derive(Debug, Clone, Serialize)]
 pub struct User {
@@ -56,6 +103,7 @@ pub struct User {
     pub account_status: AccountStatus,
     pub max_screenshot_size_bytes: Option<u64>,
     pub max_expiry_seconds: Option<u64>,
+    pub theme_preference: ThemePreference,
     pub created_at: DateTime<Utc>,
 }
 

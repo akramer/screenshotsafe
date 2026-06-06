@@ -6,6 +6,7 @@ use axum::{
 use std::collections::HashMap;
 
 use crate::auth::middleware::{AdminUser, AuthUser, MaybeAuthUser};
+use crate::models::ThemePreference;
 use crate::{AppError, SharedState};
 
 const FAVICON_LINK: &str = r#"<link rel="icon" type="image/x-icon" href="/favicon.ico">"#;
@@ -36,6 +37,30 @@ const LOCAL_TIME_SCRIPT: &str = r#"<script>
                 el.textContent = `${el.dataset.localPrefix || ''}${formatted}${el.dataset.localSuffix || ''}`;
             });
         })();
+    </script>"#;
+const THEME_TOGGLE_SCRIPT: &str = r#"<script>
+        document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const theme = btn.dataset.nextTheme;
+                const resp = await fetch('/api/user/preferences', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ theme_preference: theme }),
+                });
+                if (!resp.ok) return;
+                document.documentElement.dataset.theme = theme;
+                document.querySelectorAll('[data-theme-toggle]').forEach((toggle) => {
+                    const next = theme === 'dark' ? 'light' : 'dark';
+                    toggle.dataset.nextTheme = next;
+                    toggle.setAttribute('aria-label', `Switch to ${next} mode`);
+                    const label = toggle.querySelector('[data-theme-toggle-label]');
+                    if (label) label.textContent = next === 'dark' ? 'Dark' : 'Light';
+                });
+                document.querySelectorAll('[data-theme-current]').forEach((el) => {
+                    el.textContent = theme;
+                });
+            });
+        });
     </script>"#;
 
 /// Dashboard page — lists all screenshots for the logged-in user.
@@ -121,7 +146,7 @@ pub async fn dashboard(
 
     let html = format!(
         r#"<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{theme}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -134,6 +159,7 @@ pub async fn dashboard(
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
             <span class="nav-user">{display_name}</span>
+            {theme_toggle}
             {admin_link}
             <a href="/settings" class="btn btn-sm btn-outline">Settings</a>
             <button id="logout-btn" class="btn btn-sm btn-outline">Logout</button>
@@ -148,6 +174,7 @@ pub async fn dashboard(
         </div>
     </main>
     {local_time_script}
+    {theme_toggle_script}
     <script>
         document.getElementById('logout-btn')?.addEventListener('click', async () => {{
             await fetch('/api/auth/logout', {{ method: 'POST' }});
@@ -173,10 +200,13 @@ pub async fn dashboard(
 </body>
 </html>"#,
         favicon = FAVICON_LINK,
+        theme = theme_attr(user.theme_preference),
+        theme_toggle = theme_toggle_button(user.theme_preference),
         display_name = html_escape(&user.display_name),
         admin_link = admin_link,
         screenshot_cards = screenshot_cards,
         local_time_script = LOCAL_TIME_SCRIPT,
+        theme_toggle_script = THEME_TOGGLE_SCRIPT,
     );
 
     Ok(Html(html).into_response())
@@ -189,7 +219,7 @@ pub async fn setup_page(State(state): State<SharedState>) -> crate::Result<impl 
     }
 
     let html = r#"<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -314,7 +344,7 @@ pub async fn login_page(
     };
 
     let html = r#"<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -424,6 +454,11 @@ pub async fn editor_page(
     };
 
     let html = EDITOR_TEMPLATE
+        .replace("{{THEME}}", theme_attr(user.theme_preference))
+        .replace(
+            "{{THEME_TOGGLE}}",
+            &theme_toggle_button(user.theme_preference),
+        )
         .replace("{{TITLE}}", &html_escape(screenshot.display_title()))
         .replace(
             "{{TITLE_ESCAPED}}",
@@ -481,13 +516,14 @@ pub async fn editor_page(
         .replace("{{ID}}", &screenshot.id.to_string())
         .replace("{{ANNOTATIONS}}", &annotations_json)
         .replace("{{CROP}}", &crop_json)
-        .replace("{{IMAGE_DPI}}", &image_dpi);
+        .replace("{{IMAGE_DPI}}", &image_dpi)
+        .replace("{{THEME_TOGGLE_SCRIPT}}", THEME_TOGGLE_SCRIPT);
 
     Ok(Html(html).into_response())
 }
 
 const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{THEME}}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -500,6 +536,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
     <nav class="navbar">
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
+            {{THEME_TOGGLE}}
             <a href="/" class="btn btn-sm btn-outline">← Dashboard</a>
         </div>
     </nav>
@@ -627,6 +664,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
         </div>
     </main>
     <script src="/static/js/fabric.min.js"></script>
+    {{THEME_TOGGLE_SCRIPT}}
     <script>
         (() => {
             const formats = {
@@ -782,7 +820,7 @@ pub async fn settings_page(
 
     let html = format!(
         r#"<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{theme}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -794,11 +832,21 @@ pub async fn settings_page(
     <nav class="navbar">
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
+            {theme_toggle}
             <a href="/" class="btn btn-sm btn-outline">← Dashboard</a>
         </div>
     </nav>
     <main class="container">
         <h1>Settings</h1>
+
+        <section class="settings-section">
+            <h2>Appearance</h2>
+            <p>Use the saved theme preference for the signed-in web UI.</p>
+            <div class="theme-setting">
+                <span>Current mode: <strong data-theme-current>{current_theme}</strong></span>
+                {theme_toggle}
+            </div>
+        </section>
 
         <section class="settings-section">
             <h2>Password</h2>
@@ -858,6 +906,7 @@ pub async fn settings_page(
         </section>
     </main>
     {local_time_script}
+    {theme_toggle_script}
     <script>
         const passwordForm = document.getElementById('password-form');
         const passwordMessage = document.getElementById('password-message');
@@ -1011,9 +1060,13 @@ pub async fn settings_page(
 </body>
 </html>"#,
         favicon = FAVICON_LINK,
+        theme = theme_attr(user.theme_preference),
+        current_theme = user.theme_preference.as_str(),
+        theme_toggle = theme_toggle_button(user.theme_preference),
         token_rows = token_rows,
         oauth_section = oauth_section,
         local_time_script = LOCAL_TIME_SCRIPT,
+        theme_toggle_script = THEME_TOGGLE_SCRIPT,
     );
 
     Ok(Html(html).into_response())
@@ -1081,7 +1134,7 @@ pub async fn admin_page(
 
     let html = format!(
         r#"<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{theme}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1093,6 +1146,7 @@ pub async fn admin_page(
     <nav class="navbar">
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
+            {theme_toggle}
             <a href="/" class="btn btn-sm btn-outline">Dashboard</a>
             <a href="/settings" class="btn btn-sm btn-outline">Settings</a>
         </div>
@@ -1148,6 +1202,7 @@ pub async fn admin_page(
         </section>
     </main>
     {local_time_script}
+    {theme_toggle_script}
     <script>
         const form = document.getElementById('user-form');
         const message = document.getElementById('user-message');
@@ -1223,8 +1278,11 @@ pub async fn admin_page(
 </body>
 </html>"#,
         favicon = FAVICON_LINK,
+        theme = theme_attr(admin.theme_preference),
+        theme_toggle = theme_toggle_button(admin.theme_preference),
         user_rows = user_rows,
         local_time_script = LOCAL_TIME_SCRIPT,
+        theme_toggle_script = THEME_TOGGLE_SCRIPT,
     );
 
     Ok(Html(html).into_response())
@@ -1233,7 +1291,7 @@ pub async fn admin_page(
 /// Admin user edit page for per-user limits and password resets.
 pub async fn admin_edit_user_page(
     State(state): State<SharedState>,
-    AdminUser(_admin): AdminUser,
+    AdminUser(admin): AdminUser,
     Path(id): Path<uuid::Uuid>,
 ) -> crate::Result<impl IntoResponse> {
     let user = state.db.get_user_by_id(&id)?.ok_or(AppError::NotFound)?;
@@ -1254,7 +1312,7 @@ pub async fn admin_edit_user_page(
 
     let html = format!(
         r#"<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{theme}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -1266,6 +1324,7 @@ pub async fn admin_edit_user_page(
     <nav class="navbar">
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
+            {theme_toggle}
             <a href="/admin" class="btn btn-sm btn-outline">Admin</a>
             <a href="/" class="btn btn-sm btn-outline">Dashboard</a>
         </div>
@@ -1325,6 +1384,7 @@ pub async fn admin_edit_user_page(
         </section>
     </main>
     {local_time_script}
+    {theme_toggle_script}
     <script>
         const userId = "{id}";
         const message = document.getElementById('user-message');
@@ -1399,6 +1459,8 @@ pub async fn admin_edit_user_page(
 </body>
 </html>"#,
         favicon = FAVICON_LINK,
+        theme = theme_attr(admin.theme_preference),
+        theme_toggle = theme_toggle_button(admin.theme_preference),
         id = user.id,
         username = html_escape(&user.username),
         display_name = html_escape(&user.display_name),
@@ -1421,6 +1483,7 @@ pub async fn admin_edit_user_page(
         },
         created_at = local_time(user.created_at, "date", "%b %d, %Y"),
         local_time_script = LOCAL_TIME_SCRIPT,
+        theme_toggle_script = THEME_TOGGLE_SCRIPT,
         size_limit = size_limit,
         expiry_limit = expiry_limit,
         server_size = state.config.server.max_screenshot_size_bytes,
@@ -1448,6 +1511,20 @@ fn local_time(
         datetime.to_rfc3339(),
         html_escape(local_format),
         html_escape(&datetime.format(fallback_format).to_string()),
+    )
+}
+
+fn theme_attr(theme: ThemePreference) -> &'static str {
+    theme.as_str()
+}
+
+fn theme_toggle_button(theme: ThemePreference) -> String {
+    let next = theme.toggled();
+    format!(
+        r#"<button class="btn btn-sm btn-outline theme-toggle" type="button" data-theme-toggle data-next-theme="{}" aria-label="Switch to {} mode"><span data-theme-toggle-label>{}</span></button>"#,
+        next.as_str(),
+        next.as_str(),
+        next.toggle_label(),
     )
 }
 

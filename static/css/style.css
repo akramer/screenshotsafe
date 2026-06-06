@@ -8,6 +8,7 @@
 }
 
 :root {
+    color-scheme: dark;
     --bg-primary: #0f0f13;
     --bg-secondary: #1a1a24;
     --bg-tertiary: #22223a;
@@ -26,6 +27,25 @@
     --radius-lg: 12px;
     --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
     --transition: 0.2s ease;
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+    --bg-primary: #f7f8fb;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #eef1f6;
+    --bg-card: #ffffff;
+    --text-primary: #151821;
+    --text-secondary: #4e5768;
+    --text-muted: #788293;
+    --accent: #3157d5;
+    --accent-hover: #2649bd;
+    --danger: #c9354e;
+    --danger-hover: #aa263c;
+    --success: #168a3d;
+    --border: rgba(20, 26, 38, 0.12);
+    --border-hover: rgba(20, 26, 38, 0.22);
+    --shadow: 0 4px 24px rgba(30, 39, 58, 0.12);
 }
 
 body {
@@ -123,6 +143,10 @@ body {
 
 .btn-outline {
     background: transparent;
+}
+
+.theme-toggle {
+    min-width: 4.1rem;
 }
 
 .btn-danger {
@@ -395,6 +419,21 @@ body {
     color: var(--success);
 }
 
+.theme-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: 420px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.theme-setting strong {
+    color: var(--text-primary);
+    text-transform: capitalize;
+}
+
 .token-create {
     display: flex;
     gap: 0.75rem;
@@ -562,6 +601,11 @@ body {
     }
 
     .token-create {
+        flex-direction: column;
+    }
+
+    .theme-setting {
+        align-items: flex-start;
         flex-direction: column;
     }
 

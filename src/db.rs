@@ -2,7 +2,7 @@ use chrono::{DateTime, NaiveDateTime, Utc};
 use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::sync::Mutex;
 
-use crate::models::{AccountStatus, ApiToken, OAuthIdentity, Screenshot, User};
+use crate::models::{AccountStatus, ApiToken, OAuthIdentity, Screenshot, ThemePreference, User};
 use crate::Result;
 
 type ScreenshotFilePaths = Vec<(String, Option<String>)>;
@@ -76,6 +76,7 @@ impl Database {
                 account_status TEXT NOT NULL DEFAULT 'enabled',
                 max_screenshot_size_bytes INTEGER,
                 max_expiry_seconds INTEGER,
+                theme_preference TEXT NOT NULL DEFAULT 'dark',
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
@@ -134,6 +135,12 @@ impl Database {
         )?;
         add_column_if_missing(&conn, "users", "max_screenshot_size_bytes", "INTEGER")?;
         add_column_if_missing(&conn, "users", "max_expiry_seconds", "INTEGER")?;
+        add_column_if_missing(
+            &conn,
+            "users",
+            "theme_preference",
+            "TEXT NOT NULL DEFAULT 'dark'",
+        )?;
         conn.execute(
             "UPDATE users SET is_admin = 1
              WHERE NOT EXISTS (SELECT 1 FROM users WHERE is_admin = 1)
@@ -170,8 +177,8 @@ impl Database {
     pub fn create_user(&self, user: &User) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO users (id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO users (id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, theme_preference, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 user.id.to_string(),
                 user.username,
@@ -181,6 +188,7 @@ impl Database {
                 user.account_status.as_str(),
                 user.max_screenshot_size_bytes.map(|v| v as i64),
                 user.max_expiry_seconds.map(|v| v as i64),
+                user.theme_preference.as_str(),
                 user.created_at.to_rfc3339(),
             ],
         )?;
@@ -190,8 +198,8 @@ impl Database {
     pub fn create_initial_admin(&self, user: &User) -> Result<bool> {
         let conn = self.conn.lock().unwrap();
         let rows = conn.execute(
-            "INSERT INTO users (id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at)
-             SELECT ?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?8
+            "INSERT INTO users (id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, theme_preference, created_at)
+             SELECT ?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?8, ?9
              WHERE NOT EXISTS (SELECT 1 FROM users)",
             params![
                 user.id.to_string(),
@@ -201,6 +209,7 @@ impl Database {
                 user.account_status.as_str(),
                 user.max_screenshot_size_bytes.map(|v| v as i64),
                 user.max_expiry_seconds.map(|v| v as i64),
+                user.theme_preference.as_str(),
                 user.created_at.to_rfc3339(),
             ],
         )?;
@@ -210,7 +219,7 @@ impl Database {
     pub fn list_users(&self) -> Result<Vec<User>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at
+            "SELECT id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, theme_preference, created_at
              FROM users ORDER BY created_at ASC",
         )?;
         let rows = stmt.query_map([], Self::user_from_row)?;
@@ -222,7 +231,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at FROM users WHERE username = ?1",
+                "SELECT id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, theme_preference, created_at FROM users WHERE username = ?1",
                 params![username],
                 Self::user_from_row,
             )
@@ -234,7 +243,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at FROM users WHERE id = ?1",
+                "SELECT id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, theme_preference, created_at FROM users WHERE id = ?1",
                 params![id.to_string()],
                 Self::user_from_row,
             )
@@ -282,6 +291,19 @@ impl Database {
         Ok(rows > 0)
     }
 
+    pub fn update_user_theme_preference(
+        &self,
+        id: &uuid::Uuid,
+        theme_preference: ThemePreference,
+    ) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let rows = conn.execute(
+            "UPDATE users SET theme_preference = ?1 WHERE id = ?2",
+            params![theme_preference.as_str(), id.to_string()],
+        )?;
+        Ok(rows > 0)
+    }
+
     pub fn get_user_by_oauth_identity(
         &self,
         provider: &str,
@@ -290,7 +312,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT u.id, u.username, u.password_hash, u.display_name, u.is_admin, u.account_status, u.max_screenshot_size_bytes, u.max_expiry_seconds, u.created_at,
+                "SELECT u.id, u.username, u.password_hash, u.display_name, u.is_admin, u.account_status, u.max_screenshot_size_bytes, u.max_expiry_seconds, u.theme_preference, u.created_at,
                         oi.id, oi.user_id, oi.provider, oi.subject, oi.email, oi.display_name, oi.created_at, oi.last_login_at
                  FROM oauth_identities oi JOIN users u ON oi.user_id = u.id
                  WHERE oi.provider = ?1 AND oi.subject = ?2",
@@ -355,8 +377,8 @@ impl Database {
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction()?;
         tx.execute(
-            "INSERT INTO users (id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO users (id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, theme_preference, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 user.id.to_string(),
                 user.username,
@@ -366,6 +388,7 @@ impl Database {
                 user.account_status.as_str(),
                 user.max_screenshot_size_bytes.map(|v| v as i64),
                 user.max_expiry_seconds.map(|v| v as i64),
+                user.theme_preference.as_str(),
                 user.created_at.to_rfc3339(),
             ],
         )?;
@@ -444,7 +467,8 @@ impl Database {
             account_status: AccountStatus::from(row.get::<_, String>(5)?.as_str()),
             max_screenshot_size_bytes: optional_u64(row.get(6)?),
             max_expiry_seconds: optional_u64(row.get(7)?),
-            created_at: parse_datetime(&row.get::<_, String>(8)?),
+            theme_preference: ThemePreference::from(row.get::<_, String>(8)?.as_str()),
+            created_at: parse_datetime(&row.get::<_, String>(9)?),
         })
     }
 
@@ -458,20 +482,21 @@ impl Database {
             account_status: AccountStatus::from(row.get::<_, String>(5)?.as_str()),
             max_screenshot_size_bytes: optional_u64(row.get(6)?),
             max_expiry_seconds: optional_u64(row.get(7)?),
-            created_at: parse_datetime(&row.get::<_, String>(8)?),
+            theme_preference: ThemePreference::from(row.get::<_, String>(8)?.as_str()),
+            created_at: parse_datetime(&row.get::<_, String>(9)?),
         })
     }
 
     fn oauth_identity_from_join_row(row: &Row<'_>) -> rusqlite::Result<OAuthIdentity> {
-        let last_login_at: Option<String> = row.get(16)?;
+        let last_login_at: Option<String> = row.get(17)?;
         Ok(OAuthIdentity {
-            id: row.get::<_, String>(9)?.parse().unwrap(),
-            user_id: row.get::<_, String>(10)?.parse().unwrap(),
-            provider: row.get(11)?,
-            subject: row.get(12)?,
-            email: row.get(13)?,
-            display_name: row.get(14)?,
-            created_at: parse_datetime(&row.get::<_, String>(15)?),
+            id: row.get::<_, String>(10)?.parse().unwrap(),
+            user_id: row.get::<_, String>(11)?.parse().unwrap(),
+            provider: row.get(12)?,
+            subject: row.get(13)?,
+            email: row.get(14)?,
+            display_name: row.get(15)?,
+            created_at: parse_datetime(&row.get::<_, String>(16)?),
             last_login_at: last_login_at.and_then(|s| parse_datetime_opt(&s)),
         })
     }
@@ -723,7 +748,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT u.id, u.username, u.password_hash, u.display_name, u.is_admin, u.account_status, u.max_screenshot_size_bytes, u.max_expiry_seconds, u.created_at, t.id
+                "SELECT u.id, u.username, u.password_hash, u.display_name, u.is_admin, u.account_status, u.max_screenshot_size_bytes, u.max_expiry_seconds, u.theme_preference, u.created_at, t.id
                  FROM api_tokens t JOIN users u ON t.user_id = u.id
                  WHERE t.token_hash = ?1 AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))",
                 params![token_hash],
@@ -738,9 +763,10 @@ impl Database {
                             account_status: AccountStatus::from(row.get::<_, String>(5)?.as_str()),
                             max_screenshot_size_bytes: optional_u64(row.get(6)?),
                             max_expiry_seconds: optional_u64(row.get(7)?),
-                            created_at: parse_datetime(&row.get::<_, String>(8)?),
+                            theme_preference: ThemePreference::from(row.get::<_, String>(8)?.as_str()),
+                            created_at: parse_datetime(&row.get::<_, String>(9)?),
                         },
-                        row.get::<_, String>(9)?.parse::<uuid::Uuid>().unwrap(),
+                        row.get::<_, String>(10)?.parse::<uuid::Uuid>().unwrap(),
                     ))
                 },
             )
