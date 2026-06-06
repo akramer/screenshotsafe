@@ -617,6 +617,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_failed_admin_password_update_does_not_change_limits() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let admin_cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "POST",
+            "/api/admin/users",
+            &admin_cookie,
+            serde_json::json!({
+                "username": "alice",
+                "password": "testpassword456",
+                "is_admin": false,
+                "max_screenshot_size_bytes": 12345,
+                "max_expiry_seconds": 3600
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let alice = state.db.get_user_by_username("alice").unwrap().unwrap();
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/admin/users/{}", alice.id),
+            &admin_cookie,
+            serde_json::json!({
+                "max_screenshot_size_bytes": 99999,
+                "max_expiry_seconds": 7200,
+                "password": "short"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let alice = state.db.get_user_by_username("alice").unwrap().unwrap();
+        assert_eq!(alice.max_screenshot_size_bytes, Some(12345));
+        assert_eq!(alice.max_expiry_seconds, Some(3600));
+    }
+
+    #[tokio::test]
     async fn test_non_admin_cannot_manage_users() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app(dir.path());
@@ -751,6 +791,36 @@ mod tests {
         );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_failed_admin_status_update_does_not_change_limits() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+        state
+            .db
+            .update_user_limits(&admin.id, Some(12345), Some(3600))
+            .unwrap();
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/admin/users/{}", admin.id),
+            &cookie,
+            serde_json::json!({
+                "max_screenshot_size_bytes": 99999,
+                "max_expiry_seconds": 7200,
+                "account_status": "disabled"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+        assert_eq!(admin.max_screenshot_size_bytes, Some(12345));
+        assert_eq!(admin.max_expiry_seconds, Some(3600));
+        assert!(admin.account_status.is_enabled());
     }
 
     #[tokio::test]

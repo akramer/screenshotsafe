@@ -873,23 +873,21 @@ pub async fn admin_update_user_limits(
         .max_expiry_seconds
         .map(normalize_user_limit)
         .unwrap_or(user.max_expiry_seconds);
-    let updated =
-        state
-            .db
-            .update_user_limits(&id, max_screenshot_size_bytes, max_expiry_seconds)?;
-    if !updated {
-        return Err(AppError::NotFound);
-    }
-    if let Some(password) = req.password {
+
+    let password_hash = if let Some(password) = req.password.as_ref() {
         if password.len() < 8 {
             return Err(AppError::BadRequest(
                 "Password must be at least 8 characters".into(),
             ));
         }
-        let password_hash = auth::hash_password(&password)
-            .map_err(|e| AppError::Internal(format!("Password hashing failed: {}", e)))?;
-        state.db.update_user_password_hash(&id, &password_hash)?;
-    }
+        Some(
+            auth::hash_password(password)
+                .map_err(|e| AppError::Internal(format!("Password hashing failed: {}", e)))?,
+        )
+    } else {
+        None
+    };
+
     if let Some(account_status) = req.account_status {
         if id == admin.id && !account_status.is_enabled() {
             return Err(AppError::BadRequest(
@@ -901,6 +899,19 @@ pub async fn admin_update_user_limits(
                 "Cannot disable the last admin user".into(),
             ));
         }
+    }
+
+    let updated =
+        state
+            .db
+            .update_user_limits(&id, max_screenshot_size_bytes, max_expiry_seconds)?;
+    if !updated {
+        return Err(AppError::NotFound);
+    }
+    if let Some(password_hash) = password_hash {
+        state.db.update_user_password_hash(&id, &password_hash)?;
+    }
+    if let Some(account_status) = req.account_status {
         state.db.update_user_account_status(&id, account_status)?;
     }
 
