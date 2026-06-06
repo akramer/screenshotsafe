@@ -23,6 +23,9 @@ pub enum AppError {
     #[error("Gone: {0}")]
     Gone(String),
 
+    #[error("Too many requests")]
+    RateLimited { retry_after: std::time::Duration },
+
     #[error("Internal error: {0}")]
     Internal(String),
 
@@ -50,6 +53,10 @@ impl AppError {
             reason: reason.into(),
         }
     }
+
+    pub fn rate_limited(retry_after: std::time::Duration) -> Self {
+        Self::RateLimited { retry_after }
+    }
 }
 
 impl IntoResponse for AppError {
@@ -76,6 +83,9 @@ impl IntoResponse for AppError {
             }
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone(), Some(msg.clone())),
             AppError::Gone(msg) => (StatusCode::GONE, msg.clone(), Some(msg.clone())),
+            AppError::RateLimited { retry_after } => {
+                return crate::rate_limit::rate_limit_response(*retry_after);
+            }
             AppError::Internal(msg) => {
                 tracing::error!("Internal error: {}", msg);
                 (

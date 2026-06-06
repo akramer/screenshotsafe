@@ -4,6 +4,7 @@ pub mod db;
 pub mod error;
 pub mod image_processing;
 pub mod models;
+pub mod rate_limit;
 pub mod routes;
 pub mod share_id;
 
@@ -14,6 +15,7 @@ use std::sync::Arc;
 use axum::{
     extract::DefaultBodyLimit,
     http::{header, HeaderMap, HeaderValue, Method},
+    middleware,
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
     Router,
@@ -29,6 +31,7 @@ pub struct AppState {
     pub db: db::Database,
     pub config: config::Config,
     pub jwt_secret: String,
+    pub rate_limiter: rate_limit::RateLimiter,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -95,18 +98,24 @@ pub fn build_router(state: SharedState) -> Router {
             get(routes::pages::admin_edit_user_page),
         );
 
-    let api_routes = Router::new()
-        .route("/api/ping", get(routes::api::ping))
+    let sensitive_auth_routes = Router::new()
         .route("/api/auth/setup", post(routes::api::setup))
         .route("/api/auth/login", post(routes::api::login))
-        .route("/api/auth/logout", post(routes::api::logout))
         .route("/api/auth/oauth/start", get(routes::api::oauth_start))
         .route("/api/auth/oauth/callback", get(routes::api::oauth_callback))
+        .route("/api/auth/password", put(routes::api::change_password))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            rate_limit::sensitive_auth_rate_limit,
+        ));
+
+    let api_routes = Router::new()
+        .route("/api/ping", get(routes::api::ping))
+        .route("/api/auth/logout", post(routes::api::logout))
         .route(
             "/api/auth/oauth/identities/{id}",
             delete(routes::api::disconnect_oauth_identity),
         )
-        .route("/api/auth/password", put(routes::api::change_password))
         .route("/api/admin/users", get(routes::api::admin_list_users))
         .route("/api/admin/users", post(routes::api::admin_create_user))
         .route(
@@ -141,7 +150,8 @@ pub fn build_router(state: SharedState) -> Router {
         )
         .route("/api/auth/tokens", post(routes::api::create_token))
         .route("/api/auth/tokens", get(routes::api::list_tokens))
-        .route("/api/auth/tokens/{id}", delete(routes::api::revoke_token));
+        .route("/api/auth/tokens/{id}", delete(routes::api::revoke_token))
+        .merge(sensitive_auth_routes);
 
     let cors_state = state.clone();
     let cors = CorsLayer::new()

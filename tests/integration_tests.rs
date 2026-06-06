@@ -35,6 +35,7 @@ mod tests {
             db,
             config,
             jwt_secret: "test-secret-key-for-jwt".to_string(),
+            rate_limiter: Default::default(),
         });
 
         let app = build_router(state.clone());
@@ -430,6 +431,94 @@ mod tests {
         );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn test_login_rate_limit_blocks_repeated_attempts() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
+        app.clone().oneshot(req).await.unwrap();
+
+        for attempt in 0..10 {
+            let req = json_request(
+                "POST",
+                "/api/auth/login",
+                serde_json::json!({
+                    "username": format!("nobody-{attempt}"),
+                    "password": "testpassword123"
+                }),
+            );
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        }
+
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert!(resp.headers().get(header::RETRY_AFTER).is_some());
+    }
+
+    #[tokio::test]
+    async fn test_sensitive_auth_rate_limit_uses_forwarded_client_address() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app(dir.path());
+
+        let req = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
+        app.clone().oneshot(req).await.unwrap();
+
+        for _ in 0..10 {
+            let req = json_request(
+                "POST",
+                "/api/auth/login",
+                serde_json::json!({
+                    "username": "nobody",
+                    "password": "testpassword123"
+                }),
+            );
+            app.clone().oneshot(req).await.unwrap();
+        }
+
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "admin",
+                "password": "testpassword123"
+            }),
+        );
+        let (mut parts, body) = req.into_parts();
+        parts
+            .headers
+            .insert("x-forwarded-for", "203.0.113.10".parse().unwrap());
+        let resp = app
+            .clone()
+            .oneshot(axum::http::Request::from_parts(parts, body))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 
     #[tokio::test]

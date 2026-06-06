@@ -53,6 +53,7 @@ async fn main() -> anyhow::Result<()> {
         db: database,
         config,
         jwt_secret,
+        rate_limiter: Default::default(),
     });
 
     spawn_expired_screenshot_cleanup(state.clone());
