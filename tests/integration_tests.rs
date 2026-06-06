@@ -940,6 +940,40 @@ mod tests {
         app.clone().oneshot(req).await.unwrap()
     }
 
+    async fn upload_image_response(
+        app: &axum::Router,
+        cookie: &str,
+        image_data: Vec<u8>,
+    ) -> axum::http::Response<Body> {
+        let boundary = "----TestBoundary";
+        let mut body_bytes = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\n",
+            boundary = boundary,
+        )
+        .into_bytes();
+        body_bytes.extend_from_slice(&image_data);
+        body_bytes.extend_from_slice(
+            format!(
+                "\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"title\"\r\n\r\nTest Screenshot\r\n--{boundary}--\r\n",
+                boundary = boundary
+            )
+            .as_bytes(),
+        );
+
+        let req = axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/screenshots")
+            .header(
+                header::CONTENT_TYPE,
+                format!("multipart/form-data; boundary={}", boundary),
+            )
+            .header(header::COOKIE, cookie)
+            .body(Body::from(body_bytes))
+            .unwrap();
+
+        app.clone().oneshot(req).await.unwrap()
+    }
+
     #[tokio::test]
     async fn test_upload_screenshot() {
         let dir = tempfile::tempdir().unwrap();
@@ -1098,6 +1132,23 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
         let body = body_json(resp).await;
         assert!(body["error"].as_str().unwrap().contains("maximum size"));
+    }
+
+    #[tokio::test]
+    async fn test_upload_uses_configured_body_limit_above_axum_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, _state) = test_app_with_config(dir.path(), |config| {
+            config.server.public_url = "http://localhost:8080".to_string();
+            config.server.max_screenshot_size_bytes = 3 * 1024 * 1024;
+        });
+
+        let cookie = setup_user(&app).await;
+        let image_data = vec![0; 2 * 1024 * 1024 + 128 * 1024];
+        let resp = upload_image_response(&app, &cookie, image_data).await;
+
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body = body_json(resp).await;
+        assert!(body["error"].as_str().unwrap().contains("Invalid image"));
     }
 
     #[tokio::test]

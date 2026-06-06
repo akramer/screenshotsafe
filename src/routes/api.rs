@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    extract::{Multipart, Path, Query, State},
+    extract::{multipart::Field, Multipart, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Redirect, Response},
     Json,
@@ -1044,6 +1044,7 @@ pub async fn upload_screenshot(
     let mut source_url: Option<String> = None;
     let mut expires_in: Option<String> = None;
     let mut image_dpi: Option<f64> = None;
+    let max_screenshot_size_bytes = effective_max_screenshot_size_bytes(&state, &user);
 
     while let Some(field) = multipart
         .next_field()
@@ -1056,13 +1057,7 @@ pub async fn upload_screenshot(
                 if let Some(fname) = field.file_name() {
                     filename = fname.to_string();
                 }
-                image_data = Some(
-                    field
-                        .bytes()
-                        .await
-                        .map_err(|e| AppError::BadRequest(format!("Read error: {}", e)))?
-                        .to_vec(),
-                );
+                image_data = Some(read_image_field(field, max_screenshot_size_bytes).await?);
             }
             "title" => {
                 title = Some(
@@ -1100,14 +1095,6 @@ pub async fn upload_screenshot(
     }
 
     let image_data = image_data.ok_or(AppError::BadRequest("No image provided".into()))?;
-    let max_screenshot_size_bytes = effective_max_screenshot_size_bytes(&state, &user);
-    if image_data.len() as u64 > max_screenshot_size_bytes {
-        return Err(AppError::BadRequest(format!(
-            "Screenshot exceeds the maximum size of {}",
-            format_bytes(max_screenshot_size_bytes)
-        )));
-    }
-
     let image_dpi = image_dpi
         .or_else(|| png_dpi_from_phys_chunk(&image_data))
         .unwrap_or(100.0);
@@ -1246,6 +1233,32 @@ fn normalize_user_limit(value: Option<u64>) -> Option<u64> {
 fn effective_max_screenshot_size_bytes(state: &SharedState, user: &User) -> u64 {
     user.max_screenshot_size_bytes
         .unwrap_or(state.config.server.max_screenshot_size_bytes)
+}
+
+async fn read_image_field(mut field: Field<'_>, max_size_bytes: u64) -> crate::Result<Vec<u8>> {
+    let mut image_data = Vec::new();
+    let mut total_size = 0_u64;
+
+    while let Some(chunk) = field
+        .chunk()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("Read error: {}", e)))?
+    {
+        total_size = total_size
+            .checked_add(chunk.len() as u64)
+            .ok_or_else(|| AppError::BadRequest("Screenshot is too large".into()))?;
+
+        if total_size > max_size_bytes {
+            return Err(AppError::BadRequest(format!(
+                "Screenshot exceeds the maximum size of {}",
+                format_bytes(max_size_bytes)
+            )));
+        }
+
+        image_data.extend_from_slice(&chunk);
+    }
+
+    Ok(image_data)
 }
 
 fn effective_max_expiry_seconds(state: &SharedState, user: &User) -> Option<u64> {

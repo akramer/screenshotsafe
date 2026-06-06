@@ -12,6 +12,7 @@ pub use error::{AppError, Result};
 use std::sync::Arc;
 
 use axum::{
+    extract::DefaultBodyLimit,
     http::{header, HeaderMap, HeaderValue, Method},
     response::{IntoResponse, Response},
     routing::{delete, get, patch, post, put},
@@ -76,6 +77,9 @@ pub fn spawn_expired_screenshot_cleanup(state: SharedState) {
 
 /// Build the full Axum router with all routes.
 pub fn build_router(state: SharedState) -> Router {
+    let max_body_size =
+        usize::try_from(state.config.server.max_screenshot_size_bytes).unwrap_or(usize::MAX);
+
     let public_routes =
         Router::new().route("/s/{share_id_or_file}", get(routes::share::share_dispatch));
 
@@ -164,6 +168,7 @@ pub fn build_router(state: SharedState) -> Router {
         .merge(api_routes)
         .route("/favicon.ico", get(favicon))
         .nest_service("/static", ServeDir::new("static"))
+        .layer(DefaultBodyLimit::max(max_body_size))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
