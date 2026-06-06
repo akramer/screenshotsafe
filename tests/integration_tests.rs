@@ -1245,7 +1245,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_update_clamps_expiry_limit_from_creation_time() {
+    async fn test_update_clamps_expiry_limit_from_edit_time() {
         let dir = tempfile::tempdir().unwrap();
         let (app, state) = test_app(dir.path());
 
@@ -1259,13 +1259,8 @@ mod tests {
         let upload_body = upload_screenshot(&app, &cookie).await;
         let id = upload_body["id"].as_str().unwrap();
         let parsed_id: uuid::Uuid = id.parse().unwrap();
-        let created_at = state
-            .db
-            .get_screenshot_by_id(&parsed_id)
-            .unwrap()
-            .unwrap()
-            .created_at;
 
+        let before_update = Utc::now();
         let req = authed_json_request(
             "PATCH",
             &format!("/api/screenshots/{}", id),
@@ -1273,13 +1268,13 @@ mod tests {
             serde_json::json!({ "expires_in": "2h" }),
         );
         let resp = app.clone().oneshot(req).await.unwrap();
+        let after_update = Utc::now();
         assert_eq!(resp.status(), StatusCode::OK);
 
         let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
-        assert_eq!(
-            screenshot.expires_at.unwrap(),
-            created_at + Duration::seconds(3600)
-        );
+        let expires_at = screenshot.expires_at.unwrap();
+        assert!(expires_at >= before_update + Duration::seconds(3600));
+        assert!(expires_at <= after_update + Duration::seconds(3600));
     }
 
     #[tokio::test]

@@ -1539,7 +1539,7 @@ pub async fn update_screenshot(
             Some(value),
             state.config.auth.default_expiry_seconds,
             effective_max_expiry_seconds(&state, &user),
-            screenshot.created_at,
+            Utc::now(),
         )?),
         None => None,
     };
