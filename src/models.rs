@@ -1,5 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
+use std::str::FromStr;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -19,16 +21,26 @@ impl AccountStatus {
         }
     }
 
-    pub fn from_str(value: &str) -> Self {
+    pub fn is_enabled(self) -> bool {
+        self == Self::Enabled
+    }
+}
+
+impl From<&str> for AccountStatus {
+    fn from(value: &str) -> Self {
         match value {
             "pending" => Self::Pending,
             "disabled" => Self::Disabled,
             _ => Self::Enabled,
         }
     }
+}
 
-    pub fn is_enabled(self) -> bool {
-        self == Self::Enabled
+impl FromStr for AccountStatus {
+    type Err = Infallible;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(value))
     }
 }
 

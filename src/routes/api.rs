@@ -1373,7 +1373,7 @@ fn parse_expiry_seconds(s: &str) -> crate::Result<Option<u64>> {
 
 fn format_bytes(bytes: u64) -> String {
     const MIB: u64 = 1024 * 1024;
-    if bytes >= MIB && bytes % MIB == 0 {
+    if bytes >= MIB && bytes.is_multiple_of(MIB) {
         format!("{} MiB", bytes / MIB)
     } else {
         format!("{} bytes", bytes)

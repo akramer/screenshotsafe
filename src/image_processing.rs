@@ -358,8 +358,10 @@ fn render_svg_to_pixmap(
     fontdb.load_system_fonts();
 
     // Parse SVG — in usvg 0.44, fontdb goes into Options
-    let mut opt = usvg::Options::default();
-    opt.fontdb = Arc::new(fontdb);
+    let opt = usvg::Options {
+        fontdb: Arc::new(fontdb),
+        ..Default::default()
+    };
     let tree = usvg::Tree::from_str(svg_str, &opt)
         .map_err(|e| crate::AppError::Internal(format!("SVG parse error: {}", e)))?;
 

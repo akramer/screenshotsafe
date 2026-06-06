@@ -5,6 +5,8 @@ use std::sync::Mutex;
 use crate::models::{AccountStatus, ApiToken, OAuthIdentity, Screenshot, User};
 use crate::Result;
 
+type ScreenshotFilePaths = Vec<(String, Option<String>)>;
+
 /// Parse a datetime string that may be RFC3339 or SQLite's `datetime()` format.
 fn parse_datetime(s: &str) -> DateTime<Utc> {
     // Try RFC3339 first (e.g. "2026-04-26T21:28:45+00:00")
@@ -410,12 +412,12 @@ impl Database {
         Ok(())
     }
 
-    pub fn delete_user(&self, id: &uuid::Uuid) -> Result<Option<Vec<(String, Option<String>)>>> {
+    pub fn delete_user(&self, id: &uuid::Uuid) -> Result<Option<ScreenshotFilePaths>> {
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction()?;
         let mut stmt =
             tx.prepare("SELECT original_path, rendered_path FROM screenshots WHERE user_id = ?1")?;
-        let paths: Vec<(String, Option<String>)> = stmt
+        let paths: ScreenshotFilePaths = stmt
             .query_map(params![id.to_string()], |row| {
                 Ok((row.get(0)?, row.get(1)?))
             })?
@@ -439,7 +441,7 @@ impl Database {
             password_hash: row.get(2)?,
             display_name: row.get(3)?,
             is_admin: row.get(4)?,
-            account_status: AccountStatus::from_str(&row.get::<_, String>(5)?),
+            account_status: AccountStatus::from(row.get::<_, String>(5)?.as_str()),
             max_screenshot_size_bytes: optional_u64(row.get(6)?),
             max_expiry_seconds: optional_u64(row.get(7)?),
             created_at: parse_datetime(&row.get::<_, String>(8)?),
@@ -453,7 +455,7 @@ impl Database {
             password_hash: row.get(2)?,
             display_name: row.get(3)?,
             is_admin: row.get(4)?,
-            account_status: AccountStatus::from_str(&row.get::<_, String>(5)?),
+            account_status: AccountStatus::from(row.get::<_, String>(5)?.as_str()),
             max_screenshot_size_bytes: optional_u64(row.get(6)?),
             max_expiry_seconds: optional_u64(row.get(7)?),
             created_at: parse_datetime(&row.get::<_, String>(8)?),
@@ -733,7 +735,7 @@ impl Database {
                             password_hash: row.get(2)?,
                             display_name: row.get(3)?,
                             is_admin: row.get(4)?,
-                            account_status: AccountStatus::from_str(&row.get::<_, String>(5)?),
+                            account_status: AccountStatus::from(row.get::<_, String>(5)?.as_str()),
                             max_screenshot_size_bytes: optional_u64(row.get(6)?),
                             max_expiry_seconds: optional_u64(row.get(7)?),
                             created_at: parse_datetime(&row.get::<_, String>(8)?),
