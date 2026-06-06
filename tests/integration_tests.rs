@@ -175,6 +175,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_setup_allows_only_one_concurrent_admin() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+
+        let req1 = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin1",
+                "password": "testpassword123"
+            }),
+        );
+        let req2 = json_request(
+            "POST",
+            "/api/auth/setup",
+            serde_json::json!({
+                "username": "admin2",
+                "password": "testpassword456"
+            }),
+        );
+
+        let (resp1, resp2) = tokio::join!(app.clone().oneshot(req1), app.clone().oneshot(req2));
+        let statuses = [resp1.unwrap().status(), resp2.unwrap().status()];
+
+        assert_eq!(
+            statuses
+                .iter()
+                .filter(|status| **status == StatusCode::CREATED)
+                .count(),
+            1
+        );
+        assert_eq!(
+            statuses
+                .iter()
+                .filter(|status| **status == StatusCode::BAD_REQUEST)
+                .count(),
+            1
+        );
+
+        let users = state.db.list_users().unwrap();
+        assert_eq!(users.len(), 1);
+        assert!(users[0].is_admin);
+        assert!(matches!(users[0].username.as_str(), "admin1" | "admin2"));
+    }
+
+    #[tokio::test]
     async fn test_setup_validates_password_length() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app(dir.path());

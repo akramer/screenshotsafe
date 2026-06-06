@@ -33,11 +33,6 @@ pub async fn setup(
     headers: HeaderMap,
     Json(req): Json<SetupRequest>,
 ) -> crate::Result<impl IntoResponse> {
-    // Only allow setup if no users exist
-    if state.db.user_count()? > 0 {
-        return Err(AppError::BadRequest("Setup already completed".into()));
-    }
-
     let username = req.username.trim();
     if username.is_empty() || req.password.len() < 8 {
         return Err(AppError::BadRequest(
@@ -64,7 +59,9 @@ pub async fn setup(
         created_at: Utc::now(),
     };
 
-    state.db.create_user(&user)?;
+    if !state.db.create_initial_admin(&user)? {
+        return Err(AppError::BadRequest("Setup already completed".into()));
+    }
     tracing::info!("Initial user '{}' created", user.username);
 
     // Auto-login: create session token

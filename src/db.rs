@@ -185,6 +185,26 @@ impl Database {
         Ok(())
     }
 
+    pub fn create_initial_admin(&self, user: &User) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let rows = conn.execute(
+            "INSERT INTO users (id, username, password_hash, display_name, is_admin, account_status, max_screenshot_size_bytes, max_expiry_seconds, created_at)
+             SELECT ?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?8
+             WHERE NOT EXISTS (SELECT 1 FROM users)",
+            params![
+                user.id.to_string(),
+                user.username,
+                user.password_hash,
+                user.display_name,
+                user.account_status.as_str(),
+                user.max_screenshot_size_bytes.map(|v| v as i64),
+                user.max_expiry_seconds.map(|v| v as i64),
+                user.created_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(rows > 0)
+    }
+
     pub fn list_users(&self) -> Result<Vec<User>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
