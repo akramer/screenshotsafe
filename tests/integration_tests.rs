@@ -1125,6 +1125,39 @@ mod tests {
             "PUT",
             "/api/user/preferences",
             &cookie,
+            serde_json::json!({ "theme_preference": "dark" }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let set_cookies = resp
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert!(set_cookies
+            .iter()
+            .any(|cookie| cookie == &"theme_preference=dark; SameSite=Lax; Path=/"));
+
+        let user = state.db.get_user_by_username("admin").unwrap().unwrap();
+        assert_eq!(user.theme_preference, ThemePreference::Dark);
+
+        let resp = app
+            .clone()
+            .oneshot(authed_request("GET", "/", &cookie))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let html = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(html.contains(r#"<html lang="en" data-theme="dark">"#));
+
+        let req = authed_json_request(
+            "PUT",
+            "/api/user/preferences",
+            &cookie,
             serde_json::json!({ "theme_preference": "os_default" }),
         );
         let resp = app.clone().oneshot(req).await.unwrap();

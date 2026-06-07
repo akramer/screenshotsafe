@@ -65,6 +65,7 @@ impl ThemePreference {
 impl From<&str> for ThemePreference {
     fn from(value: &str) -> Self {
         match value {
+            "dark" => Self::Dark,
             "light" => Self::Light,
             "os_default" | "system" | "auto" => Self::OsDefault,
             _ => Self::OsDefault,
