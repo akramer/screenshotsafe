@@ -4,12 +4,59 @@
     <meta charset="utf-8">
     <title>ScreenshotSafe Editor</title>
     <style>
+        :root {
+            color-scheme: light dark;
+            --page-bg: #f7f8fb;
+            --workspace-bg: #eef1f6;
+            --canvas-bg: #ffffff;
+            --sidebar-bg: #ffffff;
+            --control-bg: #f8f9fc;
+            --control-hover: #eef1f8;
+            --text: #191b25;
+            --muted: #626778;
+            --label: #6a7080;
+            --border-subtle: rgba(25,27,37,0.12);
+            --border-strong: rgba(25,27,37,0.18);
+            --canvas-border: rgba(25,27,37,0.18);
+            --shadow: 0 24px 80px rgba(28,36,58,0.18);
+            --primary: #4f56e8;
+            --primary-hover: #3f46d0;
+            --primary-soft: rgba(79,86,232,0.13);
+            --primary-border: rgba(79,86,232,0.25);
+            --danger: #d92d4b;
+            --danger-bg: rgba(217,45,75,0.08);
+            --danger-border: rgba(217,45,75,0.24);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --page-bg: #0f0f13;
+                --workspace-bg: #08080b;
+                --canvas-bg: #050507;
+                --sidebar-bg: #121219;
+                --control-bg: #1a1a24;
+                --control-hover: #22223a;
+                --text: #e8e8f0;
+                --muted: #aaa;
+                --label: #888;
+                --border-subtle: rgba(255,255,255,0.08);
+                --border-strong: rgba(255,255,255,0.1);
+                --canvas-border: rgba(255,255,255,0.14);
+                --shadow: 0 24px 80px rgba(0,0,0,0.45);
+                --primary: #6a6aff;
+                --primary-hover: #8484ff;
+                --primary-soft: rgba(106,106,255,0.18);
+                --primary-border: rgba(106,106,255,0.22);
+                --danger: #ff6b83;
+                --danger-bg: rgba(255,77,106,0.1);
+                --danger-border: rgba(255,77,106,0.3);
+            }
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0f0f13;
-            color: #e8e8f0;
+            background: var(--page-bg);
+            color: var(--text);
             overflow: hidden;
         }
         .app {
@@ -25,7 +72,7 @@
             min-width: 0;
             padding: 24px;
             gap: 16px;
-            background: #08080b;
+            background: var(--workspace-bg);
         }
         .canvas-wrap {
             display: flex;
@@ -40,25 +87,25 @@
             display: block;
             max-width: 100%;
             max-height: 100%;
-            border: 1px solid rgba(255,255,255,0.14);
+            border: 1px solid var(--canvas-border);
             border-radius: 8px;
-            background: #050507;
+            background: var(--canvas-bg);
             cursor: crosshair;
-            box-shadow: 0 24px 80px rgba(0,0,0,0.45);
+            box-shadow: var(--shadow);
         }
         #edit-canvas.locked { cursor: default; }
         .sidebar {
             display: flex;
             flex-direction: column;
             gap: 16px;
-            border-left: 1px solid rgba(255,255,255,0.08);
+            border-left: 1px solid var(--border-subtle);
             padding: 18px;
-            background: #121219;
+            background: var(--sidebar-bg);
             overflow: auto;
         }
         .header {
             padding-bottom: 14px;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
+            border-bottom: 1px solid var(--border-subtle);
         }
         .header h1 {
             font-size: 16px;
@@ -76,7 +123,7 @@
             gap: 8px;
         }
         .label {
-            color: #888;
+            color: var(--label);
             font-size: 11px;
             font-weight: 650;
             letter-spacing: 0.05em;
@@ -97,17 +144,17 @@
             padding: 9px 12px;
             border: 0;
             border-radius: 8px;
-            color: #e8e8f0;
+            color: var(--text);
             font-size: 13px;
             font-weight: 650;
             cursor: pointer;
             transition: 0.15s ease;
         }
         .btn-primary {
-            background: #6a6aff;
+            background: var(--primary);
             color: #fff;
         }
-        .btn-primary:hover { background: #8484ff; }
+        .btn-primary:hover { background: var(--primary-hover); }
         .btn-primary:disabled {
             opacity: 0.55;
             cursor: not-allowed;
@@ -115,18 +162,18 @@
         .btn-outline,
         .tool-btn,
         .copy-btn {
-            background: #1a1a24;
-            border: 1px solid rgba(255,255,255,0.1);
+            background: var(--control-bg);
+            border: 1px solid var(--border-strong);
         }
         .btn-outline:hover,
         .tool-btn:hover,
         .copy-btn:hover {
-            background: #22223a;
-            border-color: rgba(255,255,255,0.2);
+            background: var(--control-hover);
+            border-color: var(--border-strong);
         }
         .tool-btn.active {
-            border-color: #6a6aff;
-            background: rgba(106,106,255,0.18);
+            border-color: var(--primary);
+            background: var(--primary-soft);
         }
         .btn:disabled,
         .tool-btn:disabled {
@@ -135,22 +182,22 @@
         }
         .btn:disabled:hover,
         .tool-btn:disabled:hover {
-            background: #1a1a24;
-            border-color: rgba(255,255,255,0.1);
+            background: var(--control-bg);
+            border-color: var(--border-strong);
         }
         .hint {
             min-height: 34px;
-            color: #aaa;
+            color: var(--muted);
             font-size: 12px;
             line-height: 1.4;
         }
         .error {
             display: none;
             padding: 10px 12px;
-            background: rgba(255,77,106,0.1);
-            border: 1px solid rgba(255,77,106,0.3);
+            background: var(--danger-bg);
+            border: 1px solid var(--danger-border);
             border-radius: 8px;
-            color: #ff6b83;
+            color: var(--danger);
             font-size: 12px;
             line-height: 1.4;
         }
@@ -158,9 +205,9 @@
         .result {
             display: none;
             padding: 12px;
-            border: 1px solid rgba(106,106,255,0.22);
+            border: 1px solid var(--primary-border);
             border-radius: 8px;
-            background: rgba(106,106,255,0.08);
+            background: var(--primary-soft);
         }
         .result.show { display: block; }
         .result-row {
@@ -173,26 +220,26 @@
         .result-row input {
             min-width: 0;
             padding: 7px 8px;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid var(--border-strong);
             border-radius: 6px;
-            background: #0f0f13;
-            color: #e8e8f0;
+            background: var(--control-bg);
+            color: var(--text);
             font: 12px 'SF Mono', Monaco, monospace;
         }
         .field {
             width: 100%;
             min-height: 36px;
             padding: 8px 10px;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid var(--border-strong);
             border-radius: 8px;
-            background: #0f0f13;
-            color: #e8e8f0;
+            background: var(--control-bg);
+            color: var(--text);
             font-size: 13px;
             text-align: left;
         }
         .field:focus {
             outline: none;
-            border-color: #6a6aff;
+            border-color: var(--primary);
         }
         .field-mono {
             font-family: 'SF Mono', Monaco, monospace;
@@ -215,15 +262,15 @@
             width: 100%;
             min-height: 36px;
             padding: 8px 10px;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: 1px solid var(--border-strong);
             border-radius: 8px;
-            background: #0f0f13;
-            color: #e8e8f0;
+            background: var(--control-bg);
+            color: var(--text);
             font-size: 13px;
         }
         select:focus {
             outline: none;
-            border-color: #6a6aff;
+            border-color: var(--primary);
         }
         .spacer { flex: 1; }
         .is-hidden { display: none !important; }
@@ -241,7 +288,7 @@
             }
             .sidebar {
                 border-left: 0;
-                border-top: 1px solid rgba(255,255,255,0.08);
+                border-top: 1px solid var(--border-subtle);
             }
         }
     </style>

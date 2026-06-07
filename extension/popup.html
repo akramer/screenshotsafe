@@ -3,12 +3,43 @@
 <head>
     <meta charset="utf-8">
     <style>
+        :root {
+            color-scheme: light dark;
+            --bg: #f7f8fb;
+            --text: #191b25;
+            --muted: #646879;
+            --border-subtle: rgba(25,27,37,0.12);
+            --border-strong: rgba(25,27,37,0.18);
+            --outline-hover: rgba(25,27,37,0.06);
+            --primary: #4f56e8;
+            --primary-hover: #3f46d0;
+            --danger: #d92d4b;
+            --danger-bg: rgba(217,45,75,0.08);
+            --danger-border: rgba(217,45,75,0.24);
+            --success: #0c9f5a;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0f0f13;
+                --text: #e8e8f0;
+                --muted: #888;
+                --border-subtle: rgba(255,255,255,0.08);
+                --border-strong: rgba(255,255,255,0.12);
+                --outline-hover: rgba(255,255,255,0.05);
+                --primary: #6a6aff;
+                --primary-hover: #8484ff;
+                --danger: #ff4d6a;
+                --danger-bg: rgba(255,77,106,0.1);
+                --danger-border: rgba(255,77,106,0.3);
+                --success: #00cc66;
+            }
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             width: 320px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0f0f13;
-            color: #e8e8f0;
+            background: var(--bg);
+            color: var(--text);
             padding: 16px;
         }
         .header {
@@ -17,7 +48,7 @@
             gap: 8px;
             margin-bottom: 16px;
             padding-bottom: 12px;
-            border-bottom: 1px solid rgba(255,255,255,0.08);
+            border-bottom: 1px solid var(--border-subtle);
         }
         .header h1 {
             font-size: 15px;
@@ -29,16 +60,16 @@
             align-items: center;
             gap: 6px;
             font-size: 12px;
-            color: #888;
+            color: var(--muted);
             margin-bottom: 12px;
         }
         .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background: #ff4d6a;
+            background: var(--danger);
         }
-        .status-dot.connected { background: #00cc66; }
+        .status-dot.connected { background: var(--success); }
         .btn {
             display: flex;
             align-items: center;
@@ -54,33 +85,33 @@
             transition: all 0.15s ease;
         }
         .btn-primary {
-            background: #6a6aff;
+            background: var(--primary);
             color: #fff;
         }
-        .btn-primary:hover { background: #8484ff; }
+        .btn-primary:hover { background: var(--primary-hover); }
         .btn-primary:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
         .btn-outline {
             background: transparent;
-            border: 1px solid rgba(255,255,255,0.12);
-            color: #e8e8f0;
+            border: 1px solid var(--border-strong);
+            color: var(--text);
         }
         .btn-outline:hover {
-            background: rgba(255,255,255,0.05);
-            border-color: rgba(255,255,255,0.2);
+            background: var(--outline-hover);
+            border-color: var(--border-strong);
         }
         .btn + .btn { margin-top: 8px; }
         .error {
             display: none;
             margin-top: 8px;
             padding: 8px 10px;
-            background: rgba(255,77,106,0.1);
-            border: 1px solid rgba(255,77,106,0.3);
+            background: var(--danger-bg);
+            border: 1px solid var(--danger-border);
             border-radius: 6px;
             font-size: 12px;
-            color: #ff4d6a;
+            color: var(--danger);
             line-height: 1.4;
         }
         .error.show { display: block; }
