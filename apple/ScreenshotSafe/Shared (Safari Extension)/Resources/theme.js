@@ -5,12 +5,16 @@
     const explicitThemes = new Set(['light', 'dark']);
     const ext = window.sssWebExt;
 
+    document.documentElement.dataset.themeLoading = 'true';
     init();
 
     async function init() {
         try {
             const settings = await ext.storage.get(['serverUrl']);
-            if (!settings.serverUrl) return;
+            if (!settings.serverUrl) {
+                applyTheme(null);
+                return;
+            }
 
             const cookieTheme = await getCookieTheme(settings.serverUrl);
             if (cookieTheme) {
@@ -40,7 +44,7 @@
 
     async function getAuthenticatedTheme(serverUrl) {
         try {
-            const resp = await fetch(`${serverUrl}/api/user/preferences`, {
+            const resp = await fetch(`${serverUrl}/api/ping`, {
                 cache: 'no-store',
                 mode: 'cors',
                 credentials: 'include',
@@ -57,9 +61,10 @@
     function applyTheme(theme) {
         if (explicitThemes.has(theme)) {
             document.documentElement.dataset.theme = theme;
-            return;
+        } else {
+            delete document.documentElement.dataset.theme;
         }
 
-        delete document.documentElement.dataset.theme;
+        delete document.documentElement.dataset.themeLoading;
     }
 })();

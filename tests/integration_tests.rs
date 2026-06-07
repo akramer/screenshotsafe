@@ -1168,6 +1168,20 @@ mod tests {
         .unwrap();
         assert_eq!(body["theme_preference"], "dark");
 
+        let resp = app
+            .clone()
+            .oneshot(authed_request("GET", "/api/ping", &cookie))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(body["theme_preference"], "dark");
+
         let req = authed_json_request(
             "PUT",
             "/api/user/preferences",
