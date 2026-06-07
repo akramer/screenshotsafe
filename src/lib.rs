@@ -114,7 +114,7 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/api/auth/logout", post(routes::api::logout))
         .route(
             "/api/user/preferences",
-            put(routes::api::update_user_preferences),
+            get(routes::api::get_user_preferences).put(routes::api::update_user_preferences),
         )
         .route(
             "/api/auth/oauth/identities/{id}",

@@ -1154,6 +1154,20 @@ mod tests {
         let html = String::from_utf8(bytes.to_vec()).unwrap();
         assert!(html.contains(r#"<html lang="en" data-theme="dark">"#));
 
+        let resp = app
+            .clone()
+            .oneshot(authed_request("GET", "/api/user/preferences", &cookie))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(body["theme_preference"], "dark");
+
         let req = authed_json_request(
             "PUT",
             "/api/user/preferences",

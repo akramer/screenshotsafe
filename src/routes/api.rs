@@ -1094,6 +1094,13 @@ pub struct UpdateUserPreferencesRequest {
     pub theme_preference: ThemePreference,
 }
 
+pub async fn get_user_preferences(AuthUser(user): AuthUser) -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "ok": true,
+        "theme_preference": user.theme_preference,
+    }))
+}
+
 pub async fn update_user_preferences(
     State(state): State<SharedState>,
     AuthUser(user): AuthUser,
