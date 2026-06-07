@@ -2,10 +2,16 @@
     'use strict';
 
     const cookieName = 'theme_preference';
+    const cachedThemeKey = 'sss:themePreference';
     const explicitThemes = new Set(['light', 'dark']);
     const ext = window.sssWebExt;
+    const deferAuthenticatedTheme = window.SCREENSHOTSAFE_THEME_DEFER_PING === true;
 
+    if (!deferAuthenticatedTheme) applyCachedTheme();
     document.documentElement.dataset.themeLoading = 'true';
+    window.sssTheme = {
+        applyPreference: applyTheme,
+    };
     init();
 
     async function init() {
@@ -15,6 +21,8 @@
                 applyTheme(null);
                 return;
             }
+
+            if (deferAuthenticatedTheme) return;
 
             const cookieTheme = await getCookieTheme(settings.serverUrl);
             if (cookieTheme) {
@@ -65,6 +73,43 @@
             delete document.documentElement.dataset.theme;
         }
 
+        cacheTheme(theme);
+        revealPage();
+    }
+
+    function applyCachedTheme() {
+        try {
+            const theme = window.localStorage.getItem(cachedThemeKey);
+            if (!explicitThemes.has(theme)) return;
+            document.documentElement.dataset.theme = theme;
+            setRootBackground(theme);
+        } catch (_) {}
+    }
+
+    function cacheTheme(theme) {
+        try {
+            if (explicitThemes.has(theme)) {
+                window.localStorage.setItem(cachedThemeKey, theme);
+                setRootBackground(theme);
+            } else {
+                window.localStorage.removeItem(cachedThemeKey);
+                setRootBackground(null);
+            }
+        } catch (_) {}
+    }
+
+    function setRootBackground(theme) {
+        if (theme === 'dark') {
+            document.documentElement.style.backgroundColor = '#0f0f13';
+        } else if (theme === 'light') {
+            document.documentElement.style.backgroundColor = '#f7f8fb';
+        } else {
+            document.documentElement.style.backgroundColor = '';
+        }
+    }
+
+    function revealPage() {
         delete document.documentElement.dataset.themeLoading;
+        document.documentElement.style.visibility = '';
     }
 })();
