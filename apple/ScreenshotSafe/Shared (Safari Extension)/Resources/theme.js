@@ -1,7 +1,6 @@
 (function () {
     'use strict';
 
-    const cookieName = 'theme_preference';
     const cachedThemeKey = 'sss:themePreference';
     const explicitThemes = new Set(['light', 'dark']);
     const ext = window.sssWebExt;
@@ -24,29 +23,9 @@
 
             if (deferAuthenticatedTheme) return;
 
-            const cookieTheme = await getCookieTheme(settings.serverUrl);
-            if (cookieTheme) {
-                applyTheme(cookieTheme);
-                return;
-            }
-
             applyTheme(await getAuthenticatedTheme(settings.serverUrl));
         } catch (_) {
             applyTheme(null);
-        }
-    }
-
-    async function getCookieTheme(serverUrl) {
-        if (!ext.cookies) return null;
-
-        try {
-            const cookie = await ext.cookies.get({
-                url: serverUrl,
-                name: cookieName,
-            });
-            return cookie && cookie.value;
-        } catch (_) {
-            return null;
         }
     }
 

@@ -1,12 +1,11 @@
 {
     "manifest_version": 3,
     "name": "ScreenshotSafe",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Capture and share screenshots privately via your ScreenshotSafe server.",
     "permissions": [
         "activeTab",
         "contextMenus",
-        "cookies",
         "storage"
     ],
     "optional_host_permissions": [
