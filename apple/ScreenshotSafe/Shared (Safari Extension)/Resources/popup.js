@@ -25,7 +25,6 @@
             settings = await ext.storage.get(['serverUrl']);
             await checkConnection();
         } catch (err) {
-            applyThemePreference(null);
             markInvalid(err.message);
             openSettings('load-error');
         }
@@ -33,7 +32,6 @@
 
     async function checkConnection() {
         if (!settings.serverUrl) {
-            applyThemePreference(null);
             markInvalid('Settings required');
             openSettings('missing');
             return;
@@ -47,18 +45,12 @@
             });
 
             if (resp.ok) {
-                let data = {};
-                try {
-                    data = await resp.json();
-                } catch (_) {}
-                applyThemePreference(data.theme_preference);
                 statusDot.classList.add('connected');
                 statusText.textContent = 'Connected';
                 captureBtn.disabled = false;
                 return;
             }
 
-            applyThemePreference(null);
             if (resp.status === 401) {
                 markInvalid('Sign-in needed');
                 openLoginRequired('login-required');
@@ -68,15 +60,8 @@
             markInvalid('Server error');
             openLoginRequired('server-error');
         } catch (_) {
-            applyThemePreference(null);
             markInvalid('Cannot reach server');
             openLoginRequired('cannot-reach-server');
-        }
-    }
-
-    function applyThemePreference(theme) {
-        if (window.sssTheme && typeof window.sssTheme.applyPreference === 'function') {
-            window.sssTheme.applyPreference(theme);
         }
     }
 

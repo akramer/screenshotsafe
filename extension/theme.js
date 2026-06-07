@@ -1,32 +1,24 @@
 (function () {
     'use strict';
 
+    const themes = new Set(['light', 'dark', 'os_default']);
     const cachedThemeKey = 'sss:themePreference';
-    const explicitThemes = new Set(['light', 'dark']);
     const ext = window.sssWebExt;
-    const deferAuthenticatedTheme = window.SCREENSHOTSAFE_THEME_DEFER_PING === true;
 
-    if (!deferAuthenticatedTheme) applyCachedTheme();
     document.documentElement.dataset.themeLoading = 'true';
-    window.sssTheme = {
-        applyPreference: applyTheme,
-    };
+    applyTheme(readCachedTheme());
     init();
 
     async function init() {
         try {
             const settings = await ext.storage.get(['serverUrl']);
             if (!settings.serverUrl) {
-                applyTheme(null);
                 return;
             }
 
-            if (deferAuthenticatedTheme) return;
-
-            applyTheme(await getAuthenticatedTheme(settings.serverUrl));
-        } catch (_) {
-            applyTheme(null);
-        }
+            const theme = await getAuthenticatedTheme(settings.serverUrl);
+            if (theme) applyTheme(theme);
+        } catch (_) {}
     }
 
     async function getAuthenticatedTheme(serverUrl) {
@@ -39,52 +31,34 @@
             if (!resp.ok) return null;
 
             const data = await resp.json();
-            return data && data.theme_preference;
+            return data && themes.has(data.theme_preference)
+                ? data.theme_preference
+                : null;
         } catch (_) {
             return null;
         }
     }
 
     function applyTheme(theme) {
-        if (explicitThemes.has(theme)) {
-            document.documentElement.dataset.theme = theme;
-        } else {
-            delete document.documentElement.dataset.theme;
-        }
-
-        cacheTheme(theme);
+        const resolvedTheme = themes.has(theme) ? theme : 'os_default';
+        document.documentElement.dataset.theme = resolvedTheme;
+        cacheTheme(resolvedTheme);
         revealPage();
     }
 
-    function applyCachedTheme() {
+    function readCachedTheme() {
         try {
             const theme = window.localStorage.getItem(cachedThemeKey);
-            if (!explicitThemes.has(theme)) return;
-            document.documentElement.dataset.theme = theme;
-            setRootBackground(theme);
-        } catch (_) {}
+            return themes.has(theme) ? theme : 'os_default';
+        } catch (_) {
+            return 'os_default';
+        }
     }
 
     function cacheTheme(theme) {
         try {
-            if (explicitThemes.has(theme)) {
-                window.localStorage.setItem(cachedThemeKey, theme);
-                setRootBackground(theme);
-            } else {
-                window.localStorage.removeItem(cachedThemeKey);
-                setRootBackground(null);
-            }
+            window.localStorage.setItem(cachedThemeKey, theme);
         } catch (_) {}
-    }
-
-    function setRootBackground(theme) {
-        if (theme === 'dark') {
-            document.documentElement.style.backgroundColor = '#0f0f13';
-        } else if (theme === 'light') {
-            document.documentElement.style.backgroundColor = '#f7f8fb';
-        } else {
-            document.documentElement.style.backgroundColor = '';
-        }
     }
 
     function revealPage() {
