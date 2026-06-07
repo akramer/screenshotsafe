@@ -238,7 +238,7 @@ pub async fn oauth_start(
     )
     .map_err(|e| AppError::Internal(format!("OAuth state failed: {}", e)))?;
 
-    let redirect_uri = oauth_redirect_uri(&state, &headers);
+    let redirect_uri = oauth_redirect_uri(oauth, &state.config.server.public_url, &headers);
     let mut authorize_url = format!(
         "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}",
         endpoints.authorize_url,
@@ -299,7 +299,7 @@ pub async fn oauth_callback(
     .map_err(|_| AppError::BadRequest("Invalid OAuth state".into()))?
     .claims;
 
-    let redirect_uri = oauth_redirect_uri(&state, &headers);
+    let redirect_uri = oauth_redirect_uri(oauth, &state.config.server.public_url, &headers);
     let client = reqwest::Client::new();
     let token_resp = client
         .post(&endpoints.token_url)
@@ -558,14 +558,17 @@ fn non_empty_opt(value: &Option<String>) -> Option<String> {
     value.as_deref().and_then(non_empty)
 }
 
-fn oauth_redirect_uri(state: &SharedState, headers: &HeaderMap) -> String {
-    let oauth = &state.config.auth.oauth;
-    if !oauth.redirect_url.is_empty() {
-        oauth.redirect_url.clone()
+fn oauth_redirect_uri(
+    oauth: &crate::config::OAuthConfig,
+    public_url: &str,
+    headers: &HeaderMap,
+) -> String {
+    if let Some(redirect_url) = non_empty(&oauth.redirect_url) {
+        redirect_url
     } else {
         format!(
             "{}/api/auth/oauth/callback",
-            crate::routes::get_base_url(&state.config.server.public_url, headers)
+            crate::routes::get_base_url(public_url, headers)
         )
     }
 }
@@ -1442,8 +1445,11 @@ fn format_bytes(bytes: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{openid_discovery_url, sanitize_email_username, sanitize_username};
+    use super::{
+        oauth_redirect_uri, openid_discovery_url, sanitize_email_username, sanitize_username,
+    };
     use crate::config::OAuthConfig;
+    use axum::http::{header, HeaderMap, HeaderValue};
 
     #[test]
     fn oauth_email_username_keeps_full_email_address() {
@@ -1483,6 +1489,46 @@ mod tests {
         assert_eq!(
             openid_discovery_url(&oauth),
             Some("https://issuer.example/tenant/.well-known/openid-configuration".to_string())
+        );
+    }
+
+    #[test]
+    fn oauth_redirect_uri_uses_explicit_redirect_url() {
+        let oauth = OAuthConfig {
+            redirect_url: "https://configured.example/oauth/callback".to_string(),
+            ..OAuthConfig::default()
+        };
+        let mut headers = HeaderMap::new();
+        headers.insert(header::HOST, HeaderValue::from_static("host.example"));
+        headers.insert("x-forwarded-proto", HeaderValue::from_static("https"));
+
+        assert_eq!(
+            oauth_redirect_uri(&oauth, "https://public.example", &headers),
+            "https://configured.example/oauth/callback"
+        );
+    }
+
+    #[test]
+    fn oauth_redirect_uri_falls_back_to_public_url() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::HOST, HeaderValue::from_static("host.example"));
+        headers.insert("x-forwarded-proto", HeaderValue::from_static("https"));
+
+        assert_eq!(
+            oauth_redirect_uri(&OAuthConfig::default(), "https://public.example/", &headers),
+            "https://public.example/api/auth/oauth/callback"
+        );
+    }
+
+    #[test]
+    fn oauth_redirect_uri_falls_back_to_request_host_without_public_url() {
+        let mut headers = HeaderMap::new();
+        headers.insert(header::HOST, HeaderValue::from_static("host.example"));
+        headers.insert("x-forwarded-proto", HeaderValue::from_static("https"));
+
+        assert_eq!(
+            oauth_redirect_uri(&OAuthConfig::default(), "", &headers),
+            "https://host.example/api/auth/oauth/callback"
         );
     }
 }

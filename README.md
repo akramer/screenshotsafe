@@ -84,7 +84,8 @@ authorize_url = "https://provider.example/oauth/authorize"
 token_url = "https://provider.example/oauth/token"
 userinfo_url = "https://provider.example/oauth/userinfo"
 scope = "openid email profile"
-redirect_url = "https://screenshots.example.com/api/auth/oauth/callback"
+# Optional. If omitted, the callback URL uses public_url, then the request Host header.
+redirect_url = ""
 account_mode = "link_only" # link_only, pending, or auto_enabled
 allowed_email_domains = ["example.com"]
 ```
@@ -110,6 +111,7 @@ SSS_OAUTH_DISCOVERY_URL=https://provider.example/.well-known/openid-configuratio
 SSS_OAUTH_AUTHORIZE_URL=https://provider.example/oauth/authorize
 SSS_OAUTH_TOKEN_URL=https://provider.example/oauth/token
 SSS_OAUTH_USERINFO_URL=https://provider.example/oauth/userinfo
+# Optional override; omit to use SSS_PUBLIC_URL, then the request Host header.
 SSS_OAUTH_REDIRECT_URL=https://screenshots.example.com/api/auth/oauth/callback
 SSS_OAUTH_ACCOUNT_MODE=pending
 SSS_OAUTH_ALLOWED_EMAIL_DOMAINS=example.com,example.org
@@ -138,7 +140,6 @@ client_id = "..."
 client_secret = "..."
 issuer_url = "https://accounts.google.com"
 scope = "openid email profile"
-redirect_url = "https://screenshots.example.com/api/auth/oauth/callback"
 account_mode = "pending"
 allowed_email_domains = ["example.com"]
 ```
@@ -149,7 +150,7 @@ Register this redirect URI with your OAuth provider:
 https://screenshots.example.com/api/auth/oauth/callback
 ```
 
-If `redirect_url` is omitted, ScreenshotSafe builds it from `server.public_url` or the request host. For production, set both `server.public_url` and `auth.oauth.redirect_url` explicitly so provider callbacks are stable.
+If `redirect_url` / `SSS_OAUTH_REDIRECT_URL` is omitted, ScreenshotSafe builds the callback URL from `server.public_url` / `SSS_PUBLIC_URL`. If no public URL is configured, it falls back to the request `Host` header and `X-Forwarded-Proto` when it is `http` or `https`. For production behind a reverse proxy, make sure the configured public URL or forwarded headers match the URL you registered with the provider.
 
 When `issuer_url` is set, ScreenshotSafe reads:
 

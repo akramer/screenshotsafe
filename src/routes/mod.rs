@@ -9,6 +9,10 @@ pub fn get_base_url(public_url: &str, headers: &HeaderMap) -> String {
         return public_url.trim_end_matches('/').to_string();
     }
 
+    get_request_base_url(headers)
+}
+
+pub fn get_request_base_url(headers: &HeaderMap) -> String {
     let host = headers
         .get(axum::http::header::HOST)
         .and_then(|h| h.to_str().ok())
