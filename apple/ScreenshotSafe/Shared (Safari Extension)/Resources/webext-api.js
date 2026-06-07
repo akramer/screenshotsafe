@@ -92,6 +92,11 @@
         permissions: {
             requestOrigin,
         },
+        cookies: {
+            get(details) {
+                return call(api && api.cookies, 'get', [details]);
+            },
+        },
         runtime: {
             getURL(path) {
                 return api && api.runtime && api.runtime.getURL(path);

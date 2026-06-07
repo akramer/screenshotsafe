@@ -2,6 +2,7 @@ use axum::{
     body::Body,
     extract::{multipart::Field, Multipart, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
+    response::AppendHeaders,
     response::{IntoResponse, Redirect, Response},
     Json,
 };
@@ -56,7 +57,7 @@ pub async fn setup(
         account_status: AccountStatus::Enabled,
         max_screenshot_size_bytes: None,
         max_expiry_seconds: None,
-        theme_preference: ThemePreference::Dark,
+        theme_preference: ThemePreference::OsDefault,
         created_at: Utc::now(),
     };
 
@@ -73,10 +74,14 @@ pub async fn setup(
     );
 
     let cookie = session_cookie(&state, &headers, &token);
+    let theme_cookie = theme_preference_cookie(user.theme_preference);
 
     Ok((
         StatusCode::CREATED,
-        [(header::SET_COOKIE, cookie)],
+        AppendHeaders([
+            (header::SET_COOKIE, cookie),
+            (header::SET_COOKIE, theme_cookie),
+        ]),
         Json(serde_json::json!({
             "ok": true,
             "user": {
@@ -129,9 +134,13 @@ pub async fn login(
     );
 
     let cookie = session_cookie(&state, &headers, &token);
+    let theme_cookie = theme_preference_cookie(user.theme_preference);
 
     Ok((
-        [(header::SET_COOKIE, cookie)],
+        AppendHeaders([
+            (header::SET_COOKIE, cookie),
+            (header::SET_COOKIE, theme_cookie),
+        ]),
         Json(serde_json::json!({
             "ok": true,
             "user": {
@@ -423,7 +432,7 @@ pub async fn oauth_callback(
                 account_status,
                 max_screenshot_size_bytes: None,
                 max_expiry_seconds: None,
-                theme_preference: ThemePreference::Dark,
+                theme_preference: ThemePreference::OsDefault,
                 created_at: Utc::now(),
             };
             let identity = OAuthIdentity {
@@ -706,6 +715,14 @@ fn with_session_cookie(
         header::SET_COOKIE,
         cookie.parse().expect("session cookie should be valid"),
     );
+    if let Ok(Some(user)) = state.db.get_user_by_id(user_id) {
+        response.headers_mut().append(
+            header::SET_COOKIE,
+            theme_preference_cookie(user.theme_preference)
+                .parse()
+                .expect("theme preference cookie should be valid"),
+        );
+    }
     response.headers_mut().append(
         header::SET_COOKIE,
         "oauth_state=; HttpOnly; SameSite=Lax; Path=/api/auth/oauth; Max-Age=0"
@@ -726,6 +743,10 @@ fn session_cookie(state: &SharedState, headers: &HeaderMap, token: &str) -> Stri
         "session={}; HttpOnly; {}; Path=/; Max-Age={}",
         token, same_site, state.config.auth.session_ttl_seconds
     )
+}
+
+fn theme_preference_cookie(theme: ThemePreference) -> String {
+    format!("theme_preference={}; SameSite=Lax; Path=/", theme.as_str())
 }
 
 fn request_uses_https(state: &SharedState, headers: &HeaderMap) -> bool {
@@ -836,7 +857,7 @@ pub async fn admin_create_user(
         account_status: AccountStatus::Enabled,
         max_screenshot_size_bytes: normalize_user_limit(req.max_screenshot_size_bytes),
         max_expiry_seconds: normalize_user_limit(req.max_expiry_seconds),
-        theme_preference: ThemePreference::Dark,
+        theme_preference: ThemePreference::OsDefault,
         created_at: Utc::now(),
     };
 
@@ -1077,7 +1098,7 @@ pub async fn update_user_preferences(
     State(state): State<SharedState>,
     AuthUser(user): AuthUser,
     Json(req): Json<UpdateUserPreferencesRequest>,
-) -> crate::Result<Json<serde_json::Value>> {
+) -> crate::Result<impl IntoResponse> {
     let updated = state
         .db
         .update_user_theme_preference(&user.id, req.theme_preference)?;
@@ -1085,10 +1106,16 @@ pub async fn update_user_preferences(
         return Err(AppError::NotFound);
     }
 
-    Ok(Json(serde_json::json!({
-        "ok": true,
-        "theme_preference": req.theme_preference,
-    })))
+    Ok((
+        [(
+            header::SET_COOKIE,
+            theme_preference_cookie(req.theme_preference),
+        )],
+        Json(serde_json::json!({
+            "ok": true,
+            "theme_preference": req.theme_preference,
+        })),
+    ))
 }
 
 pub async fn disconnect_oauth_identity(

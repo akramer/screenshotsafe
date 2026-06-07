@@ -6,6 +6,7 @@
     "permissions": [
         "activeTab",
         "contextMenus",
+        "cookies",
         "storage"
     ],
     "optional_host_permissions": [

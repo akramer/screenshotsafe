@@ -38,31 +38,6 @@ const LOCAL_TIME_SCRIPT: &str = r#"<script>
             });
         })();
     </script>"#;
-const THEME_TOGGLE_SCRIPT: &str = r#"<script>
-        document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
-            btn.addEventListener('click', async () => {
-                const theme = btn.dataset.nextTheme;
-                const resp = await fetch('/api/user/preferences', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ theme_preference: theme }),
-                });
-                if (!resp.ok) return;
-                document.documentElement.dataset.theme = theme;
-                document.querySelectorAll('[data-theme-toggle]').forEach((toggle) => {
-                    const next = theme === 'dark' ? 'light' : 'dark';
-                    toggle.dataset.nextTheme = next;
-                    toggle.setAttribute('aria-label', `Switch to ${next} mode`);
-                    const label = toggle.querySelector('[data-theme-toggle-label]');
-                    if (label) label.textContent = next === 'dark' ? 'Dark' : 'Light';
-                });
-                document.querySelectorAll('[data-theme-current]').forEach((el) => {
-                    el.textContent = theme;
-                });
-            });
-        });
-    </script>"#;
-
 /// Dashboard page — lists all screenshots for the logged-in user.
 /// Redirects to /setup if no users exist, or /login if not authenticated.
 pub async fn dashboard(
@@ -144,9 +119,8 @@ pub async fn dashboard(
             .join("\n")
     };
 
-    let html = format!(
-        r#"<!DOCTYPE html>
-<html lang="en" data-theme="{theme}">
+    let html = r#"<!DOCTYPE html>
+<html lang="en" data-theme="{{THEME}}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -159,7 +133,6 @@ pub async fn dashboard(
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
             <span class="nav-user">{display_name}</span>
-            {theme_toggle}
             {admin_link}
             <a href="/settings" class="btn btn-sm btn-outline">Settings</a>
             <button id="logout-btn" class="btn btn-sm btn-outline">Logout</button>
@@ -174,52 +147,51 @@ pub async fn dashboard(
         </div>
     </main>
     {local_time_script}
-    {theme_toggle_script}
     <script>
-        document.getElementById('logout-btn')?.addEventListener('click', async () => {{
-            await fetch('/api/auth/logout', {{ method: 'POST' }});
+        document.getElementById('logout-btn')?.addEventListener('click', async () => {
+            await fetch('/api/auth/logout', { method: 'POST' });
             window.location.href = '/login';
-        }});
+        });
 
-        document.querySelectorAll('.copy-btn').forEach(btn => {{
-            btn.addEventListener('click', () => {{
+        document.querySelectorAll('.copy-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
                 navigator.clipboard.writeText(btn.dataset.url);
                 btn.textContent = 'Copied!';
                 setTimeout(() => btn.textContent = 'Copy Shared Link', 2000);
-            }});
-        }});
+            });
+        });
 
-        document.querySelectorAll('.delete-btn').forEach(btn => {{
-            btn.addEventListener('click', async () => {{
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
                 if (!confirm('Delete this screenshot?')) return;
-                const resp = await fetch(`/api/screenshots/${{btn.dataset.id}}`, {{ method: 'DELETE' }});
+                const resp = await fetch(`/api/screenshots/${btn.dataset.id}`, { method: 'DELETE' });
                 if (resp.ok) window.location.reload();
-            }});
-        }});
+            });
+        });
     </script>
 </body>
-</html>"#,
-        favicon = FAVICON_LINK,
-        theme = theme_attr(user.theme_preference),
-        theme_toggle = theme_toggle_button(user.theme_preference),
-        display_name = html_escape(&user.display_name),
-        admin_link = admin_link,
-        screenshot_cards = screenshot_cards,
-        local_time_script = LOCAL_TIME_SCRIPT,
-        theme_toggle_script = THEME_TOGGLE_SCRIPT,
-    );
+</html>"#
+    .replace("{{THEME}}", theme_attr(user.theme_preference))
+    .replace("{favicon}", FAVICON_LINK)
+    .replace("{display_name}", &html_escape(&user.display_name))
+    .replace("{admin_link}", &admin_link)
+    .replace("{screenshot_cards}", &screenshot_cards)
+    .replace("{local_time_script}", LOCAL_TIME_SCRIPT);
 
     Ok(Html(html).into_response())
 }
 
 /// Setup page — shown on first run when no users exist.
-pub async fn setup_page(State(state): State<SharedState>) -> crate::Result<impl IntoResponse> {
+pub async fn setup_page(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+) -> crate::Result<impl IntoResponse> {
     if state.db.user_count()? > 0 {
         return Ok(Redirect::to("/login").into_response());
     }
 
     let html = r#"<!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="{{THEME}}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -281,7 +253,8 @@ pub async fn setup_page(State(state): State<SharedState>) -> crate::Result<impl 
         });
     </script>
 </body>
-</html>"#;
+</html>"#
+    .replace("{{THEME}}", theme_from_cookie(&headers).as_str());
 
     Ok(Html(html).into_response())
 }
@@ -290,6 +263,7 @@ pub async fn setup_page(State(state): State<SharedState>) -> crate::Result<impl 
 pub async fn login_page(
     State(state): State<SharedState>,
     Query(params): Query<HashMap<String, String>>,
+    headers: HeaderMap,
     user: MaybeAuthUser,
 ) -> crate::Result<impl IntoResponse> {
     if state.db.user_count()? == 0 {
@@ -344,7 +318,7 @@ pub async fn login_page(
     };
 
     let html = r#"<!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="{{THEME}}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -405,7 +379,8 @@ pub async fn login_page(
 </html>"#
     .replace("{{OAUTH_MESSAGE}}", &oauth_message)
     .replace("{{EXTENSION_MESSAGE}}", &extension_message)
-    .replace("{{OAUTH_BUTTON}}", &oauth_button);
+    .replace("{{OAUTH_BUTTON}}", &oauth_button)
+    .replace("{{THEME}}", theme_from_cookie(&headers).as_str());
 
     Ok(Html(html).into_response())
 }
@@ -455,10 +430,6 @@ pub async fn editor_page(
 
     let html = EDITOR_TEMPLATE
         .replace("{{THEME}}", theme_attr(user.theme_preference))
-        .replace(
-            "{{THEME_TOGGLE}}",
-            &theme_toggle_button(user.theme_preference),
-        )
         .replace("{{TITLE}}", &html_escape(screenshot.display_title()))
         .replace(
             "{{TITLE_ESCAPED}}",
@@ -516,8 +487,7 @@ pub async fn editor_page(
         .replace("{{ID}}", &screenshot.id.to_string())
         .replace("{{ANNOTATIONS}}", &annotations_json)
         .replace("{{CROP}}", &crop_json)
-        .replace("{{IMAGE_DPI}}", &image_dpi)
-        .replace("{{THEME_TOGGLE_SCRIPT}}", THEME_TOGGLE_SCRIPT);
+        .replace("{{IMAGE_DPI}}", &image_dpi);
 
     Ok(Html(html).into_response())
 }
@@ -536,7 +506,6 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
     <nav class="navbar">
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
-            {{THEME_TOGGLE}}
             <a href="/" class="btn btn-sm btn-outline">← Dashboard</a>
         </div>
     </nav>
@@ -664,7 +633,6 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
         </div>
     </main>
     <script src="/static/js/fabric.min.js"></script>
-    {{THEME_TOGGLE_SCRIPT}}
     <script>
         (() => {
             const formats = {
@@ -817,6 +785,21 @@ pub async fn settings_page(
     } else {
         String::new()
     };
+    let light_checked = if user.theme_preference == ThemePreference::Light {
+        "checked"
+    } else {
+        ""
+    };
+    let dark_checked = if user.theme_preference == ThemePreference::Dark {
+        "checked"
+    } else {
+        ""
+    };
+    let os_default_checked = if user.theme_preference == ThemePreference::OsDefault {
+        "checked"
+    } else {
+        ""
+    };
 
     let html = format!(
         r#"<!DOCTYPE html>
@@ -832,7 +815,6 @@ pub async fn settings_page(
     <nav class="navbar">
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
-            {theme_toggle}
             <a href="/" class="btn btn-sm btn-outline">← Dashboard</a>
         </div>
     </nav>
@@ -842,10 +824,21 @@ pub async fn settings_page(
         <section class="settings-section">
             <h2>Appearance</h2>
             <p>Use the saved theme preference for the signed-in web UI.</p>
-            <div class="theme-setting">
-                <span>Current mode: <strong data-theme-current>{current_theme}</strong></span>
-                {theme_toggle}
-            </div>
+            <form id="theme-form" class="theme-form">
+                <label class="radio-row">
+                    <input type="radio" name="theme-preference" value="light" {light_checked}>
+                    <span>Light mode</span>
+                </label>
+                <label class="radio-row">
+                    <input type="radio" name="theme-preference" value="dark" {dark_checked}>
+                    <span>Dark mode</span>
+                </label>
+                <label class="radio-row">
+                    <input type="radio" name="theme-preference" value="os_default" {os_default_checked}>
+                    <span>OS default</span>
+                </label>
+                <div id="theme-message" class="settings-message" style="display:none"></div>
+            </form>
         </section>
 
         <section class="settings-section">
@@ -906,11 +899,18 @@ pub async fn settings_page(
         </section>
     </main>
     {local_time_script}
-    {theme_toggle_script}
     <script>
+        const themeForm = document.getElementById('theme-form');
+        const themeMessage = document.getElementById('theme-message');
         const passwordForm = document.getElementById('password-form');
         const passwordMessage = document.getElementById('password-message');
         const tokenMessage = document.getElementById('token-message');
+
+        function showThemeMessage(text, isError) {{
+            themeMessage.textContent = text;
+            themeMessage.className = `settings-message ${{isError ? 'settings-message-error' : 'settings-message-success'}}`;
+            themeMessage.style.display = 'block';
+        }}
 
         function showPasswordMessage(text, isError) {{
             passwordMessage.textContent = text;
@@ -923,6 +923,28 @@ pub async fn settings_page(
             tokenMessage.className = `settings-message ${{isError ? 'settings-message-error' : 'settings-message-success'}}`;
             tokenMessage.style.display = 'block';
         }}
+
+        themeForm.addEventListener('change', async (event) => {{
+            if (event.target.name !== 'theme-preference') return;
+            const theme = event.target.value;
+            const resp = await fetch('/api/user/preferences', {{
+                method: 'PUT',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ theme_preference: theme }}),
+            }});
+
+            if (resp.ok) {{
+                document.documentElement.dataset.theme = theme;
+                showThemeMessage('Appearance saved.', false);
+            }} else {{
+                let message = 'Unable to save appearance.';
+                try {{
+                    const data = await resp.json();
+                    if (data.error) message = data.error;
+                }} catch (_) {{}}
+                showThemeMessage(message, true);
+            }}
+        }});
 
         passwordForm.addEventListener('submit', async (event) => {{
             event.preventDefault();
@@ -1061,12 +1083,12 @@ pub async fn settings_page(
 </html>"#,
         favicon = FAVICON_LINK,
         theme = theme_attr(user.theme_preference),
-        current_theme = user.theme_preference.as_str(),
-        theme_toggle = theme_toggle_button(user.theme_preference),
+        light_checked = light_checked,
+        dark_checked = dark_checked,
+        os_default_checked = os_default_checked,
         token_rows = token_rows,
         oauth_section = oauth_section,
         local_time_script = LOCAL_TIME_SCRIPT,
-        theme_toggle_script = THEME_TOGGLE_SCRIPT,
     );
 
     Ok(Html(html).into_response())
@@ -1146,7 +1168,6 @@ pub async fn admin_page(
     <nav class="navbar">
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
-            {theme_toggle}
             <a href="/" class="btn btn-sm btn-outline">Dashboard</a>
             <a href="/settings" class="btn btn-sm btn-outline">Settings</a>
         </div>
@@ -1202,7 +1223,6 @@ pub async fn admin_page(
         </section>
     </main>
     {local_time_script}
-    {theme_toggle_script}
     <script>
         const form = document.getElementById('user-form');
         const message = document.getElementById('user-message');
@@ -1279,10 +1299,8 @@ pub async fn admin_page(
 </html>"#,
         favicon = FAVICON_LINK,
         theme = theme_attr(admin.theme_preference),
-        theme_toggle = theme_toggle_button(admin.theme_preference),
         user_rows = user_rows,
         local_time_script = LOCAL_TIME_SCRIPT,
-        theme_toggle_script = THEME_TOGGLE_SCRIPT,
     );
 
     Ok(Html(html).into_response())
@@ -1324,7 +1342,6 @@ pub async fn admin_edit_user_page(
     <nav class="navbar">
         <a href="/" class="nav-brand">📸 ScreenshotSafe</a>
         <div class="nav-right">
-            {theme_toggle}
             <a href="/admin" class="btn btn-sm btn-outline">Admin</a>
             <a href="/" class="btn btn-sm btn-outline">Dashboard</a>
         </div>
@@ -1384,7 +1401,6 @@ pub async fn admin_edit_user_page(
         </section>
     </main>
     {local_time_script}
-    {theme_toggle_script}
     <script>
         const userId = "{id}";
         const message = document.getElementById('user-message');
@@ -1460,7 +1476,6 @@ pub async fn admin_edit_user_page(
 </html>"#,
         favicon = FAVICON_LINK,
         theme = theme_attr(admin.theme_preference),
-        theme_toggle = theme_toggle_button(admin.theme_preference),
         id = user.id,
         username = html_escape(&user.username),
         display_name = html_escape(&user.display_name),
@@ -1483,7 +1498,6 @@ pub async fn admin_edit_user_page(
         },
         created_at = local_time(user.created_at, "date", "%b %d, %Y"),
         local_time_script = LOCAL_TIME_SCRIPT,
-        theme_toggle_script = THEME_TOGGLE_SCRIPT,
         size_limit = size_limit,
         expiry_limit = expiry_limit,
         server_size = state.config.server.max_screenshot_size_bytes,
@@ -1518,14 +1532,17 @@ fn theme_attr(theme: ThemePreference) -> &'static str {
     theme.as_str()
 }
 
-fn theme_toggle_button(theme: ThemePreference) -> String {
-    let next = theme.toggled();
-    format!(
-        r#"<button class="btn btn-sm btn-outline theme-toggle" type="button" data-theme-toggle data-next-theme="{}" aria-label="Switch to {} mode"><span data-theme-toggle-label>{}</span></button>"#,
-        next.as_str(),
-        next.as_str(),
-        next.toggle_label(),
-    )
+fn theme_from_cookie(headers: &HeaderMap) -> ThemePreference {
+    headers
+        .get(axum::http::header::COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|cookies| {
+            cookies.split(';').find_map(|cookie| {
+                let (name, value) = cookie.trim().split_once('=')?;
+                (name == "theme_preference").then(|| ThemePreference::from(value))
+            })
+        })
+        .unwrap_or(ThemePreference::OsDefault)
 }
 
 fn is_safe_external_url(url: &str) -> bool {

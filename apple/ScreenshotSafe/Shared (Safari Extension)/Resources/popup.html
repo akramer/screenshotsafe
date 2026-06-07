@@ -2,6 +2,8 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <script src="webext-api.js"></script>
+    <script src="theme.js"></script>
     <style>
         :root {
             color-scheme: light dark;
@@ -33,6 +35,36 @@
                 --danger-border: rgba(255,77,106,0.3);
                 --success: #00cc66;
             }
+        }
+        :root[data-theme="light"] {
+            color-scheme: light;
+            --bg: #f7f8fb;
+            --text: #191b25;
+            --muted: #646879;
+            --border-subtle: rgba(25,27,37,0.12);
+            --border-strong: rgba(25,27,37,0.18);
+            --outline-hover: rgba(25,27,37,0.06);
+            --primary: #4f56e8;
+            --primary-hover: #3f46d0;
+            --danger: #d92d4b;
+            --danger-bg: rgba(217,45,75,0.08);
+            --danger-border: rgba(217,45,75,0.24);
+            --success: #0c9f5a;
+        }
+        :root[data-theme="dark"] {
+            color-scheme: dark;
+            --bg: #0f0f13;
+            --text: #e8e8f0;
+            --muted: #888;
+            --border-subtle: rgba(255,255,255,0.08);
+            --border-strong: rgba(255,255,255,0.12);
+            --outline-hover: rgba(255,255,255,0.05);
+            --primary: #6a6aff;
+            --primary-hover: #8484ff;
+            --danger: #ff4d6a;
+            --danger-bg: rgba(255,77,106,0.1);
+            --danger-border: rgba(255,77,106,0.3);
+            --success: #00cc66;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -133,7 +165,6 @@
 
     <div class="error" id="error-msg"></div>
 
-    <script src="webext-api.js"></script>
     <script src="popup.js"></script>
 </body>
 </html>

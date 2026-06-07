@@ -1003,7 +1003,7 @@ mod tests {
             account_status: AccountStatus::Enabled,
             max_screenshot_size_bytes: None,
             max_expiry_seconds: None,
-            theme_preference: ThemePreference::Dark,
+            theme_preference: ThemePreference::OsDefault,
             created_at: Utc::now(),
         };
         let identity = OAuthIdentity {
@@ -1050,6 +1050,27 @@ mod tests {
         let (app, state) = test_app(dir.path());
         let cookie = setup_user(&app).await;
 
+        let user = state.db.get_user_by_username("admin").unwrap().unwrap();
+        assert_eq!(user.theme_preference, ThemePreference::OsDefault);
+
+        let resp = app
+            .clone()
+            .oneshot(
+                axum::http::Request::builder()
+                    .method("GET")
+                    .uri("/login")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let html = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(html.contains(r#"<html lang="en" data-theme="os_default">"#));
+
         let req = authed_json_request(
             "PUT",
             "/api/user/preferences",
@@ -1058,6 +1079,15 @@ mod tests {
         );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+        let set_cookies = resp
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert!(set_cookies
+            .iter()
+            .any(|cookie| cookie == &"theme_preference=light; SameSite=Lax; Path=/"));
 
         let user = state.db.get_user_by_username("admin").unwrap().unwrap();
         assert_eq!(user.theme_preference, ThemePreference::Light);
@@ -1073,7 +1103,70 @@ mod tests {
             .unwrap();
         let html = String::from_utf8(bytes.to_vec()).unwrap();
         assert!(html.contains(r#"<html lang="en" data-theme="light">"#));
-        assert!(html.contains(r#"data-theme-toggle"#));
+        assert!(!html.contains(r#"data-theme-toggle"#));
+
+        let resp = app
+            .clone()
+            .oneshot(authed_request("GET", "/settings", &cookie))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let html = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(html.contains(r#"id="theme-form""#));
+        assert!(html.contains(r#"name="theme-preference" value="light" checked"#));
+        assert!(html.contains(r#"name="theme-preference" value="dark" "#));
+        assert!(html.contains(r#"name="theme-preference" value="os_default" "#));
+        assert!(!html.contains(r#"data-theme-toggle"#));
+
+        let req = authed_json_request(
+            "PUT",
+            "/api/user/preferences",
+            &cookie,
+            serde_json::json!({ "theme_preference": "os_default" }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let set_cookies = resp
+            .headers()
+            .get_all(header::SET_COOKIE)
+            .iter()
+            .map(|value| value.to_str().unwrap())
+            .collect::<Vec<_>>();
+        assert!(set_cookies
+            .iter()
+            .any(|cookie| cookie == &"theme_preference=os_default; SameSite=Lax; Path=/"));
+
+        let user = state.db.get_user_by_username("admin").unwrap().unwrap();
+        assert_eq!(user.theme_preference, ThemePreference::OsDefault);
+
+        let resp = app
+            .clone()
+            .oneshot(authed_request("GET", "/", &cookie))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let html = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(html.contains(r#"<html lang="en" data-theme="os_default">"#));
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/login")
+            .header(header::COOKIE, "theme_preference=os_default")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let html = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(html.contains(r#"<html lang="en" data-theme="os_default">"#));
     }
 
     // ── Screenshot Tests ──

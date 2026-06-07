@@ -76,7 +76,7 @@ impl Database {
                 account_status TEXT NOT NULL DEFAULT 'enabled',
                 max_screenshot_size_bytes INTEGER,
                 max_expiry_seconds INTEGER,
-                theme_preference TEXT NOT NULL DEFAULT 'dark',
+                theme_preference TEXT NOT NULL DEFAULT 'os_default',
                 created_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
@@ -139,7 +139,7 @@ impl Database {
             &conn,
             "users",
             "theme_preference",
-            "TEXT NOT NULL DEFAULT 'dark'",
+            "TEXT NOT NULL DEFAULT 'os_default'",
         )?;
         conn.execute(
             "UPDATE users SET is_admin = 1

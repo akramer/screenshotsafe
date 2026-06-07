@@ -49,6 +49,7 @@ impl FromStr for AccountStatus {
 pub enum ThemePreference {
     Dark,
     Light,
+    OsDefault,
 }
 
 impl ThemePreference {
@@ -56,20 +57,7 @@ impl ThemePreference {
         match self {
             Self::Dark => "dark",
             Self::Light => "light",
-        }
-    }
-
-    pub fn toggle_label(self) -> &'static str {
-        match self {
-            Self::Dark => "Light",
-            Self::Light => "Dark",
-        }
-    }
-
-    pub fn toggled(self) -> Self {
-        match self {
-            Self::Dark => Self::Light,
-            Self::Light => Self::Dark,
+            Self::OsDefault => "os_default",
         }
     }
 }
@@ -78,7 +66,8 @@ impl From<&str> for ThemePreference {
     fn from(value: &str) -> Self {
         match value {
             "light" => Self::Light,
-            _ => Self::Dark,
+            "os_default" | "system" | "auto" => Self::OsDefault,
+            _ => Self::OsDefault,
         }
     }
 }

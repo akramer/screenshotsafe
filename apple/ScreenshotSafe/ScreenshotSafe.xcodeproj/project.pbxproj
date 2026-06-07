@@ -31,6 +31,7 @@
 		A2FB8AF02FBA180C005916E6 /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2FB8AB02FBA180C005916E6 /* SafariWebExtensionHandler.swift */; };
 		A2FB8B0C2FBA180C005916E6 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B022FBA180C005916E6 /* popup.js */; };
 		A2FB8B0D2FBA180C005916E6 /* webext-api.js in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B032FBA180C005916E6 /* webext-api.js */; };
+		C0D002012FD5000000000201 /* theme.js in Resources */ = {isa = PBXBuildFile; fileRef = C0D002002FD5000000000200 /* theme.js */; };
 		A2FB8B0E2FBA180C005916E6 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B042FBA180C005916E6 /* background.js */; };
 		A2FB8B0F2FBA180C005916E6 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B052FBA180C005916E6 /* popup.html */; };
 		A2FB8B102FBA180C005916E6 /* options.js in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B062FBA180C005916E6 /* options.js */; };
@@ -41,6 +42,7 @@
 		A2FB8B152FBA180C005916E6 /* options.html in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B0B2FBA180C005916E6 /* options.html */; };
 		A2FB8B162FBA180C005916E6 /* popup.js in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B022FBA180C005916E6 /* popup.js */; };
 		A2FB8B172FBA180C005916E6 /* webext-api.js in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B032FBA180C005916E6 /* webext-api.js */; };
+		C0D002022FD5000000000202 /* theme.js in Resources */ = {isa = PBXBuildFile; fileRef = C0D002002FD5000000000200 /* theme.js */; };
 		A2FB8B182FBA180C005916E6 /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B042FBA180C005916E6 /* background.js */; };
 		A2FB8B192FBA180C005916E6 /* popup.html in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B052FBA180C005916E6 /* popup.html */; };
 		A2FB8B1A2FBA180C005916E6 /* options.js in Resources */ = {isa = PBXBuildFile; fileRef = A2FB8B062FBA180C005916E6 /* options.js */; };
@@ -147,6 +149,7 @@
 		A2FB8AE22FBA180C005916E6 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2FB8B022FBA180C005916E6 /* popup.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = popup.js; path = Resources/popup.js; sourceTree = "<group>"; };
 		A2FB8B032FBA180C005916E6 /* webext-api.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = "webext-api.js"; path = "Resources/webext-api.js"; sourceTree = "<group>"; };
+		C0D002002FD5000000000200 /* theme.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = theme.js; path = Resources/theme.js; sourceTree = "<group>"; };
 		A2FB8B042FBA180C005916E6 /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = Resources/background.js; sourceTree = "<group>"; };
 		A2FB8B052FBA180C005916E6 /* popup.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = popup.html; path = Resources/popup.html; sourceTree = "<group>"; };
 		A2FB8B062FBA180C005916E6 /* options.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = options.js; path = Resources/options.js; sourceTree = "<group>"; };
@@ -323,6 +326,7 @@
 			children = (
 				A2FB8B022FBA180C005916E6 /* popup.js */,
 				A2FB8B032FBA180C005916E6 /* webext-api.js */,
+				C0D002002FD5000000000200 /* theme.js */,
 				A2FB8B042FBA180C005916E6 /* background.js */,
 				A2FB8B052FBA180C005916E6 /* popup.html */,
 				A2FB8B062FBA180C005916E6 /* options.js */,
@@ -575,6 +579,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A2FB8B172FBA180C005916E6 /* webext-api.js in Resources */,
+				C0D002022FD5000000000202 /* theme.js in Resources */,
 				A2FB8B1D2FBA180C005916E6 /* icons in Resources */,
 				A2FB8B1B2FBA180C005916E6 /* editor.html in Resources */,
 				A2FB8B192FBA180C005916E6 /* popup.html in Resources */,
@@ -592,6 +597,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A2FB8B0D2FBA180C005916E6 /* webext-api.js in Resources */,
+				C0D002012FD5000000000201 /* theme.js in Resources */,
 				A2FB8B132FBA180C005916E6 /* icons in Resources */,
 				A2FB8B112FBA180C005916E6 /* editor.html in Resources */,
 				A2FB8B0F2FBA180C005916E6 /* popup.html in Resources */,
