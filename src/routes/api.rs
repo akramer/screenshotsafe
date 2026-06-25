@@ -546,12 +546,9 @@ fn openid_discovery_url(oauth: &crate::config::OAuthConfig) -> Option<String> {
 }
 
 fn non_empty(value: &str) -> Option<String> {
-    let value = value.trim();
-    if value.is_empty() {
-        None
-    } else {
-        Some(value.to_string())
-    }
+    Some(value.trim())
+        .filter(|s| !s.is_empty())
+        .map(String::from)
 }
 
 fn non_empty_opt(value: &Option<String>) -> Option<String> {
