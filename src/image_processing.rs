@@ -343,6 +343,15 @@ fn build_svg(
     )
 }
 
+use once_cell::sync::Lazy;
+use std::sync::Arc;
+
+static GLOBAL_FONTDB: Lazy<Arc<resvg::usvg::fontdb::Database>> = Lazy::new(|| {
+    let mut fontdb = resvg::usvg::fontdb::Database::new();
+    fontdb.load_system_fonts();
+    Arc::new(fontdb)
+});
+
 /// Render an SVG string into a tiny-skia Pixmap.
 fn render_svg_to_pixmap(
     svg_str: &str,
@@ -351,15 +360,10 @@ fn render_svg_to_pixmap(
 ) -> crate::Result<resvg::tiny_skia::Pixmap> {
     use resvg::tiny_skia;
     use resvg::usvg;
-    use std::sync::Arc;
-
-    // Set up font database for text rendering
-    let mut fontdb = resvg::usvg::fontdb::Database::new();
-    fontdb.load_system_fonts();
 
     // Parse SVG — in usvg 0.44, fontdb goes into Options
     let opt = usvg::Options {
-        fontdb: Arc::new(fontdb),
+        fontdb: GLOBAL_FONTDB.clone(),
         ..Default::default()
     };
     let tree = usvg::Tree::from_str(svg_str, &opt)
@@ -441,4 +445,24 @@ fn svg_escape_text(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
+}
+
+#[cfg(test)]
+mod tests_bench {
+    use super::*;
+    use std::time::Instant;
+
+    #[test]
+    fn bench_render_svg_optimized() {
+        let svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"><text x=\"10\" y=\"20\" font-family=\"Liberation Sans, Arial, sans-serif\" font-size=\"12\" fill=\"#000000\">Test</text></svg>";
+
+        let _ = render_svg_to_pixmap(svg, 100, 100).unwrap();
+
+        let start = Instant::now();
+        for _ in 0..100 {
+            let _ = render_svg_to_pixmap(svg, 100, 100).unwrap();
+        }
+        let elapsed = start.elapsed();
+        println!("OPTIMIZED: Time taken for 100 renders: {:?}", elapsed);
+    }
 }

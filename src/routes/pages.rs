@@ -174,7 +174,7 @@ pub async fn dashboard(
     .replace("{{THEME}}", theme_attr(user.theme_preference))
     .replace("{favicon}", FAVICON_LINK)
     .replace("{display_name}", &html_escape(&user.display_name))
-    .replace("{admin_link}", &admin_link)
+    .replace("{admin_link}", admin_link)
     .replace("{screenshot_cards}", &screenshot_cards)
     .replace("{local_time_script}", LOCAL_TIME_SCRIPT);
 
