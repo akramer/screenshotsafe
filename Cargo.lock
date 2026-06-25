@@ -2340,6 +2340,7 @@ dependencies = [
  "image",
  "jsonwebtoken",
  "mime_guess",
+ "once_cell",
  "qrcode",
  "rand 0.8.6",
  "reqwest",
