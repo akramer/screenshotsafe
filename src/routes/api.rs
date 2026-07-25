@@ -58,6 +58,7 @@ pub async fn setup(
         max_screenshot_size_bytes: None,
         max_expiry_seconds: None,
         theme_preference: ThemePreference::OsDefault,
+        last_login_at: Some(Utc::now()),
         created_at: Utc::now(),
     };
 
@@ -126,6 +127,7 @@ pub async fn login(
     if !auth::verify_password(&req.password, hash) {
         return Err(AppError::unauthorized("login password did not match"));
     }
+    state.db.update_user_last_login(&user.id)?;
 
     let token = auth::middleware::create_session_token(
         &user.id,
@@ -406,6 +408,7 @@ pub async fn oauth_callback(
         if !user.account_status.is_enabled() {
             return Ok(Redirect::to("/login?oauth=pending").into_response());
         }
+        state.db.update_user_last_login(&user.id)?;
         return Ok(with_session_cookie(
             Redirect::to("/").into_response(),
             &state,
@@ -433,6 +436,7 @@ pub async fn oauth_callback(
                 max_screenshot_size_bytes: None,
                 max_expiry_seconds: None,
                 theme_preference: ThemePreference::OsDefault,
+                last_login_at: account_status.is_enabled().then(Utc::now),
                 created_at: Utc::now(),
             };
             let identity = OAuthIdentity {
@@ -819,6 +823,7 @@ pub async fn admin_list_users(
                 "account_status": user.account_status,
                 "max_screenshot_size_bytes": user.max_screenshot_size_bytes,
                 "max_expiry_seconds": user.max_expiry_seconds,
+                "last_login_at": user.last_login_at,
                 "created_at": user.created_at,
             })
         })
@@ -858,6 +863,7 @@ pub async fn admin_create_user(
         max_screenshot_size_bytes: normalize_user_limit(req.max_screenshot_size_bytes),
         max_expiry_seconds: normalize_user_limit(req.max_expiry_seconds),
         theme_preference: ThemePreference::OsDefault,
+        last_login_at: None,
         created_at: Utc::now(),
     };
 
@@ -873,6 +879,7 @@ pub async fn admin_create_user(
             "account_status": user.account_status,
             "max_screenshot_size_bytes": user.max_screenshot_size_bytes,
             "max_expiry_seconds": user.max_expiry_seconds,
+            "last_login_at": user.last_login_at,
             "created_at": user.created_at,
         })),
     ))

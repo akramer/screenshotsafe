@@ -378,7 +378,7 @@ mod tests {
     #[tokio::test]
     async fn test_login_wrong_password() {
         let dir = tempfile::tempdir().unwrap();
-        let (app, _state) = test_app(dir.path());
+        let (app, state) = test_app(dir.path());
 
         // Setup first
         let req = json_request(
@@ -390,6 +390,12 @@ mod tests {
             }),
         );
         app.clone().oneshot(req).await.unwrap();
+        let last_login_at = state
+            .db
+            .get_user_by_username("admin")
+            .unwrap()
+            .unwrap()
+            .last_login_at;
 
         // Login with wrong password
         let req = json_request(
@@ -402,6 +408,15 @@ mod tests {
         );
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            state
+                .db
+                .get_user_by_username("admin")
+                .unwrap()
+                .unwrap()
+                .last_login_at,
+            last_login_at
+        );
     }
 
     #[tokio::test]
@@ -666,6 +681,65 @@ mod tests {
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert!(state.db.get_user_by_username("alice").unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_last_login_is_recorded_and_displayed_on_admin_page() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let admin_cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "POST",
+            "/api/admin/users",
+            &admin_cookie,
+            serde_json::json!({
+                "username": "alice",
+                "password": "testpassword456",
+                "display_name": "Alice Example",
+                "is_admin": false
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        assert!(state
+            .db
+            .get_user_by_username("alice")
+            .unwrap()
+            .unwrap()
+            .last_login_at
+            .is_none());
+
+        let req = json_request(
+            "POST",
+            "/api/auth/login",
+            serde_json::json!({
+                "username": "alice",
+                "password": "testpassword456"
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let alice = state.db.get_user_by_username("alice").unwrap().unwrap();
+        let last_login_at = alice
+            .last_login_at
+            .expect("successful login should record a timestamp");
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/admin")
+            .header(header::COOKIE, &admin_cookie)
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(resp.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let html = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(html.contains("<th>Last Login</th>"));
+        assert!(html.contains(&format!(r#"datetime="{}""#, last_login_at.to_rfc3339())));
     }
 
     #[tokio::test]
@@ -1004,6 +1078,7 @@ mod tests {
             max_screenshot_size_bytes: None,
             max_expiry_seconds: None,
             theme_preference: ThemePreference::OsDefault,
+            last_login_at: None,
             created_at: Utc::now(),
         };
         let identity = OAuthIdentity {

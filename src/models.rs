@@ -94,6 +94,7 @@ pub struct User {
     pub max_screenshot_size_bytes: Option<u64>,
     pub max_expiry_seconds: Option<u64>,
     pub theme_preference: ThemePreference,
+    pub last_login_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
 

@@ -1105,6 +1105,10 @@ pub async fn admin_page(
         .map(|user| {
             let role = if user.is_admin { "Admin" } else { "User" };
             let status = user.account_status.as_str();
+            let last_login = user
+                .last_login_at
+                .map(|timestamp| local_time(timestamp, "datetime", "%b %d, %Y %H:%M UTC"))
+                .unwrap_or_else(|| "<span class=\"admin-muted\">Never</span>".to_string());
             let delete_button = if user.id == admin.id {
                 "<span class=\"admin-muted\">Current user</span>".to_string()
             } else {
@@ -1134,6 +1138,7 @@ pub async fn admin_page(
                     <td><span class="role-pill{}">{}</span></td>
                     <td>{}</td>
                     <td>{}</td>
+                    <td>{}</td>
                     <td>
                         <a class="btn btn-sm btn-outline" href="/admin/users/{}">Edit</a>
                         {}
@@ -1145,6 +1150,7 @@ pub async fn admin_page(
                 if user.is_admin { " role-pill-admin" } else { "" },
                 role,
                 status,
+                last_login,
                 local_time(user.created_at, "date", "%b %d, %Y"),
                 user.id,
                 status_button,
@@ -1212,6 +1218,7 @@ pub async fn admin_page(
                         <th>Display Name</th>
                         <th>Role</th>
                         <th>Status</th>
+                        <th>Last Login</th>
                         <th>Created</th>
                         <th></th>
                     </tr>
