@@ -6,11 +6,7 @@
     "permissions": [
         "activeTab",
         "contextMenus",
-        "storage"
-    ],
-    "optional_host_permissions": [
-        "http://*/*",
-        "https://*/*"
+        "nativeMessaging"
     ],
     "action": {
         "default_icon": {

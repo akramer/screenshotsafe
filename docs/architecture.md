@@ -1,6 +1,6 @@
 # Architecture
 
-ScreenshotSafe is a self-hosted screenshot capture, annotation, and sharing app. It is made of a Rust/Axum server, static web editor assets, a shared WebExtension, and optional native Apple wrappers for Safari and share extensions.
+ScreenshotSafe is a self-hosted screenshot capture, annotation, and sharing app. It is made of a Rust/Axum server, static web editor assets, a Chromium WebExtension, and a native Apple project containing separate Safari and share extensions.
 
 ## Backend
 
@@ -37,8 +37,10 @@ SQLite stores users, OAuth identities, API token hashes, and screenshot metadata
 
 - `static/` contains web UI CSS and JavaScript served by the backend.
 - `static/js/editor.js` is used by the server-rendered editor page.
-- `extension/` is the canonical browser extension source. It handles capture, options, popup UI, local pre-upload editing, and server upload.
-- Safari uses the shared WebExtension payload plus a native app wrapper. The build script copies `extension/` files into `dist/safari-extension/` and can invoke `safari-web-extension-converter` to update `apple/ScreenshotSafe/`.
+- `extension/` is the canonical Chromium extension source. It handles capture, options, popup UI, local pre-upload editing, and server upload.
+- `apple/ScreenshotSafe/Shared (Safari Extension)/Resources/` is the canonical Safari WebExtension source. It captures and edits in Safari, then sends configuration checks and uploads to the native extension handler.
+- The Safari native handler reads server and API-token configuration from the shared app group and performs bearer-token requests with `URLSession`.
+- `scripts/build-safari-extension.sh` builds the checked-in Xcode project. It does not copy Chromium files or invoke `safari-web-extension-converter`.
 
 ## Main Data Flows
 

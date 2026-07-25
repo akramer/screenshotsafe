@@ -1,6 +1,6 @@
 # ScreenshotSafe Privacy Policy
 
-Effective date: May 17, 2026
+Effective date: July 25, 2026
 
 ScreenshotSafe is a self-hosted screenshot capture, editing, and sharing tool. The ScreenshotSafe browser extension is designed to connect only to the ScreenshotSafe server URL that you configure.
 
@@ -17,19 +17,19 @@ This policy describes the ScreenshotSafe browser extension and the self-hosted S
 
 The ScreenshotSafe extension may handle the following information:
 
-- Server URL: the ScreenshotSafe server address you enter in the extension settings.
-- API token: the token you create on your ScreenshotSafe server so the extension can upload screenshots.
+- Server URL: the ScreenshotSafe server address configured for the browser extension or native app.
+- API token: the token configured in the native ScreenshotSafe app so Safari and native share extensions can upload screenshots.
 - Visible-tab screenshot: the image captured when you intentionally use the extension to take a screenshot.
 - Page metadata: the page title and source URL associated with the captured screenshot.
 - Edited screenshot content: cropped or redacted screenshot data that you choose to upload.
 
-The extension stores the server URL in your browser's local extension storage. Screenshot drafts are held temporarily inside the extension while you review, crop, or redact them before upload.
+The Chromium extension stores its server URL in local extension storage. On Apple platforms, the native ScreenshotSafe app stores the server URL and API token in an app group shared with its extensions; Safari WebExtension JavaScript does not receive the raw token. Screenshot drafts are held temporarily while you review, crop, or redact them before upload.
 
 ## How Information Is Used
 
 ScreenshotSafe uses this information to:
 
-- verify that the configured server URL works with your browser sign-in;
+- verify that the configured server and authentication work;
 - capture the visible tab when you request a screenshot;
 - let you crop or redact the screenshot before upload;
 - upload the finalized screenshot and metadata to your configured ScreenshotSafe server;
@@ -53,7 +53,7 @@ Screenshots uploaded to a ScreenshotSafe server may be shared through links gene
 
 ## Retention and Deletion
 
-The extension keeps the configured server URL until you change or remove it from the extension settings or uninstall the extension.
+The Chromium extension keeps its configured server URL until you change it or uninstall the extension. On Apple platforms, the native app keeps the server URL and API token until you replace them or remove the app and its stored data.
 
 Temporary screenshot drafts in the extension are short-lived and are used only to support the pre-upload editing flow.
 
@@ -61,16 +61,18 @@ Uploaded screenshots and metadata are retained by the configured ScreenshotSafe 
 
 ## Permissions
 
-The extension requests browser permissions needed for its core features:
+The extensions request browser permissions needed for their core features:
 
 - `activeTab`: to capture the currently active visible tab after you invoke the extension.
 - `contextMenus`: to provide screenshot and settings actions from the browser context menu.
-- `storage`: to save the configured server URL locally in the browser.
-- `scripting`: to show the sign-in prompt in the active tab when your browser session is unavailable.
+- `storage` in Chromium: to save the configured server URL locally in the browser.
+- `nativeMessaging` in Safari: to ask the native app to check its configuration and upload finalized screenshots.
+
+The Safari extension does not request host permission for the configured ScreenshotSafe server. Its native component performs server requests.
 
 ## Security
 
-Use HTTPS for any ScreenshotSafe server exposed outside local development. The extension uses your browser sign-in session for authenticated requests to the configured server.
+Use HTTPS for any ScreenshotSafe server exposed outside local development. Safari and the native share extensions authenticate with a bearer API token stored by the native app. Other browser clients use the authentication method described by their configuration.
 
 ## Children's Privacy
 

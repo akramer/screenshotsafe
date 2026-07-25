@@ -198,7 +198,7 @@ With this setting enabled, userinfo must include an allowed email address. If th
 
 ## Browser Extension
 
-The shared WebExtension source is in `extension/`.
+The Chromium WebExtension source is in `extension/`.
 
 For Chrome or another Chromium browser:
 
@@ -213,18 +213,18 @@ The privacy policy for store listings or public installs is available in [docs/p
 
 ## Safari Extension
 
-Safari uses the same extension payload plus a native wrapper.
+Safari has a separate WebExtension inside the checked-in Apple project. The native app owns the server URL and API token. Safari captures and edits locally, then delegates connection checks and bearer-token uploads to the native extension handler without requesting access to the server website.
 
-Build the Safari payload:
+Build the existing macOS Xcode project:
 
 ```sh
 scripts/build-safari-extension.sh
 ```
 
-Generate the Xcode wrapper with full Xcode:
+Build the iOS project:
 
 ```sh
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer scripts/build-safari-extension.sh --xcode-project
+scripts/build-safari-extension.sh --ios
 ```
 
 More detail is in [docs/safari-extension.md](docs/safari-extension.md).
@@ -298,8 +298,9 @@ Useful project paths:
 
 - `src/`: Rust application, routes, auth, config, database, and image rendering
 - `static/`: web UI CSS and editor JavaScript used by the server-rendered app
-- `extension/`: shared Chrome/Safari WebExtension source
-- `scripts/build-safari-extension.sh`: Safari payload and Xcode wrapper generator
+- `extension/`: Chromium WebExtension source
+- `apple/ScreenshotSafe/`: native apps plus the separate Safari and share extensions
+- `scripts/build-safari-extension.sh`: builds the checked-in Apple project without regenerating it
 - `tests/`: integration tests
 
 ## Security Notes

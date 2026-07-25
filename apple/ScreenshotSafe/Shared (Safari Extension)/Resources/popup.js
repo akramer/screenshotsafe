@@ -12,7 +12,6 @@
     const errorMsg = document.getElementById('error-msg');
 
     const ext = window.sssWebExt;
-    let settings = null;
     let openedSettings = false;
 
     init();
@@ -22,7 +21,6 @@
 
     async function init() {
         try {
-            settings = await ext.storage.get(['serverUrl']);
             await checkConnection();
         } catch (err) {
             markInvalid(err.message);
@@ -31,37 +29,23 @@
     }
 
     async function checkConnection() {
-        if (!settings.serverUrl) {
-            markInvalid('Settings required');
-            openSettings('missing');
-            return;
-        }
-
         try {
-            const resp = await fetch(`${settings.serverUrl}/api/ping`, {
-                cache: 'no-store',
-                mode: 'cors',
-                credentials: 'include',
+            const response = await ext.runtime.sendNativeMessage({
+                type: 'sss-verify-native-settings',
             });
 
-            if (resp.ok) {
+            if (response && response.ok) {
                 statusDot.classList.add('connected');
                 statusText.textContent = 'Connected';
                 captureBtn.disabled = false;
                 return;
             }
 
-            if (resp.status === 401) {
-                markInvalid('Sign-in needed');
-                openLoginRequired('login-required');
-                return;
-            }
-
-            markInvalid('Server error');
-            openLoginRequired('server-error');
-        } catch (_) {
-            markInvalid('Cannot reach server');
-            openLoginRequired('cannot-reach-server');
+            markInvalid(response && response.error
+                ? response.error
+                : 'App configuration unavailable');
+        } catch (err) {
+            markInvalid(err.message);
         }
     }
 
@@ -111,16 +95,6 @@
         openedSettings = true;
         await ext.tabs.create({
             url: ext.runtime.getURL(`options.html?reason=${encodeURIComponent(reason)}`),
-        });
-    }
-
-    async function openLoginRequired(reason) {
-        if (openedSettings) return;
-        openedSettings = true;
-        await ext.runtime.sendMessage({
-            type: 'sss-login-required',
-            settings,
-            reason,
         });
     }
 

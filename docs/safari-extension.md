@@ -1,103 +1,88 @@
 # Safari Extension
 
-ScreenshotSafe's Safari extension uses the same popup and upload code as the
-Chrome extension. Safari still requires a native app wrapper, so the repo keeps
-the reusable WebExtension payload in `extension/` and generates the Safari
-payload in `dist/safari-extension`.
+ScreenshotSafe's Safari extension is maintained as part of the checked-in Apple
+project. It intentionally differs from the Chromium extension so Safari never
+needs host permission for an arbitrary self-hosted ScreenshotSafe server.
 
-## What Is Shared
+## Canonical Sources
 
-- `extension/popup.html`
-- `extension/popup.js`
-- `extension/background.js`
-- `extension/webext-api.js`
-- `extension/icons/*`
+- Safari WebExtension resources:
+  `apple/ScreenshotSafe/Shared (Safari Extension)/Resources/`
+- Native message handler:
+  `apple/ScreenshotSafe/Shared (Safari Extension)/SafariWebExtensionHandler.swift`
+- Shared native configuration and upload code:
+  `apple/ScreenshotSafe/Shared (Native)/`
+- Xcode project:
+  `apple/ScreenshotSafe/ScreenshotSafe.xcodeproj`
 
-`webext-api.js` wraps the small API surface used by the popup so Chrome's
-callback APIs and Safari's `browser.*` promise APIs can run the same code.
+The Chromium extension in `extension/` is separate. Do not copy Chromium
+resources over the Safari resources.
 
-## Build The Safari Payload
+## Configuration And Upload
+
+The containing app owns the server URL, API token, and default expiry in the
+`group.com.screenshotsafe.safari` app group. Configuration can be entered in the
+app or imported from the `screenshotsafe://configure` link and QR code generated
+by the server.
+
+The Safari WebExtension has no server host permissions:
+
+1. The extension asks the native handler whether app configuration exists.
+2. Its connection page asks the native handler to call `/api/ping` with the
+   bearer API token.
+3. Safari captures and edits the screenshot locally.
+4. The editor sends the finalized PNG and metadata to the native handler.
+5. The native upload client calls `/api/screenshots` with the bearer token.
+6. Safari navigates to the authenticated editor page for the new screenshot.
+
+The raw API token is never returned to WebExtension JavaScript.
+
+## Build
+
+Full Xcode is required. Build the checked-in macOS project:
 
 ```sh
 scripts/build-safari-extension.sh
 ```
 
-This creates:
-
-```text
-dist/safari-extension/
-  background.js
-  icons/
-  manifest.json
-  popup.html
-  popup.js
-  webext-api.js
-```
-
-## Generate The Xcode Wrapper
-
-Full Xcode is required for Apple's Safari converter. Command Line Tools alone
-are not enough.
+Build the checked-in iOS project:
 
 ```sh
-sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-scripts/build-safari-extension.sh --xcode-project
+scripts/build-safari-extension.sh --ios
 ```
 
-Or run it without changing the global developer directory:
+To select Xcode without changing the system-wide developer directory:
 
 ```sh
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer scripts/build-safari-extension.sh --xcode-project
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer scripts/build-safari-extension.sh
 ```
 
-The script uses:
+The build script calls `xcodebuild` with signing disabled and writes derived
+data under ignored `build/apple-derived-data/`. It does not invoke
+`safari-web-extension-converter`, copy resources, or generate a project.
 
-```sh
-xcrun safari-web-extension-converter dist/safari-extension \
-  --project-location apple \
-  --app-name ScreenshotSafe \
-  --bundle-identifier com.screenshotsafe.safari \
-  --copy-resources \
-  --no-prompt \
-  --force \
-  --no-open
-```
+## Why The Converter Is Not Used
 
-The generated project is written to `apple/ScreenshotSafe/`.
-
-Set a real bundle identifier before distribution:
-
-```sh
-BUNDLE_IDENTIFIER=com.example.ScreenshotSafe scripts/build-safari-extension.sh --xcode-project
-```
+`safari-web-extension-converter` is useful for creating an initial wrapper from
+a browser extension. Running it with `--force` over this repository would
+regenerate files under `apple/ScreenshotSafe/` and could overwrite native app,
+share-extension, entitlement, and project changes. The tracked Xcode project is
+now maintained directly.
 
 ## Manual Safari Test
 
-1. Open the generated project in Xcode.
-2. Build and run the macOS host app.
-3. Open Safari > Settings > Extensions and enable ScreenshotSafe.
-4. Sign in to your ScreenshotSafe server in Safari.
-5. Open the extension popup, save the server URL, and grant website access when prompted.
-6. Capture a visible tab and confirm the share link is created and opens.
-
-## Current Scope
-
-Implemented here:
-
-- Shared popup/background JavaScript for Chrome and Safari.
-- Safari-specific manifest with `browser_specific_settings.safari`.
-- Safari payload build script.
-- Xcode wrapper generation when full Xcode is installed.
-- Generated Swift host app wrapper under `apple/ScreenshotSafe/`.
-
-Still remaining:
-
-- Decide whether the host app needs its own settings UI or whether popup
-  settings are sufficient for the first Safari release.
-- App Store signing, entitlements, and distribution metadata.
+1. Create an API token on the ScreenshotSafe server and use its configure link
+   or QR code to configure the native app.
+2. In the app, use **Save and Verify** and confirm `/api/ping` succeeds.
+3. Build and run the macOS or iOS containing app.
+4. Enable ScreenshotSafe in Safari.
+5. Open **Check ScreenshotSafe Connection** and confirm the native check succeeds.
+6. Confirm Safari does not ask for access to the ScreenshotSafe server website.
+7. Capture a visible tab, crop or redact it, and upload.
+8. Confirm the authenticated editor page opens for the new screenshot and the
+   API token's last-used time changes on the server.
 
 References:
 
-- Apple: https://developer.apple.com/documentation/safariservices/optimizing-your-web-extension-for-safari
+- Apple: https://developer.apple.com/documentation/safariservices/messaging-between-the-app-and-javascript-in-a-safari-web-extension
 - Apple: https://developer.apple.com/documentation/safariservices/packaging-a-web-extension-for-safari
-- MDN: https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/browser_specific_settings

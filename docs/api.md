@@ -10,7 +10,7 @@ Routes are registered in `src/lib.rs`. Handlers live mainly in `src/routes/api.r
 - API token or session: `Authorization: Bearer sss_...` accepted first, then session cookie through `ApiOrSessionUser`.
 - Optional session: route can inspect a session if present but does not require one.
 
-Cookie-authenticated `/api/*` calls are origin-checked. Browser extension origins are accepted for Chrome and Safari, and additional origins can be configured with `allowed_extension_origins`.
+Cookie-authenticated `/api/*` calls are origin-checked. Chrome extension origins are accepted for the Chromium client, and additional origins can be configured with `allowed_extension_origins`. Safari uses native bearer-token requests and its WebExtension origin is not trusted for cookie authentication.
 
 ## Page Routes
 

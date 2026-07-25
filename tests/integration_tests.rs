@@ -1408,7 +1408,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cookie_api_auth_allows_safari_extension_origin() {
+    async fn test_cookie_api_auth_rejects_safari_extension_origin() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app_with_config(dir.path(), |config| {
             config.server.public_url = "https://screens.example".to_string();
@@ -1418,7 +1418,7 @@ mod tests {
         let cookie = setup_user(&app).await;
         let resp = upload_screenshot_response_with_origin(&app, &cookie, &[], Some(origin)).await;
 
-        assert_eq!(resp.status(), StatusCode::CREATED);
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
@@ -1441,7 +1441,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cors_allows_credentials_for_safari_extension_origin() {
+    async fn test_cors_does_not_allow_safari_extension_origin() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app_with_config(dir.path(), |config| {
             config.server.public_url = "https://screens.example".to_string();
@@ -1462,18 +1462,10 @@ mod tests {
 
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
-        assert_eq!(
-            resp.headers()
-                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
-                .and_then(|v| v.to_str().ok()),
-            Some(origin)
-        );
-        assert_eq!(
-            resp.headers()
-                .get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS)
-                .and_then(|v| v.to_str().ok()),
-            Some("true")
-        );
+        assert!(resp
+            .headers()
+            .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            .is_none());
     }
 
     #[tokio::test]

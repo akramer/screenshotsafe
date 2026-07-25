@@ -199,7 +199,7 @@ fn cors_origin_allowed(origin: &str, headers: &HeaderMap, state: &SharedState) -
         return true;
     }
 
-    if origin.starts_with("chrome-extension://") || origin.starts_with("safari-web-extension://") {
+    if origin.starts_with("chrome-extension://") {
         return true;
     }
 

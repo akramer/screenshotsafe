@@ -28,68 +28,136 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             message = request?.userInfo?["message"]
         }
 
-        os_log(.default, "Received message from browser.runtime.sendNativeMessage: %@ (profile: %@)", String(describing: message), profile?.uuidString ?? "none")
+        let messageType = (message as? [String: Any])?["type"] as? String ?? "invalid"
+        os_log(.default, "Received Safari web extension message: %{public}@ (profile: %{public}@)", messageType, profile?.uuidString ?? "none")
 
-        let response = NSExtensionItem()
-        let responseMessage = handle(message: message)
-        if #available(iOS 15.0, macOS 11.0, *) {
-            response.userInfo = [ SFExtensionMessageKey: responseMessage ]
-        } else {
-            response.userInfo = [ "message": responseMessage ]
+        handle(message: message) { responseMessage in
+            let response = NSExtensionItem()
+            if #available(iOS 15.0, macOS 11.0, *) {
+                response.userInfo = [ SFExtensionMessageKey: responseMessage ]
+            } else {
+                response.userInfo = [ "message": responseMessage ]
+            }
+
+            context.completeRequest(returningItems: [ response ], completionHandler: nil)
         }
-
-        context.completeRequest(returningItems: [ response ], completionHandler: nil)
     }
 
-    private func handle(message: Any?) -> [String: Any] {
+    private func handle(message: Any?, completion: @escaping ([String: Any]) -> Void) {
         guard let message = message as? [String: Any],
               let type = message["type"] as? String else {
-            return ["ok": false, "error": "Invalid native message"]
+            completion(["ok": false, "error": "Invalid native message"])
+            return
         }
 
         let settingsStore = ScreenshotSafeSettingsStore()
+        guard settingsStore.isUsingAppGroup else {
+            completion([
+                "ok": false,
+                "error": "App Group \(ScreenshotSafeSettingsStore.appGroupIdentifier) is unavailable. Check Signing & Capabilities for the app and Safari extension.",
+            ])
+            return
+        }
 
         switch type {
         case "sss-get-native-settings":
-            guard settingsStore.isUsingAppGroup else {
-                return [
-                    "ok": false,
-                    "error": "App Group \(ScreenshotSafeSettingsStore.appGroupIdentifier) is unavailable. Check Signing & Capabilities for the macOS app and Safari extension.",
-                ]
-            }
-
             let settings = settingsStore.load()
-            return [
+            completion([
                 "ok": true,
                 "settings": [
+                    "configured": settings.isConfigured,
                     "serverUrl": settings.serverURL,
-                    "apiToken": settings.apiToken,
                     "defaultExpiry": settings.defaultExpiry,
                 ],
-            ]
+            ])
 
-        case "sss-set-native-settings":
-            guard settingsStore.isUsingAppGroup else {
-                return [
+        case "sss-verify-native-settings":
+            let settings = settingsStore.load()
+            ScreenshotSafeUploadClient().verify(settings: settings) { result in
+                switch result {
+                case .success:
+                    completion([
+                        "ok": true,
+                        "serverUrl": settings.serverURL,
+                    ])
+                case .failure(let error):
+                    completion([
+                        "ok": false,
+                        "error": error.localizedDescription,
+                    ])
+                }
+            }
+
+        case "sss-upload-screenshot":
+            let settings = settingsStore.load()
+            guard settings.isConfigured else {
+                completion([
                     "ok": false,
-                    "error": "App Group \(ScreenshotSafeSettingsStore.appGroupIdentifier) is unavailable. Check Signing & Capabilities for the macOS app and Safari extension.",
-                ]
+                    "error": ScreenshotSafeUploadError.notConfigured.localizedDescription,
+                ])
+                return
             }
 
-            guard let values = message["settings"] as? [String: Any] else {
-                return ["ok": false, "error": "Missing settings"]
+            guard
+                let imageBase64 = message["imageBase64"] as? String,
+                let imageData = decodeBase64Image(imageBase64),
+                !imageData.isEmpty
+            else {
+                completion(["ok": false, "error": "The edited screenshot data is invalid."])
+                return
             }
-            let current = settingsStore.load()
-            settingsStore.save(ScreenshotSafeSettings(
-                serverURL: values["serverUrl"] as? String ?? current.serverURL,
-                apiToken: values["apiToken"] as? String ?? current.apiToken,
-                defaultExpiry: values["defaultExpiry"] as? String ?? current.defaultExpiry
-            ))
-            return ["ok": true]
+
+            var uploadSettings = settings
+            if let expiresIn = message["expiresIn"] as? String {
+                uploadSettings.defaultExpiry = expiresIn
+            }
+
+            let filename = message["filename"] as? String ?? "screenshot.png"
+            let title = message["title"] as? String ?? "Screenshot"
+            let sourceURL = (message["sourceUrl"] as? String).flatMap { value in
+                value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : value
+            }
+            let imageDPI = (message["imageDpi"] as? NSNumber)?.doubleValue
+
+            ScreenshotSafeUploadClient().upload(
+                imageData: imageData,
+                filename: filename,
+                title: title,
+                sourceURL: sourceURL,
+                imageDPI: imageDPI,
+                settings: uploadSettings
+            ) { result in
+                switch result {
+                case .success(let upload):
+                    completion([
+                        "ok": true,
+                        "result": [
+                            "id": upload.id,
+                            "shareId": upload.shareId,
+                            "shareUrl": upload.shareURL.absoluteString,
+                            "rawUrl": upload.rawURL.absoluteString,
+                        ],
+                    ])
+                case .failure(let error):
+                    completion([
+                        "ok": false,
+                        "error": error.localizedDescription,
+                    ])
+                }
+            }
 
         default:
-            return ["ok": false, "error": "Unknown native message type"]
+            completion(["ok": false, "error": "Unknown native message type"])
         }
     }
 
+    private func decodeBase64Image(_ value: String) -> Data? {
+        let encoded: String
+        if let comma = value.firstIndex(of: ",") {
+            encoded = String(value[value.index(after: comma)...])
+        } else {
+            encoded = value
+        }
+        return Data(base64Encoded: encoded, options: .ignoreUnknownCharacters)
+    }
 }

@@ -34,9 +34,9 @@ Use these when a change touches frontend, extension, Safari, OAuth provider beha
 | Web dashboard | `cargo run`, create/login user, upload image, list and delete screenshots. |
 | Web editor | Open `/screenshots/{id}/edit`, add annotations, crop if relevant, save, reload share URL. |
 | Public share | Verify `/s/{share_id}`, `/s/{share_id}.png`, and `/s/{share_id}.preview.png`. |
-| Chromium extension | Load `extension/` unpacked, configure server URL/token, capture visible tab, edit, upload. |
-| Safari payload | Run `scripts/build-safari-extension.sh` and inspect `dist/safari-extension/`. |
-| Safari wrapper | With full Xcode, run the `--xcode-project` build command and open/build the generated project. |
+| Chromium extension | Load `extension/` unpacked, configure the server, capture a visible tab, edit, and upload. |
+| Safari extension | Configure the native app with a setup link or QR code, run `scripts/build-safari-extension.sh`, enable the extension, check its connection, capture, edit, and upload. Confirm Safari never requests access to the ScreenshotSafe server. |
+| iOS Safari extension | Run `scripts/build-safari-extension.sh --ios`, then test the containing app and extension in the simulator or on a signed device. |
 | OAuth | Test against the configured provider with callback URL matching deployment config. |
 | Docker | Build image and run with persistent `/data` volume. |
 

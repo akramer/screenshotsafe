@@ -6,9 +6,9 @@ Use this file as the first stop for automated coding agents and future maintaine
 
 - `src/`: Rust/Axum backend, routes, auth, configuration, database access, and image rendering.
 - `static/`: server-rendered web UI assets, including the in-browser screenshot editor used by app pages.
-- `extension/`: canonical shared WebExtension source for Chromium and Safari payload generation.
-- `apple/ScreenshotSafe/`: native iOS/macOS Safari app and share-extension wrapper generated around copied extension resources.
-- `scripts/build-safari-extension.sh`: copies `extension/` into `dist/safari-extension/` and can regenerate the Xcode wrapper with full Xcode.
+- `extension/`: canonical Chromium WebExtension source.
+- `apple/ScreenshotSafe/`: canonical iOS/macOS app, Safari WebExtension, and share-extension project.
+- `scripts/build-safari-extension.sh`: builds the checked-in Xcode project without regenerating it.
 - `tests/`: Axum integration tests using in-memory SQLite and temporary image storage.
 
 ## Core Flows
@@ -25,14 +25,14 @@ Use this file as the first stop for automated coding agents and future maintaine
 - Run backend locally: `cargo run`
 - Run tests: `cargo test`
 - Format Rust: `cargo fmt`
-- Build Safari payload: `scripts/build-safari-extension.sh`
-- Regenerate Xcode wrapper: `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer scripts/build-safari-extension.sh --xcode-project`
+- Build macOS app and Safari extension: `scripts/build-safari-extension.sh`
+- Build iOS app and Safari extension: `scripts/build-safari-extension.sh --ios`
 
 ## Canonical Sources
 
-- Edit shared extension behavior in `extension/`.
-- Treat `dist/safari-extension/` as generated output from `scripts/build-safari-extension.sh`.
-- The Apple project contains native wrapper code and copied Safari extension resources. Prefer changing `extension/` first when behavior is shared across browser extensions.
+- Edit Chromium extension behavior in `extension/`.
+- Edit Safari WebExtension behavior in `apple/ScreenshotSafe/Shared (Safari Extension)/Resources/`.
+- Treat the checked-in Apple project as source. Do not run `safari-web-extension-converter` over it.
 - Backend routes are registered in `src/lib.rs`; handler implementations live mostly in `src/routes/api.rs`, `src/routes/pages.rs`, and `src/routes/share.rs`.
 - SQLite schema is created and migrated in `src/db.rs`.
 

@@ -1,13 +1,11 @@
 /**
- * Tiny WebExtension API adapter for Chrome callback APIs and Safari/Firefox
- * promise APIs. Keep this intentionally narrow: it only wraps the APIs used by
- * the ScreenshotSafe popup.
+ * Narrow Safari WebExtension API adapter used by extension pages.
  */
 (function () {
     'use strict';
 
     const api = window.browser || window.chrome;
-    const localStoragePrefix = 'sss:';
+    const nativeApplicationId = 'application.id';
     const usesChromeCallbackApi = Boolean(window.chrome && api === window.chrome);
 
     function getLastError() {
@@ -45,59 +43,19 @@
         });
     }
 
-    function getLocal(keys) {
-        const result = {};
-        keys.forEach((key) => {
-            const value = window.localStorage.getItem(`${localStoragePrefix}${key}`);
-            if (value !== null) {
-                result[key] = value;
-            }
-        });
-        return result;
-    }
-
-    function setLocal(values) {
-        Object.entries(values).forEach(([key, value]) => {
-            window.localStorage.setItem(`${localStoragePrefix}${key}`, value);
-        });
-    }
-
-    async function requestOrigin(serverUrl) {
-        if (!api || !api.permissions || typeof api.permissions.request !== 'function') {
-            return true;
-        }
-
-        const origin = new URL(serverUrl).origin + '/*';
-        return call(api.permissions, 'request', [{ origins: [origin] }]);
-    }
-
     window.sssWebExt = {
-        storage: {
-            async get(keys) {
-                if (api && api.storage && api.storage.local) {
-                    return call(api.storage.local, 'get', [keys]);
-                }
-
-                return getLocal(keys);
-            },
-            async set(values) {
-                if (api && api.storage && api.storage.local) {
-                    await call(api.storage.local, 'set', [values]);
-                    return;
-                }
-
-                setLocal(values);
-            },
-        },
-        permissions: {
-            requestOrigin,
-        },
         runtime: {
             getURL(path) {
                 return api && api.runtime && api.runtime.getURL(path);
             },
             sendMessage(message) {
                 return call(api && api.runtime, 'sendMessage', [message]);
+            },
+            sendNativeMessage(message) {
+                return call(api && api.runtime, 'sendNativeMessage', [
+                    nativeApplicationId,
+                    message,
+                ]);
             },
             onMessage(handler) {
                 if (!api || !api.runtime || !api.runtime.onMessage) return;

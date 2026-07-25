@@ -1,8 +1,8 @@
 /**
  * ScreenshotSafe Safari Extension - Background Worker
  *
- * Handles toolbar-click capture, settings menu access, and screenshot draft
- * handoff for the full-tab editor.
+ * Handles capture and editor drafts. Configuration, verification, and upload
+ * are delegated to the containing app through Safari native messaging.
  */
 
 const api = globalThis.browser || globalThis.chrome;
@@ -50,20 +50,6 @@ if (api && api.runtime) {
             return false;
         }
 
-        if (message.type === 'sss-native-message') {
-            sendNativeMessageToApp(message.message)
-                .then(sendResponse)
-                .catch((err) => sendResponse({ ok: false, error: err.message }));
-            return true;
-        }
-
-        if (message.type === 'sss-login-required') {
-            handleLoginRequired(message.settings || {}, message.reason || 'login-required', _sender.tab)
-                .then(() => sendResponse({ ok: true }))
-                .catch((err) => sendResponse({ ok: false, error: err.message }));
-            return true;
-        }
-
         return false;
     });
 }
@@ -96,9 +82,9 @@ if (api && api.contextMenus && api.contextMenus.onClicked) {
 }
 
 async function captureAndOpenEditor(tab) {
-    const settings = await getSettings();
+    const settings = await getNativeSettings();
     const activeTab = tab || (await queryActiveTab());
-    if (!settings.serverUrl) {
+    if (!settings.configured) {
         await openSettings('missing');
         return;
     }
@@ -134,18 +120,14 @@ function captureAfterDelay(tab, delayMs) {
     }, delayMs);
 }
 
-async function getSettings() {
-    if (!api || !api.storage || !api.storage.local) {
-        return { serverUrl: '' };
+async function getNativeSettings() {
+    const response = await sendNativeMessageToApp({ type: 'sss-get-native-settings' });
+    if (!response || !response.ok) {
+        throw new Error(response && response.error
+            ? response.error
+            : 'ScreenshotSafe app settings are unavailable.');
     }
-
-    try {
-        const settings = await call(api.storage.local, 'get', [['serverUrl']]);
-        return { serverUrl: settings.serverUrl || '' };
-    } catch (err) {
-        console.error('ScreenshotSafe settings load failed:', err.message);
-        return { serverUrl: '' };
-    }
+    return response.settings || { configured: false, serverUrl: '' };
 }
 
 async function sendNativeMessageToApp(message) {
@@ -165,14 +147,6 @@ async function openSettings(reason) {
     await call(api.tabs, 'create', [{
         url: api.runtime.getURL(`options.html?reason=${encodeURIComponent(reason)}`),
     }]);
-}
-
-async function handleLoginRequired(settings, reason, tab) {
-    if (settings && settings.serverUrl) {
-        await call(api.tabs, 'create', [{ url: settings.serverUrl }]);
-    } else {
-        await openSettings('missing');
-    }
 }
 
 async function createSettingsMenu() {
@@ -201,7 +175,7 @@ async function createSettingsMenu() {
             }]);
             await call(api.contextMenus, 'create', [{
                 id: settingsMenuId,
-                title: 'ScreenshotSafe Settings',
+                title: 'Check ScreenshotSafe Connection',
                 contexts,
             }]);
             return true;

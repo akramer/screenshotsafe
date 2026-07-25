@@ -144,7 +144,7 @@ private extension ViewController {
         titleLabel.adjustsFontForContentSizeCategory = true
 
         let subtitleLabel = UILabel()
-        subtitleLabel.text = "Set the upload destination used by the iOS share sheet."
+        subtitleLabel.text = "Set the upload destination used by the Safari and share extensions."
         subtitleLabel.font = .preferredFont(forTextStyle: .subheadline)
         subtitleLabel.textColor = .secondaryLabel
         subtitleLabel.adjustsFontForContentSizeCategory = true
@@ -323,7 +323,7 @@ private extension ViewController {
             DispatchQueue.main.async {
                 switch result {
                 case .success:
-                    self?.statusLabel.text = "Connected. The Share Extension can upload screenshots."
+                    self?.statusLabel.text = "Connected. Safari and the Share Extension can upload screenshots."
                     self?.statusLabel.textColor = .systemGreen
                 case .failure(let error):
                     self?.statusLabel.text = error.localizedDescription
@@ -483,7 +483,7 @@ private extension ViewController {
         title.font = .systemFont(ofSize: 28, weight: .semibold)
         title.textColor = .labelColor
 
-        let subtitle = NSTextField(labelWithString: "Configure the native app and Share Extension to upload screenshots to your ScreenshotSafe server.")
+        let subtitle = NSTextField(labelWithString: "Configure Safari and the Share Extension to upload screenshots to your ScreenshotSafe server.")
         subtitle.font = .systemFont(ofSize: 13)
         subtitle.textColor = .secondaryLabelColor
         subtitle.maximumNumberOfLines = 2
@@ -577,7 +577,7 @@ private extension ViewController {
             DispatchQueue.main.async {
                 switch result {
                 case .success:
-                    self?.statusLabel.stringValue = "Connected. The Share Extension can upload screenshots."
+                    self?.statusLabel.stringValue = "Connected. Safari and the Share Extension can upload screenshots."
                     self?.statusLabel.textColor = .systemGreen
                 case .failure(let error):
                     self?.statusLabel.stringValue = error.localizedDescription

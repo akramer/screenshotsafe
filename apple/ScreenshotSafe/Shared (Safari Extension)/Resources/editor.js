@@ -55,12 +55,22 @@
                 throw new Error('Missing screenshot draft. Capture again from the extension popup.');
             }
 
-            settings = await ext.storage.get(['serverUrl']);
-            if (!settings.serverUrl) {
-                throw new Error('ScreenshotSafe is not configured. Save your server domain in the extension settings.');
+            const settingsResponse = await ext.runtime.sendNativeMessage({
+                type: 'sss-get-native-settings',
+            });
+            if (!settingsResponse || !settingsResponse.ok) {
+                throw new Error(settingsResponse && settingsResponse.error
+                    ? settingsResponse.error
+                    : 'ScreenshotSafe app settings are unavailable.');
             }
-
-            await redirectToLoginIfNeeded();
+            settings = settingsResponse.settings || {};
+            if (!settings.configured) {
+                throw new Error('Configure ScreenshotSafe in the app before uploading.');
+            }
+            if (settings.defaultExpiry &&
+                Array.from(expiresInSelect.options).some((option) => option.value === settings.defaultExpiry)) {
+                expiresInSelect.value = settings.defaultExpiry;
+            }
 
             const response = await ext.runtime.sendMessage({ type: 'sss-get-draft', id });
             if (!response || !response.ok) {
@@ -96,6 +106,9 @@
         try {
             const blob = await renderEditedBlob();
             const result = await uploadBlob(blob);
+            if (!result.id) {
+                throw new Error('ScreenshotSafe did not return a screenshot ID.');
+            }
             finalized = true;
             window.location.replace(editorUrlForResult(result));
         } catch (err) {
@@ -106,59 +119,46 @@
     }
 
     async function uploadBlob(blob) {
-        const formData = new FormData();
-        formData.append('image', blob, 'screenshot.png');
-        formData.append('title', pageTitleInput.value.trim() || 'Screenshot');
-        formData.append('source_url', imageUrlInput.value.trim());
-        formData.append('image_dpi', String(draft.imageDpi || 100));
-        if (expiresInSelect.value) {
-            formData.append('expires_in', expiresInSelect.value);
-        }
-
-        const resp = await fetch(`${settings.serverUrl}/api/screenshots`, {
-            method: 'POST',
-            mode: 'cors',
-            credentials: 'include',
-            body: formData,
+        const imageBase64 = await blobToBase64(blob);
+        const response = await ext.runtime.sendNativeMessage({
+            type: 'sss-upload-screenshot',
+            imageBase64,
+            filename: 'screenshot.png',
+            title: pageTitleInput.value.trim() || 'Screenshot',
+            sourceUrl: imageUrlInput.value.trim(),
+            imageDpi: draft.imageDpi || 100,
+            expiresIn: expiresInSelect.value,
         });
 
-        if (!resp.ok) {
-            if (resp.status === 401) {
-                await ext.runtime.sendMessage({
-                    type: 'sss-login-required',
-                    settings,
-                    reason: 'login-required',
-                });
-                throw new Error('Please sign in to ScreenshotSafe in your browser, then try uploading again.');
-            }
-
-            const errData = await resp.json().catch(() => ({}));
-            throw new Error(errData.error || `Upload failed (${resp.status})`);
+        if (!response || !response.ok) {
+            throw new Error(response && response.error
+                ? response.error
+                : 'The ScreenshotSafe app could not upload this screenshot.');
         }
 
-        return resp.json();
+        return response.result || {};
     }
 
     function editorUrlForResult(result) {
-        return `${settings.serverUrl}/screenshots/${result.id}/edit`;
+        const serverUrl = String(settings.serverUrl || '').replace(/\/+$/, '');
+        return `${serverUrl}/screenshots/${encodeURIComponent(result.id)}/edit`;
     }
 
-    async function redirectToLoginIfNeeded() {
-        try {
-            const resp = await fetch(`${settings.serverUrl}/api/ping`, {
-                cache: 'no-store',
-                mode: 'cors',
-                credentials: 'include',
-            });
-
-            if (resp.ok) {
-                return;
-            }
-        } catch (_) {
-            // A blocked CORS/cookie request looks like a failed fetch here.
-        }
-
-        window.location.href = `${settings.serverUrl}/login?extension=login_required`;
+    function blobToBase64(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const result = typeof reader.result === 'string' ? reader.result : '';
+                const comma = result.indexOf(',');
+                if (comma < 0) {
+                    reject(new Error('Could not encode the edited screenshot.'));
+                    return;
+                }
+                resolve(result.slice(comma + 1));
+            };
+            reader.onerror = () => reject(new Error('Could not encode the edited screenshot.'));
+            reader.readAsDataURL(blob);
+        });
     }
 
     async function renderEditedBlob() {
