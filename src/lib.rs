@@ -88,7 +88,7 @@ pub fn flush_hit_counts(state: &AppState) -> Result<u64> {
 /// Start a background task that periodically persists full-image hit counts.
 pub fn spawn_hit_count_flush(state: SharedState) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        let mut interval = tokio::time::interval(hit_counter::HIT_COUNT_FLUSH_INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         // Tokio intervals tick immediately once. Consume that tick so the first
@@ -96,7 +96,11 @@ pub fn spawn_hit_count_flush(state: SharedState) -> tokio::task::JoinHandle<()> 
         interval.tick().await;
 
         loop {
-            interval.tick().await;
+            tokio::select! {
+                _ = interval.tick() => {}
+                _ = state.hit_counter.idle_flush_requested() => {}
+            }
+
             match flush_hit_counts(&state) {
                 Ok(0) => {}
                 Ok(count) => tracing::debug!("Persisted {} full-image hits", count),

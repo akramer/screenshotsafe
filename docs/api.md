@@ -68,7 +68,7 @@ Cookie-authenticated `/api/*` calls are origin-checked. Chrome extension origins
 | `GET` | `/api/screenshots/{id}/original` | Session | None | Serves original image bytes for an owned screenshot. |
 | `GET` | `/api/screenshots/{id}/preview` | Session | None | Serves or creates preview image bytes for an owned screenshot. |
 
-Authenticated screenshot-list results include the persisted `hit_count`. Counts are eventually consistent and normally lag by no more than the 30-second flush interval.
+Authenticated screenshot-list results include the persisted `hit_count`. Active counts normally lag by no more than the 5-second flush interval; the first hit after at least 5 seconds of inactivity triggers an immediate background flush.
 
 Upload responses include the screenshot metadata plus public `share_url`, `raw_url`, and `share_id`.
 

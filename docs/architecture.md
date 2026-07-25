@@ -76,7 +76,8 @@ SQLite stores users, OAuth identities, API token hashes, and screenshot metadata
 3. `/s/{share_id}.preview.png` serves or lazily creates a scaled preview.
 4. Expired screenshots are treated as not found.
 5. Successful origin-observed `GET` requests for the full PNG, including `304` cache validations, are buffered as hits.
-6. Pending hits are added to screenshot counters every 30 seconds in one transaction without changing screenshot `updated_at`.
+6. Pending hits are added to screenshot counters every 5 seconds in one transaction without changing screenshot `updated_at`.
+7. After at least 5 seconds with no hits, the first new hit wakes the background task for an immediate flush.
 
 ## Cross-Cutting Rules
 
