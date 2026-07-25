@@ -1,8 +1,8 @@
 use axum::{
     body::Body,
     extract::{Path, State},
-    http::{header, HeaderMap},
-    response::{Html, IntoResponse},
+    http::{header, HeaderMap, Method, StatusCode},
+    response::{Html, IntoResponse, Response},
 };
 use tokio_util::io::ReaderStream;
 
@@ -32,6 +32,7 @@ const LOCAL_TIME_SCRIPT: &str = r#"<script>
 /// /s/{id}.png to full image, /s/{id} to share page.
 pub async fn share_dispatch(
     state: State<SharedState>,
+    method: Method,
     headers: HeaderMap,
     Path(share_id_or_file): Path<String>,
 ) -> crate::Result<axum::response::Response> {
@@ -40,9 +41,11 @@ pub async fn share_dispatch(
             .await?
             .into_response())
     } else if let Some(share_id) = share_id_or_file.strip_suffix(".png") {
-        Ok(share_image(state, Path(share_id.to_string()))
-            .await?
-            .into_response())
+        Ok(
+            share_image(state, method, headers, Path(share_id.to_string()))
+                .await?
+                .into_response(),
+        )
     } else {
         Ok(share_page(state, headers, Path(share_id_or_file))
             .await?
@@ -382,8 +385,10 @@ pub async fn share_preview_image(
 /// Direct PNG image — serves the rendered screenshot file.
 pub async fn share_image(
     State(state): State<SharedState>,
+    method: Method,
+    headers: HeaderMap,
     Path(share_id): Path<String>,
-) -> crate::Result<impl IntoResponse> {
+) -> crate::Result<Response> {
     let screenshot = state
         .db
         .get_screenshot_by_share_id(&share_id)?
@@ -402,8 +407,28 @@ pub async fn share_image(
         .as_deref()
         .ok_or(AppError::NotFound)?;
 
-    let etag = file_etag(rendered_path).await;
+    let metadata = tokio::fs::metadata(rendered_path).await?;
+    let etag = metadata_etag(&metadata);
+
+    if if_none_match_matches(&headers, &etag) {
+        if method == Method::GET {
+            state.hit_counter.record(screenshot.id);
+        }
+
+        return Ok((
+            StatusCode::NOT_MODIFIED,
+            [
+                (header::CACHE_CONTROL, "no-cache".to_string()),
+                (header::ETAG, etag),
+            ],
+        )
+            .into_response());
+    }
+
     let body = stream_png_file(rendered_path).await?;
+    if method == Method::GET {
+        state.hit_counter.record(screenshot.id);
+    }
 
     Ok((
         [
@@ -412,7 +437,8 @@ pub async fn share_image(
             (header::ETAG, etag),
         ],
         body,
-    ))
+    )
+        .into_response())
 }
 
 async fn stream_png_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Body> {
@@ -424,16 +450,34 @@ async fn file_etag(path: &str) -> String {
     tokio::fs::metadata(path)
         .await
         .ok()
-        .and_then(|m| m.modified().ok())
-        .map(|t| {
-            format!(
-                "\"{:?}\"",
-                t.duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs()
-            )
-        })
+        .map(|metadata| metadata_etag(&metadata))
         .unwrap_or_default()
+}
+
+fn metadata_etag(metadata: &std::fs::Metadata) -> String {
+    let modified_nanos = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    format!("\"{:x}-{:x}\"", metadata.len(), modified_nanos)
+}
+
+fn if_none_match_matches(headers: &HeaderMap, etag: &str) -> bool {
+    headers
+        .get_all(header::IF_NONE_MATCH)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(','))
+        .any(|candidate| {
+            let candidate = candidate.trim();
+            candidate == "*" || weak_etag(candidate) == weak_etag(etag)
+        })
+}
+
+fn weak_etag(etag: &str) -> &str {
+    etag.strip_prefix("W/").unwrap_or(etag)
 }
 
 fn html_escape(s: &str) -> String {

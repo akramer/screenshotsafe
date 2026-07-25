@@ -20,6 +20,7 @@ Current tests cover these broad areas:
 - Screenshot upload/list/update/delete behavior.
 - Annotation save and image rerender behavior.
 - Expiry and cleanup behavior.
+- Buffered full-image hit counting, conditional `304` responses, and non-counted preview/failed requests.
 - API token creation/use/revocation behavior.
 - OAuth account and identity edge cases where practical without an external provider.
 

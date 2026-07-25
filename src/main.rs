@@ -2,7 +2,10 @@ use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use screenshotsafe::{build_router, config, db, spawn_expired_screenshot_cleanup, AppState};
+use screenshotsafe::{
+    build_router, config, db, flush_hit_counts, spawn_expired_screenshot_cleanup,
+    spawn_hit_count_flush, AppState,
+};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -54,14 +57,50 @@ async fn main() -> anyhow::Result<()> {
         config,
         jwt_secret,
         rate_limiter: Default::default(),
+        hit_counter: Default::default(),
     });
 
     spawn_expired_screenshot_cleanup(state.clone());
+    let hit_count_flush_task = spawn_hit_count_flush(state.clone());
 
-    let app = build_router(state);
+    let app = build_router(state.clone());
     let listener = TcpListener::bind(&bind_addr).await?;
     tracing::info!("ScreenshotSafe listening on {}", bind_addr);
-    axum::serve(listener, app).await?;
+    let server_result = axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await;
+
+    hit_count_flush_task.abort();
+    let _ = hit_count_flush_task.await;
+    let flushed = flush_hit_counts(&state)?;
+    if flushed > 0 {
+        tracing::info!("Persisted {} full-image hits during shutdown", flushed);
+    }
+    server_result?;
 
     Ok(())
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        () = ctrl_c => {}
+        () = terminate => {}
+    }
 }

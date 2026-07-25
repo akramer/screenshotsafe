@@ -36,6 +36,7 @@ mod tests {
             config,
             jwt_secret: "test-secret-key-for-jwt".to_string(),
             rate_limiter: Default::default(),
+            hit_counter: Default::default(),
         });
 
         let app = build_router(state.clone());
@@ -1835,7 +1836,7 @@ mod tests {
     #[tokio::test]
     async fn test_share_page() {
         let dir = tempfile::tempdir().unwrap();
-        let (app, _state) = test_app(dir.path());
+        let (app, state) = test_app(dir.path());
 
         let cookie = setup_user(&app).await;
         let upload_body = upload_screenshot(&app, &cookie).await;
@@ -1866,16 +1867,24 @@ mod tests {
         assert!(html.contains(r#"id="copy-image""#));
         assert!(html.contains("Open Image"));
         assert!(html.contains(&format!(r#"href="/s/{}.png""#, share_id)));
+        assert_eq!(flush_hit_counts(&state).unwrap(), 0);
     }
 
     #[tokio::test]
-    async fn test_share_image() {
+    async fn test_share_image_hits_are_buffered_and_conditional_gets_count() {
         let dir = tempfile::tempdir().unwrap();
-        let (app, _state) = test_app(dir.path());
+        let (app, state) = test_app(dir.path());
 
         let cookie = setup_user(&app).await;
         let upload_body = upload_screenshot(&app, &cookie).await;
+        let id: uuid::Uuid = upload_body["id"].as_str().unwrap().parse().unwrap();
         let share_id = upload_body["share_id"].as_str().unwrap();
+        let updated_at = state
+            .db
+            .get_screenshot_by_id(&id)
+            .unwrap()
+            .unwrap()
+            .updated_at;
 
         // Access direct image
         let req = axum::http::Request::builder()
@@ -1889,6 +1898,113 @@ mod tests {
         assert_eq!(
             resp.headers().get(header::CONTENT_TYPE).unwrap(),
             "image/png"
+        );
+        let etag = resp.headers().get(header::ETAG).unwrap().clone();
+
+        // The request only updates memory until the periodic flush runs.
+        assert_eq!(
+            state
+                .db
+                .get_screenshot_by_id(&id)
+                .unwrap()
+                .unwrap()
+                .hit_count,
+            0
+        );
+
+        // A successful cache validation is also an origin-observed image hit.
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/s/{}.png", share_id))
+            .header(header::IF_NONE_MATCH, etag)
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_MODIFIED);
+
+        // HEAD validates the resource but is not an image load.
+        let req = axum::http::Request::builder()
+            .method("HEAD")
+            .uri(format!("/s/{}.png", share_id))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        assert_eq!(flush_hit_counts(&state).unwrap(), 2);
+        let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
+        assert_eq!(screenshot.hit_count, 2);
+        assert_eq!(screenshot.updated_at, updated_at);
+
+        let req = authed_request("GET", "/api/screenshots", &cookie);
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let body = body_json(resp).await;
+        assert_eq!(body["screenshots"][0]["hit_count"], 2);
+
+        let req = authed_request("GET", "/", &cookie);
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let html = body_text(resp).await;
+        assert!(html.contains("2 image loads"));
+    }
+
+    #[tokio::test]
+    async fn test_unsuccessful_full_image_requests_do_not_count() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+
+        let cookie = setup_user(&app).await;
+        let upload_body = upload_screenshot(&app, &cookie).await;
+        let id: uuid::Uuid = upload_body["id"].as_str().unwrap().parse().unwrap();
+        let share_id = upload_body["share_id"].as_str().unwrap();
+
+        state
+            .db
+            .update_screenshot_metadata(&id, None, None, Some("private"), None, None)
+            .unwrap();
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/s/{}.png", share_id))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        state
+            .db
+            .update_screenshot_metadata(
+                &id,
+                None,
+                None,
+                Some("unlisted"),
+                Some(Some(Utc::now() - Duration::seconds(1))),
+                None,
+            )
+            .unwrap();
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/s/{}.png", share_id))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::GONE);
+
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri("/s/does-not-exist.png")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        assert_eq!(flush_hit_counts(&state).unwrap(), 0);
+        assert_eq!(
+            state
+                .db
+                .get_screenshot_by_id(&id)
+                .unwrap()
+                .unwrap()
+                .hit_count,
+            0
         );
     }
 
@@ -1942,6 +2058,7 @@ mod tests {
         let image = image::load_from_memory(&bytes).unwrap();
         assert_eq!((image.width(), image.height()), (100, 100));
         assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
+        assert_eq!(flush_hit_counts(&state).unwrap(), 0);
     }
 
     #[tokio::test]
@@ -1974,6 +2091,15 @@ mod tests {
         let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
         assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
 
+        // Leave one hit pending when the screenshot is deleted.
+        let req = axum::http::Request::builder()
+            .method("GET")
+            .uri(format!("/s/{}.png", share_id))
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
         // Delete
         let req = axum::http::Request::builder()
             .method("DELETE")
@@ -1994,6 +2120,9 @@ mod tests {
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        assert_eq!(flush_hit_counts(&state).unwrap(), 1);
+        assert!(state.db.get_screenshot_by_id(&parsed_id).unwrap().is_none());
     }
 
     #[tokio::test]

@@ -29,7 +29,7 @@ Cookie-authenticated `/api/*` calls are origin-checked. Chrome extension origins
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/s/{share_id}` | Public | Public unlisted share page. |
-| `GET` | `/s/{share_id}.png` | Public | Public rendered PNG. |
+| `GET` | `/s/{share_id}.png` | Public | Public rendered PNG. Successful `200` responses and `304` cache validations are buffered as full-image hits. |
 | `GET` | `/s/{share_id}.preview.png` | Public | Public preview PNG, generated lazily when needed. |
 | `GET` | `/favicon.ico` | Public | Extension favicon served as site favicon. |
 | `GET` | `/static/*` | Public | Static CSS and JavaScript assets. |
@@ -67,6 +67,8 @@ Cookie-authenticated `/api/*` calls are origin-checked. Chrome extension origins
 | `PUT` | `/api/screenshots/{id}/annotations` | Session | JSON: `annotations`, optional `crop` | Saves annotations/crop and regenerates rendered image and preview. |
 | `GET` | `/api/screenshots/{id}/original` | Session | None | Serves original image bytes for an owned screenshot. |
 | `GET` | `/api/screenshots/{id}/preview` | Session | None | Serves or creates preview image bytes for an owned screenshot. |
+
+Authenticated screenshot-list results include the persisted `hit_count`. Counts are eventually consistent and normally lag by no more than the 30-second flush interval.
 
 Upload responses include the screenshot metadata plus public `share_url`, `raw_url`, and `share_id`.
 

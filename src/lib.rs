@@ -2,6 +2,7 @@ pub mod auth;
 pub mod config;
 pub mod db;
 pub mod error;
+pub mod hit_counter;
 pub mod image_processing;
 pub mod models;
 pub mod rate_limit;
@@ -32,6 +33,7 @@ pub struct AppState {
     pub config: config::Config,
     pub jwt_secret: String,
     pub rate_limiter: rate_limit::RateLimiter,
+    pub hit_counter: hit_counter::HitCounter,
 }
 
 pub type SharedState = Arc<AppState>;
@@ -76,6 +78,32 @@ pub fn spawn_expired_screenshot_cleanup(state: SharedState) {
             }
         }
     });
+}
+
+/// Persist pending full-image hits in one transaction when the batch is non-empty.
+pub fn flush_hit_counts(state: &AppState) -> Result<u64> {
+    state.hit_counter.flush(&state.db)
+}
+
+/// Start a background task that periodically persists full-image hit counts.
+pub fn spawn_hit_count_flush(state: SharedState) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+
+        // Tokio intervals tick immediately once. Consume that tick so the first
+        // attempted flush happens after a complete batching interval.
+        interval.tick().await;
+
+        loop {
+            interval.tick().await;
+            match flush_hit_counts(&state) {
+                Ok(0) => {}
+                Ok(count) => tracing::debug!("Persisted {} full-image hits", count),
+                Err(err) => tracing::warn!("Failed to persist full-image hits: {}", err),
+            }
+        }
+    })
 }
 
 /// Build the full Axum router with all routes.

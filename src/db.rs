@@ -115,6 +115,7 @@ impl Database {
                 annotations TEXT NOT NULL DEFAULT '[]',
                 crop_rect TEXT,
                 visibility TEXT NOT NULL DEFAULT 'unlisted',
+                hit_count INTEGER NOT NULL DEFAULT 0,
                 expires_at TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -154,6 +155,12 @@ impl Database {
             "screenshots",
             "image_dpi",
             "REAL NOT NULL DEFAULT 100.0",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "screenshots",
+            "hit_count",
+            "INTEGER NOT NULL DEFAULT 0",
         )?;
         Ok(())
     }
@@ -540,8 +547,8 @@ impl Database {
     pub fn create_screenshot(&self, s: &Screenshot) -> Result<()> {
         let conn = self.conn.lock().unwrap();
         conn.execute(
-            "INSERT INTO screenshots (id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, image_dpi, visibility, expires_at, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            "INSERT INTO screenshots (id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, image_dpi, visibility, hit_count, expires_at, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 s.id.to_string(),
                 s.user_id.to_string(),
@@ -555,6 +562,7 @@ impl Database {
                 s.crop_rect.as_ref().map(|c| serde_json::to_string(c).unwrap()),
                 s.image_dpi,
                 s.visibility,
+                i64::try_from(s.hit_count).unwrap_or(i64::MAX),
                 s.expires_at.map(|t| t.to_rfc3339()),
                 s.created_at.to_rfc3339(),
                 s.updated_at.to_rfc3339(),
@@ -579,14 +587,14 @@ impl Database {
         params: impl rusqlite::Params,
     ) -> Result<Option<Screenshot>> {
         let sql = format!(
-            "SELECT id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, image_dpi, visibility, expires_at, created_at, updated_at FROM screenshots {}",
+            "SELECT id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, image_dpi, visibility, hit_count, expires_at, created_at, updated_at FROM screenshots {}",
             where_clause
         );
         let result = conn
             .query_row(&sql, params, |row| {
                 let annotations_str: String = row.get(8)?;
                 let crop_str: Option<String> = row.get(9)?;
-                let expires_str: Option<String> = row.get(12)?;
+                let expires_str: Option<String> = row.get(13)?;
                 Ok(Screenshot {
                     id: row.get::<_, String>(0)?.parse().unwrap(),
                     user_id: row.get::<_, String>(1)?.parse().unwrap(),
@@ -600,9 +608,10 @@ impl Database {
                     crop_rect: crop_str.and_then(|s| serde_json::from_str(&s).ok()),
                     image_dpi: row.get(10)?,
                     visibility: row.get(11)?,
+                    hit_count: row.get::<_, i64>(12)?.max(0) as u64,
                     expires_at: expires_str.and_then(|s| parse_datetime_opt(&s)),
-                    created_at: parse_datetime(&row.get::<_, String>(13)?),
-                    updated_at: parse_datetime(&row.get::<_, String>(14)?),
+                    created_at: parse_datetime(&row.get::<_, String>(14)?),
+                    updated_at: parse_datetime(&row.get::<_, String>(15)?),
                 })
             })
             .optional()?;
@@ -617,7 +626,7 @@ impl Database {
     ) -> Result<Vec<Screenshot>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
-            "SELECT id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, image_dpi, visibility, expires_at, created_at, updated_at
+            "SELECT id, user_id, share_id, title, source_url, original_filename, original_path, rendered_path, annotations, crop_rect, image_dpi, visibility, hit_count, expires_at, created_at, updated_at
              FROM screenshots WHERE user_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3",
         )?;
         let rows = stmt.query_map(
@@ -625,7 +634,7 @@ impl Database {
             |row| {
                 let annotations_str: String = row.get(8)?;
                 let crop_str: Option<String> = row.get(9)?;
-                let expires_str: Option<String> = row.get(12)?;
+                let expires_str: Option<String> = row.get(13)?;
                 Ok(Screenshot {
                     id: row.get::<_, String>(0)?.parse().unwrap(),
                     user_id: row.get::<_, String>(1)?.parse().unwrap(),
@@ -639,9 +648,10 @@ impl Database {
                     crop_rect: crop_str.and_then(|s| serde_json::from_str(&s).ok()),
                     image_dpi: row.get(10)?,
                     visibility: row.get(11)?,
+                    hit_count: row.get::<_, i64>(12)?.max(0) as u64,
                     expires_at: expires_str.and_then(|s| parse_datetime_opt(&s)),
-                    created_at: parse_datetime(&row.get::<_, String>(13)?),
-                    updated_at: parse_datetime(&row.get::<_, String>(14)?),
+                    created_at: parse_datetime(&row.get::<_, String>(14)?),
+                    updated_at: parse_datetime(&row.get::<_, String>(15)?),
                 })
             },
         )?;
@@ -743,6 +753,35 @@ impl Database {
             |row| row.get(0),
         )?;
         Ok(count)
+    }
+
+    /// Add a batch of full-image hits without changing screenshot `updated_at`.
+    pub fn increment_screenshot_hit_counts(&self, counts: &[(uuid::Uuid, u64)]) -> Result<()> {
+        if counts.is_empty() {
+            return Ok(());
+        }
+
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        let mut stmt = tx.prepare(
+            "UPDATE screenshots
+             SET hit_count = CASE
+                 WHEN hit_count > 9223372036854775807 - ?1 THEN 9223372036854775807
+                 ELSE hit_count + ?1
+             END
+             WHERE id = ?2",
+        )?;
+
+        for (screenshot_id, count) in counts {
+            stmt.execute(params![
+                i64::try_from(*count).unwrap_or(i64::MAX),
+                screenshot_id.to_string(),
+            ])?;
+        }
+
+        drop(stmt);
+        tx.commit()?;
+        Ok(())
     }
 
     // ── API Token operations ──

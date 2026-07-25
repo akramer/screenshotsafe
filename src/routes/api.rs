@@ -1273,6 +1273,7 @@ pub async fn upload_screenshot(
         crop_rect: None,
         image_dpi,
         visibility: "unlisted".to_string(),
+        hit_count: 0,
         expires_at,
         created_at,
         updated_at: created_at,
@@ -1562,6 +1563,7 @@ pub struct ScreenshotSummary {
     pub visibility: String,
     pub share_url: String,
     pub raw_url: String,
+    pub hit_count: u64,
     pub created_at: chrono::DateTime<Utc>,
     pub expires_at: Option<chrono::DateTime<Utc>>,
 }
@@ -1595,6 +1597,7 @@ pub async fn list_screenshots(
                 visibility: s.visibility,
                 share_url,
                 raw_url,
+                hit_count: s.hit_count,
                 created_at: s.created_at,
                 expires_at: s.expires_at,
             }

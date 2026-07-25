@@ -4,8 +4,9 @@ ScreenshotSafe is a self-hosted screenshot capture, annotation, and sharing app.
 
 ## Backend
 
-- `src/main.rs` loads config, creates storage directories, opens SQLite, runs migrations, prepares the JWT secret, starts expiry cleanup, and serves the Axum router.
+- `src/main.rs` loads config, creates storage directories, opens SQLite, runs migrations, prepares the JWT secret, starts expiry cleanup and hit-count flushing, and serves the Axum router.
 - `src/lib.rs` defines `AppState`, registers all page/API/share routes, serves `/static`, applies CORS, and starts the trace layer.
+- `src/hit_counter.rs` buffers full-image hits in memory and persists each non-empty batch in one SQLite transaction.
 - `src/config.rs` loads config from CLI path, environment, `config.toml`, and defaults.
 - `src/db.rs` owns the SQLite connection, schema migrations, and database access methods.
 - `src/models.rs` defines persisted model types, annotations, crop rectangles, account status, screenshots, users, API tokens, and OAuth identities.
@@ -74,6 +75,8 @@ SQLite stores users, OAuth identities, API token hashes, and screenshot metadata
 2. `/s/{share_id}.png` serves the rendered PNG.
 3. `/s/{share_id}.preview.png` serves or lazily creates a scaled preview.
 4. Expired screenshots are treated as not found.
+5. Successful origin-observed `GET` requests for the full PNG, including `304` cache validations, are buffered as hits.
+6. Pending hits are added to screenshot counters every 30 seconds in one transaction without changing screenshot `updated_at`.
 
 ## Cross-Cutting Rules
 
@@ -82,3 +85,4 @@ SQLite stores users, OAuth identities, API token hashes, and screenshot metadata
 - Disabled and pending accounts cannot authenticate through password, session cookie, or API token.
 - Bearer API tokens are stored as hashes, never as plaintext.
 - Share IDs are public identifiers; database UUIDs remain internal API identifiers.
+- Full-image hit counts are eventually consistent and can lag by one flush interval. A process crash can lose the current in-memory batch.

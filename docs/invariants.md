@@ -32,6 +32,9 @@ These are the assumptions that should stay true as the project evolves. When cha
 - Deleted or expired screenshots should not be visible through API or share routes.
 - When a screenshot is deleted, its original, rendered, and preview files should be removed when present.
 - When annotations or crop change, the rendered image and preview should be regenerated from the original image.
+- Full-image hits count successful, origin-observed `GET /s/{share_id}.png` requests, including successful `304` validations. Share pages, previews, `HEAD`, and unsuccessful requests do not count.
+- Hit-count persistence must be batched rather than performing a write transaction for every image request.
+- Persisting hit counts must not change screenshot `updated_at`, because that timestamp versions public image URLs.
 
 ## Storage
 
@@ -63,3 +66,4 @@ These are the assumptions that should stay true as the project evolves. When cha
 - Treat title, source URL, rendered image, and preview image as public to anyone with the share URL.
 - Do not expose original image paths, token hashes, password hashes, or OAuth secrets through responses.
 - Raw public PNG and preview URLs should serve image bytes only for valid, unexpired share IDs.
+- Hit counts are owner-visible metadata and should not be displayed on public share pages.

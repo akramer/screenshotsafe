@@ -139,6 +139,7 @@ pub struct Screenshot {
     pub crop_rect: Option<CropRect>,
     pub image_dpi: f64,
     pub visibility: String,
+    pub hit_count: u64,
     pub expires_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

@@ -85,6 +85,11 @@ pub async fn dashboard(
                         local_time(e, "date", "%b %d, %Y")
                     ))
                     .unwrap_or_default();
+                let hit_label = if s.hit_count == 1 {
+                    "1 image load".to_string()
+                } else {
+                    format!("{} image loads", s.hit_count)
+                };
                 format!(
                     r#"<div class="screenshot-card{}">
                         <a href="/screenshots/{}/edit" class="card-image-link">
@@ -93,6 +98,7 @@ pub async fn dashboard(
                         <div class="card-info">
                             <h3 class="card-title">{}</h3>
                             <div class="card-meta">
+                                <span class="meta-item">{}</span>
                                 <span class="meta-item">{}</span>
                                 {}
                             </div>
@@ -109,6 +115,7 @@ pub async fn dashboard(
                     html_escape(title),
                     html_escape(title),
                     local_time(s.created_at, "datetime", "%b %d, %Y %H:%M UTC"),
+                    hit_label,
                     expires_info,
                     s.id,
                     share_url,
