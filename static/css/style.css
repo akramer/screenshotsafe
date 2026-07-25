@@ -354,7 +354,9 @@ body {
     color: var(--text-muted);
     margin-bottom: 0.75rem;
     display: flex;
-    gap: 0.65rem;
+    flex-wrap: wrap;
+    column-gap: 0.65rem;
+    row-gap: 0.25rem;
     min-width: 0;
 }
 
@@ -364,6 +366,7 @@ body {
 }
 
 .card-meta .meta-item {
+    flex: 0 0 auto;
     min-width: 0;
 }
 
