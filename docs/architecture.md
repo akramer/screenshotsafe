@@ -52,21 +52,30 @@ SQLite stores users, OAuth identities, API token hashes, and screenshot metadata
 3. `POST /api/auth/login` verifies a password and sets the `session` JWT cookie.
 4. OAuth sign-in/linking starts at `/api/auth/oauth/start` and returns through `/api/auth/oauth/callback`.
 
-### Chromium Extension Authorization
+### Browser And Apple App Authorization
 
-1. The extension requests runtime host access for a user-entered server.
-2. It generates a random state and PKCE-S256 verifier/challenge, then starts
-   Chrome's interactive web-auth flow at `/extension/authorize`.
+1. The client normalizes a user-entered server to an origin. Chromium also
+   requests runtime host access for that origin.
+2. It generates a random state and PKCE-S256 verifier/challenge, then starts an
+   interactive web-auth flow at `/extension/authorize`.
 3. ScreenshotSafe preserves the authorization request through password or OAuth
    login and displays an explicit approval page with an editable API token name.
-4. Approval returns a short-lived, single-use code through Chrome's
-   `chromiumapp.org` callback.
-5. The extension verifies state and exchanges the code plus PKCE verifier at
-   `/api/auth/extension/token`.
+4. Approval returns a short-lived, single-use code through either Chrome's
+   `chromiumapp.org` callback or the Apple app's exact
+   `com.screenshotsafe:/authorize/{platform}` callback.
+5. The client verifies the callback and state, then exchanges the code plus PKCE
+   verifier at `/api/auth/extension/token`.
 6. The server atomically consumes the code, stores a hash of a new API token, and
    returns the raw token once.
-7. The extension stores connections locally and uses the selected server's
-   bearer token for ping and upload requests.
+7. Chromium stores its connections in local extension storage. The Apple app
+   stores connection metadata in its app group and bearer tokens in the shared
+   Keychain. Each client uses its selected default server for ping and upload
+   requests.
+
+Apple devices can alternatively import a complete server origin and bearer
+token from the versioned JSON QR code shown when a web user creates an API
+token. The app validates the payload and verifies the token with `/api/ping`
+before saving it.
 
 ### Screenshot Upload
 

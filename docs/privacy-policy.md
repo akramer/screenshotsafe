@@ -18,8 +18,9 @@ This policy describes the ScreenshotSafe browser extension and the self-hosted S
 The ScreenshotSafe extension may handle the following information:
 
 - Server URL: the ScreenshotSafe server address configured for the browser extension or native app.
-- API token: a revocable upload token created for a Chromium extension
-  connection or configured in the native ScreenshotSafe app.
+- API token: a revocable bearer token created by an interactive authorization
+  flow or imported into the native iOS app by scanning a full-token setup QR
+  code.
 - Visible-tab screenshot: the image captured when you intentionally use the extension to take a screenshot.
 - Page metadata: the page title and source URL associated with the captured screenshot.
 - Edited screenshot content: cropped or redacted screenshot data that you choose to upload.
@@ -27,10 +28,11 @@ The ScreenshotSafe extension may handle the following information:
 The Chromium extension stores its connected server origins, selected server, API
 tokens, and latest connection-check results in local extension storage. These
 values are not stored in browser sync storage. On Apple platforms, the native
-ScreenshotSafe app stores the server URL and API token in an app group shared
-with its extensions; Safari WebExtension JavaScript does not receive the raw
-token. Screenshot drafts are held temporarily while you review, crop, or redact
-them before upload.
+ScreenshotSafe app stores its server registry and selected default in an app
+group, and stores each API token in the shared Keychain. Safari WebExtension
+JavaScript does not receive raw tokens. A full-token QR code is a bearer secret
+and should be protected like the token itself. Screenshot drafts are held
+temporarily while you review, crop, or redact them before upload.
 
 ## How Information Is Used
 
@@ -63,8 +65,9 @@ Screenshots uploaded to a ScreenshotSafe server may be shared through links gene
 The Chromium extension keeps connected server origins and their API tokens until
 you log out, remove them, or uninstall the extension. Logging out attempts to
 revoke the corresponding server token before removing it locally. On Apple
-platforms, the native app keeps the server URL and API token until you replace
-them or remove the app and its stored data.
+platforms, the native app keeps authorized server metadata and Keychain tokens
+until you log out, remove the connection, or remove the app and its stored data.
+Logging out attempts to revoke that server's token before removing it locally.
 
 Temporary screenshot drafts in the extension are short-lived and are used only to support the pre-upload editing flow.
 
@@ -80,13 +83,18 @@ The extensions request browser permissions needed for their core features:
   upload destination, and connection status locally in the browser.
 - `identity` in Chromium: to complete the interactive ScreenshotSafe website
   login and approval flow without exposing the permanent token in a redirect.
-- `nativeMessaging` in Safari: to ask the native app to check its configuration and upload finalized screenshots.
+- `nativeMessaging` in Safari: to ask the native app to check the selected
+  server and upload finalized screenshots without exposing its bearer token to
+  WebExtension JavaScript.
 
 The Safari extension does not request host permission for the configured ScreenshotSafe server. Its native component performs server requests.
 
 ## Security
 
-Use HTTPS for any ScreenshotSafe server exposed outside local development. Safari and the native share extensions authenticate with a bearer API token stored by the native app. Other browser clients use the authentication method described by their configuration.
+Use HTTPS for any ScreenshotSafe server exposed outside local development.
+Safari and the native share extensions authenticate with a bearer API token
+stored in the shared Keychain. Treat API-token setup QR codes as secrets: anyone
+who obtains an unrevoked token can act with that token's permissions.
 
 ## Children's Privacy
 

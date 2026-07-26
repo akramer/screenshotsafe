@@ -222,7 +222,16 @@ The privacy policy for store listings or public installs is available in [docs/p
 
 ## Safari Extension
 
-Safari has a separate WebExtension inside the checked-in Apple project. The native app owns the server URL and API token. Safari captures and edits locally, then delegates connection checks and bearer-token uploads to the native extension handler without requesting access to the server website.
+Safari has a separate WebExtension inside the checked-in Apple project. The
+native macOS/iOS app manages multiple authorized ScreenshotSafe servers and lets
+you select the default upload destination. Add a server by entering its domain
+and completing the browser login/approval flow. On iOS, you can instead scan the
+full-token QR code shown after creating an API token on a ScreenshotSafe server.
+
+Connection metadata is shared through the app group, while bearer tokens remain
+in the shared Keychain. Safari captures and edits locally, then delegates
+connection checks and uploads to the native extension handler without receiving
+the token or requesting access to the server website.
 
 Build the existing macOS Xcode project:
 

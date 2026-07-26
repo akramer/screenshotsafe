@@ -1471,8 +1471,9 @@ fn format_bytes(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        default_extension_token_label, extension_token_label, oauth_redirect_uri,
-        openid_discovery_url, safe_return_to, sanitize_email_username, sanitize_username,
+        apple_configuration_payload, default_extension_token_label_for, extension_token_label,
+        oauth_redirect_uri, openid_discovery_url, safe_return_to, sanitize_email_username,
+        sanitize_username, validate_extension_redirect_uri, ExtensionClient,
     };
     use crate::config::OAuthConfig;
     use axum::http::{header, HeaderMap, HeaderValue};
@@ -1507,19 +1508,68 @@ mod tests {
 
     #[test]
     fn extension_token_names_default_trim_and_validate() {
-        assert!(default_extension_token_label().starts_with("Chrome Extension — "));
-        assert!(extension_token_label(None)
+        assert!(default_extension_token_label_for(ExtensionClient::Chrome)
+            .starts_with("Chrome Extension — "));
+        assert!(extension_token_label(None, ExtensionClient::Chrome)
             .unwrap()
             .starts_with("Chrome Extension — "));
-        assert!(extension_token_label(Some("   "))
+        assert!(extension_token_label(Some("   "), ExtensionClient::Chrome)
             .unwrap()
             .starts_with("Chrome Extension — "));
         assert_eq!(
-            extension_token_label(Some("  Work Chrome  ")).unwrap(),
+            extension_token_label(Some("  Work Chrome  "), ExtensionClient::Chrome).unwrap(),
             "Work Chrome"
         );
-        assert!(extension_token_label(Some(&"x".repeat(101))).is_err());
-        assert!(extension_token_label(Some("Chrome\nExtension")).is_err());
+        assert!(extension_token_label(Some(&"x".repeat(101)), ExtensionClient::Chrome).is_err());
+        assert!(extension_token_label(Some("Chrome\nExtension"), ExtensionClient::Chrome).is_err());
+    }
+
+    #[test]
+    fn extension_redirects_accept_exact_chrome_and_apple_callbacks() {
+        assert_eq!(
+            validate_extension_redirect_uri(
+                "https://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/screenshotsafe"
+            )
+            .unwrap(),
+            ExtensionClient::Chrome
+        );
+        assert_eq!(
+            validate_extension_redirect_uri("com.screenshotsafe:/authorize/ios").unwrap(),
+            ExtensionClient::IOS
+        );
+        assert_eq!(
+            validate_extension_redirect_uri("com.screenshotsafe:/authorize/macos").unwrap(),
+            ExtensionClient::MacOS
+        );
+    }
+
+    #[test]
+    fn extension_redirects_reject_apple_callback_variants() {
+        for redirect in [
+            "screenshotsafe:/authorize/ios",
+            "com.screenshotsafe://authorize/ios",
+            "com.screenshotsafe:/authorize",
+            "com.screenshotsafe:/authorize/ios?next=https://attacker.example",
+            "com.screenshotsafe:/authorize/ios#fragment",
+            "com.screenshotsafe:/authorize/IOS",
+        ] {
+            assert!(
+                validate_extension_redirect_uri(redirect).is_err(),
+                "{redirect} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn apple_configuration_qr_payload_contains_origin_and_complete_token() {
+        let payload =
+            apple_configuration_payload("https://screenshots.example.com", "sss_secret").unwrap();
+        let value: serde_json::Value = serde_json::from_str(&payload).unwrap();
+        assert_eq!(value["type"], "screenshotsafe_configuration");
+        assert_eq!(value["version"], 1);
+        assert_eq!(value["server_url"], "https://screenshots.example.com");
+        assert_eq!(value["token"], "sss_secret");
+        assert!(!payload.contains("screenshotsafe://"));
     }
 
     #[test]
@@ -1916,10 +1966,10 @@ pub async fn authorize_extension(
     AuthUser(user): AuthUser,
     Json(req): Json<AuthorizeExtensionRequest>,
 ) -> crate::Result<impl IntoResponse> {
-    validate_extension_redirect_uri(&req.redirect_uri)?;
+    let client = validate_extension_redirect_uri(&req.redirect_uri)?;
     validate_extension_state(&req.state)?;
     validate_pkce_challenge(&req.code_challenge, &req.code_challenge_method)?;
-    let token_label = extension_token_label(req.token_label.as_deref())?;
+    let token_label = extension_token_label(req.token_label.as_deref(), client)?;
 
     let raw_code = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
     let now = Utc::now();
@@ -1947,7 +1997,7 @@ pub async fn exchange_extension_code(
     State(state): State<SharedState>,
     Json(req): Json<ExchangeExtensionCodeRequest>,
 ) -> crate::Result<impl IntoResponse> {
-    validate_extension_redirect_uri(&req.redirect_uri)?;
+    let client = validate_extension_redirect_uri(&req.redirect_uri)?;
     validate_pkce_verifier(&req.code_verifier)?;
     if req.code.len() < 32 || req.code.len() > 256 {
         return Err(AppError::BadRequest(
@@ -1991,7 +2041,7 @@ pub async fn exchange_extension_code(
     }
 
     let raw_token = share_id::generate_api_token();
-    let token_label = extension_token_label(Some(&authorization.token_label))?;
+    let token_label = extension_token_label(Some(&authorization.token_label), client)?;
     let token = ApiToken {
         id: Uuid::new_v4(),
         user_id: user.id,
@@ -2031,33 +2081,59 @@ pub async fn revoke_current_extension_token(
     Ok(StatusCode::NO_CONTENT)
 }
 
-pub(crate) fn validate_extension_redirect_uri(redirect_uri: &str) -> crate::Result<()> {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum ExtensionClient {
+    Chrome,
+    IOS,
+    MacOS,
+}
+
+pub(crate) fn validate_extension_redirect_uri(
+    redirect_uri: &str,
+) -> crate::Result<ExtensionClient> {
     let url = url::Url::parse(redirect_uri)
         .map_err(|_| AppError::BadRequest("Invalid extension redirect URI.".into()))?;
-    let host = url
-        .host_str()
-        .ok_or_else(|| AppError::BadRequest("Invalid extension redirect URI.".into()))?;
-    let extension_id = host
-        .strip_suffix(".chromiumapp.org")
-        .ok_or_else(|| AppError::BadRequest("Invalid extension redirect URI.".into()))?;
-    let valid_id = extension_id.len() == 32
-        && extension_id
-            .bytes()
-            .all(|byte| (b'a'..=b'p').contains(&byte));
-    if url.scheme() != "https"
-        || !valid_id
-        || url.port().is_some()
-        || !url.username().is_empty()
-        || url.password().is_some()
-        || url.query().is_some()
-        || url.fragment().is_some()
-        || url.path() != "/screenshotsafe"
+
+    if url.scheme() == "com.screenshotsafe"
+        && url.host_str().is_none()
+        && url.port().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none()
     {
-        return Err(AppError::BadRequest(
-            "Invalid extension redirect URI.".into(),
-        ));
+        return match url.path() {
+            "/authorize/ios" => Ok(ExtensionClient::IOS),
+            "/authorize/macos" => Ok(ExtensionClient::MacOS),
+            _ => Err(AppError::BadRequest(
+                "Invalid extension redirect URI.".into(),
+            )),
+        };
     }
-    Ok(())
+
+    let valid_chromium_host = url
+        .host_str()
+        .and_then(|host| host.strip_suffix(".chromiumapp.org"))
+        .map(|extension_id| {
+            extension_id.len() == 32
+                && extension_id
+                    .bytes()
+                    .all(|byte| (b'a'..=b'p').contains(&byte))
+        })
+        .unwrap_or(false);
+    if url.scheme() == "https"
+        && valid_chromium_host
+        && url.port().is_none()
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.query().is_none()
+        && url.fragment().is_none()
+        && url.path() == "/screenshotsafe"
+    {
+        return Ok(ExtensionClient::Chrome);
+    }
+
+    Err(AppError::BadRequest(
+        "Invalid extension redirect URI.".into(),
+    ))
 }
 
 pub(crate) fn validate_extension_state(state: &str) -> crate::Result<()> {
@@ -2098,16 +2174,21 @@ fn validate_pkce_verifier(verifier: &str) -> crate::Result<()> {
     Ok(())
 }
 
-pub(crate) fn default_extension_token_label() -> String {
-    format!("Chrome Extension — {}", Utc::now().format("%b %-d, %Y"))
+pub(crate) fn default_extension_token_label_for(client: ExtensionClient) -> String {
+    let client_name = match client {
+        ExtensionClient::Chrome => "Chrome Extension",
+        ExtensionClient::IOS => "ScreenshotSafe for iOS",
+        ExtensionClient::MacOS => "ScreenshotSafe for macOS",
+    };
+    format!("{} — {}", client_name, Utc::now().format("%b %-d, %Y"))
 }
 
-fn extension_token_label(value: Option<&str>) -> crate::Result<String> {
+fn extension_token_label(value: Option<&str>, client: ExtensionClient) -> crate::Result<String> {
     let label = value
         .map(str::trim)
         .filter(|label| !label.is_empty())
         .map(str::to_string)
-        .unwrap_or_else(default_extension_token_label);
+        .unwrap_or_else(|| default_extension_token_label_for(client));
     if label.chars().count() > 100 || label.chars().any(char::is_control) {
         return Err(AppError::BadRequest(
             "Extension token name must be 100 characters or fewer and contain no control characters."
@@ -2167,12 +2248,8 @@ pub async fn create_token(
     state.db.create_api_token(&token)?;
 
     let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
-    let configure_url = format!(
-        "screenshotsafe://configure?server_url={}&token={}",
-        urlencoding::encode(&base_url),
-        urlencoding::encode(&raw_token)
-    );
-    let configure_qr_svg = QrCode::new(configure_url.as_bytes())
+    let configure_payload = apple_configuration_payload(&base_url, &raw_token)?;
+    let configure_qr_svg = QrCode::new(configure_payload.as_bytes())
         .map_err(|e| AppError::Internal(format!("QR code generation failed: {}", e)))?
         .render::<svg::Color<'_>>()
         .min_dimensions(220, 220)
@@ -2186,12 +2263,21 @@ pub async fn create_token(
         Json(serde_json::json!({
             "id": token.id,
             "token": raw_token,
-            "configure_url": configure_url,
             "configure_qr_svg": configure_qr_svg,
             "label": token.label,
             "created_at": token.created_at,
         })),
     ))
+}
+
+fn apple_configuration_payload(server_url: &str, token: &str) -> crate::Result<String> {
+    serde_json::to_string(&serde_json::json!({
+        "type": "screenshotsafe_configuration",
+        "version": 1,
+        "server_url": server_url,
+        "token": token,
+    }))
+    .map_err(|e| AppError::Internal(format!("QR payload generation failed: {}", e)))
 }
 
 pub async fn list_tokens(

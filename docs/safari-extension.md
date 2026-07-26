@@ -20,10 +20,16 @@ resources over the Safari resources.
 
 ## Configuration And Upload
 
-The containing app owns the server URL, API token, and default expiry in the
-`group.com.screenshotsafe.safari` app group. Configuration can be entered in the
-app or imported from the `screenshotsafe://configure` link and QR code generated
-by the server.
+The containing app owns a versioned list of connected servers, one default
+connection, and the default expiry. Non-secret metadata is stored in the
+`group.com.screenshotsafe.safari` app group, while each bearer token is stored
+in the shared Keychain.
+
+Users can connect by entering a server domain and completing the server's PKCE
+authorization flow in `ASWebAuthenticationSession`. On iOS, they can instead
+scan the one-time setup QR shown after creating an API token on a desktop. That
+QR contains a versioned JSON payload with the server origin and complete token;
+it must be treated like a password.
 
 The Safari WebExtension has no server host permissions:
 
@@ -71,9 +77,9 @@ now maintained directly.
 
 ## Manual Safari Test
 
-1. Create an API token on the ScreenshotSafe server and use its configure link
-   or QR code to configure the native app.
-2. In the app, use **Save and Verify** and confirm `/api/ping` succeeds.
+1. In the app, enter a ScreenshotSafe server domain and choose **Log in**, or on
+   iOS create an API token from a desktop session and scan its setup QR.
+2. Confirm the server appears as **Connected** and is selected as the default.
 3. Build and run the macOS or iOS containing app.
 4. Enable ScreenshotSafe in Safari.
 5. Open **Check ScreenshotSafe Connection** and confirm the native check succeeds.
@@ -81,6 +87,8 @@ now maintained directly.
 7. Capture a visible tab, crop or redact it, and upload.
 8. Confirm the authenticated editor page opens for the new screenshot and the
    API token's last-used time changes on the server.
+9. Connect a second server, change the default, and confirm the next Safari and
+   share-extension uploads use the newly selected server.
 
 References:
 

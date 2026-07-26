@@ -19,7 +19,7 @@ Cookie-authenticated `/api/*` calls are origin-checked. Chrome extension origins
 | `GET` | `/` | Session | Dashboard listing the user's screenshots. |
 | `GET` | `/setup` | Public | First-run setup page when no users exist. |
 | `GET` | `/login` | Optional session | Login page. |
-| `GET` | `/extension/authorize` | Optional session | Interactive Chromium-extension authorization and approval page. |
+| `GET` | `/extension/authorize` | Optional session | Interactive Chromium-extension or Apple-app authorization and approval page. |
 | `GET` | `/screenshots/{id}/edit` | Session | Screenshot editor page for an owned screenshot. |
 | `GET` | `/settings` | Session | User settings, API tokens, password, OAuth linking. |
 | `GET` | `/admin` | Admin session | Admin user management page. |
@@ -46,7 +46,7 @@ Cookie-authenticated `/api/*` calls are origin-checked. Chrome extension origins
 | `GET` | `/api/auth/oauth/start` | Optional session | Query: optional `link=true` | Redirects to configured OAuth provider. |
 | `GET` | `/api/auth/oauth/callback` | Public | OAuth callback query | Links identity or signs in/creates user depending on account mode. |
 | `DELETE` | `/api/auth/oauth/identities/{id}` | Session | None | Disconnects one linked OAuth identity when allowed. |
-| `POST` | `/api/auth/extension/authorize` | Session | JSON: Chrome `redirect_uri`, `state`, PKCE challenge/method, optional `token_label` | Creates a five-minute, single-use authorization code after user approval. A blank or omitted token label defaults to `Chrome Extension — <date>`. |
+| `POST` | `/api/auth/extension/authorize` | Session | JSON: validated Chrome or Apple `redirect_uri`, `state`, PKCE challenge/method, optional `token_label` | Creates a five-minute, single-use authorization code after user approval. Blank labels identify Chrome, iOS, or macOS from the exact callback URI. |
 | `POST` | `/api/auth/extension/token` | Public | JSON: authorization `code`, PKCE verifier, `redirect_uri` | Atomically consumes the code and returns a new extension API token once. |
 | `DELETE` | `/api/auth/extension/token` | API token | None | Revokes the bearer token used for the request. |
 | `PUT` | `/api/auth/password` | Session | JSON: current/new password fields | Changes password hash. |
@@ -80,7 +80,7 @@ Upload responses include the screenshot metadata plus public `share_url`, `raw_u
 
 | Method | Path | Auth | Body | Side Effects |
 | --- | --- | --- | --- | --- |
-| `POST` | `/api/auth/tokens` | Session | JSON: `label` | Creates an API token and returns the raw token once. |
+| `POST` | `/api/auth/tokens` | Session | JSON: `label` | Creates an API token and returns the raw token once, plus an iOS setup QR containing a versioned JSON payload with the server origin and complete token. |
 | `GET` | `/api/auth/tokens` | Session | None | Lists token metadata for the session user. |
 | `DELETE` | `/api/auth/tokens/{id}` | Session | None | Revokes one token owned by the session user. |
 
@@ -89,7 +89,7 @@ Upload responses include the screenshot metadata plus public `share_url`, `raw_u
 - Choose the narrowest auth extractor that matches the client surface.
 - If a route can be used by the extension without a web session, document bearer-token support here.
 - Extension authorization codes are hashed, expire after five minutes, are bound
-  to a validated `chromiumapp.org` callback and PKCE challenge, and may be
-  consumed only once.
+  to a validated Chromium or exact platform-specific Apple callback and PKCE
+  challenge, and may be consumed only once.
 - Keep owner checks explicit for any `{id}` route that touches screenshots, tokens, or identities.
 - If a route writes files and DB rows, document the side effects so cleanup/test expectations stay visible.

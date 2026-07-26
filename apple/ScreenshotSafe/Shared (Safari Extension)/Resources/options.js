@@ -66,11 +66,11 @@
     function reasonMessage(reason) {
         switch (reason) {
             case 'missing':
-                return 'Open the ScreenshotSafe app to configure a server and API token.';
+                return 'Open the ScreenshotSafe app and log in to a server or scan a setup QR code.';
             case 'capture-error':
                 return 'Safari could not start the capture. Check the app configuration and try again.';
             default:
-                return 'Server and API-token configuration is managed by the ScreenshotSafe app.';
+                return 'Connected servers are managed by the ScreenshotSafe app.';
         }
     }
 })();

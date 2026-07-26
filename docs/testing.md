@@ -38,7 +38,7 @@ Use these when a change touches frontend, extension, Safari, OAuth provider beha
 | Web editor | Open `/screenshots/{id}/edit`, add annotations, crop if relevant, save, reload share URL. |
 | Public share | Verify `/s/{share_id}`, `/s/{share_id}.png`, and `/s/{share_id}.preview.png`. |
 | Chromium extension | Load `extension/` unpacked; log in to two servers; verify ping status, active-server switching, capture/edit/upload to each, reconnect, logout/revocation, and migration from a legacy `serverUrl`. |
-| Safari extension | Configure the native app with a setup link or QR code, run `scripts/build-safari-extension.sh`, enable the extension, check its connection, capture, edit, and upload. Confirm Safari never requests access to the ScreenshotSafe server. |
+| Safari extension | Log in through the native app or scan a token-bearing setup QR on iOS, run both Apple builds, enable the extension, switch between two connected servers, capture, edit, and upload. Confirm Safari never receives the token or requests access to either server. |
 | iOS Safari extension | Run `scripts/build-safari-extension.sh --ios`, then test the containing app and extension in the simulator or on a signed device. |
 | OAuth | Test against the configured provider with callback URL matching deployment config. |
 | Docker | Build image and run with persistent `/data` volume. |

@@ -2364,6 +2364,87 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_apple_pkce_flow_uses_native_consent_and_callback() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+        let redirect_uri = "com.screenshotsafe:/authorize/ios";
+        let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+        let challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
+        let flow_state = "appleauthorizationstate123456789";
+        let authorize_path = format!(
+            "/extension/authorize?redirect_uri={}&state={}&code_challenge={}&code_challenge_method=S256",
+            urlencoding::encode(redirect_uri),
+            flow_state,
+            challenge,
+        );
+
+        let resp = app
+            .clone()
+            .oneshot(authed_request("GET", &authorize_path, &cookie))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let page = body_text(resp).await;
+        assert!(page.contains("Connect ScreenshotSafe for iOS"));
+        assert!(page.contains("ScreenshotSafe for iOS —"));
+        assert!(page.contains("Allow App"));
+        assert!(!page.contains("Connect Chrome"));
+
+        let resp = app
+            .clone()
+            .oneshot(authed_json_request(
+                "POST",
+                "/api/auth/extension/authorize",
+                &cookie,
+                serde_json::json!({
+                    "redirect_uri": redirect_uri,
+                    "state": flow_state,
+                    "code_challenge": challenge,
+                    "code_challenge_method": "S256",
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let redirect_url = body_json(resp).await["redirect_url"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let callback = url::Url::parse(&redirect_url).unwrap();
+        assert_eq!(callback.scheme(), "com.screenshotsafe");
+        assert_eq!(callback.path(), "/authorize/ios");
+        let code = callback
+            .query_pairs()
+            .find(|(key, _)| key == "code")
+            .unwrap()
+            .1
+            .to_string();
+
+        let resp = app
+            .clone()
+            .oneshot(json_request(
+                "POST",
+                "/api/auth/extension/token",
+                serde_json::json!({
+                    "code": code,
+                    "code_verifier": verifier,
+                    "redirect_uri": redirect_uri,
+                }),
+            ))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let body = body_json(resp).await;
+        assert!(body["token"].as_str().unwrap().starts_with("sss_"));
+
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+        let tokens = state.db.list_tokens_for_user(&admin.id).unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert!(tokens[0].label.starts_with("ScreenshotSafe for iOS —"));
+    }
+
+    #[tokio::test]
     async fn test_extension_authorization_rejects_bad_redirect_and_pkce() {
         let dir = tempfile::tempdir().unwrap();
         let (app, _state) = test_app(dir.path());
@@ -2419,6 +2500,10 @@ mod tests {
         let body = body_json(resp).await;
         let token = body["token"].as_str().unwrap();
         assert!(token.starts_with("sss_"), "Token should have sss_ prefix");
+        assert!(body.get("configure_url").is_none());
+        assert!(body["configure_qr_svg"]
+            .as_str()
+            .is_some_and(|svg| svg.contains("<svg")));
 
         // Verify token CANNOT be used to list screenshots
         let req = axum::http::Request::builder()

@@ -48,12 +48,12 @@ pub struct ExtensionAuthorizePageQuery {
     code_challenge_method: String,
 }
 
-/// Interactive approval page for the Chromium extension PKCE flow.
+/// Interactive approval page for the browser extension and Apple app PKCE flow.
 pub async fn extension_authorize_page(
     Query(params): Query<ExtensionAuthorizePageQuery>,
     user: MaybeAuthUser,
 ) -> crate::Result<Response> {
-    crate::routes::api::validate_extension_redirect_uri(&params.redirect_uri)?;
+    let client = crate::routes::api::validate_extension_redirect_uri(&params.redirect_uri)?;
     crate::routes::api::validate_extension_state(&params.state)?;
     crate::routes::api::validate_pkce_challenge(
         &params.code_challenge,
@@ -79,13 +79,39 @@ pub async fn extension_authorize_page(
         params.redirect_uri,
         urlencoding::encode(&params.state),
     );
-    let default_token_label = crate::routes::api::default_extension_token_label();
+    let (page_title, heading, prompt, access_message, allow_label, token_hint) = match client {
+        crate::routes::api::ExtensionClient::Chrome => (
+            "Authorize ScreenshotSafe Extension",
+            "📸 Connect Chrome",
+            "Allow the ScreenshotSafe Chrome extension to upload screenshots as",
+            "The extension will receive a permanent, revocable upload token. It will not receive your password.",
+            "Allow Extension",
+            "Use a name that will help you recognize this browser in your API token settings.",
+        ),
+        crate::routes::api::ExtensionClient::IOS => (
+            "Authorize ScreenshotSafe for iOS",
+            "📸 Connect ScreenshotSafe for iOS",
+            "Allow the ScreenshotSafe iOS app to upload screenshots as",
+            "The app will receive a permanent, revocable upload token. It will not receive your password.",
+            "Allow App",
+            "Use a name that will help you recognize this device in your API token settings.",
+        ),
+        crate::routes::api::ExtensionClient::MacOS => (
+            "Authorize ScreenshotSafe for macOS",
+            "📸 Connect ScreenshotSafe for macOS",
+            "Allow the ScreenshotSafe macOS app to upload screenshots as",
+            "The app will receive a permanent, revocable upload token. It will not receive your password.",
+            "Allow App",
+            "Use a name that will help you recognize this Mac in your API token settings.",
+        ),
+    };
+    let default_token_label = crate::routes::api::default_extension_token_label_for(client);
     let html = r#"<!DOCTYPE html>
 <html lang="en" data-theme="{{THEME}}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Authorize ScreenshotSafe Extension</title>
+    <title>{{PAGE_TITLE}}</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
@@ -93,22 +119,22 @@ pub async fn extension_authorize_page(
     <div class="auth-container">
         <div class="auth-card">
             <div class="auth-header">
-                <h1>📸 Connect Chrome</h1>
-                <p>Allow the ScreenshotSafe Chrome extension to upload screenshots as <strong>{{DISPLAY_NAME}}</strong>?</p>
+                <h1>{{HEADING}}</h1>
+                <p>{{PROMPT}} <strong>{{DISPLAY_NAME}}</strong>?</p>
             </div>
             <div class="settings-message settings-message-success auth-message">
-                The extension will receive a permanent, revocable upload token. It will not receive your password.
+                {{ACCESS_MESSAGE}}
             </div>
             <div class="form-group">
                 <label for="token-label">Token name</label>
                 <input type="text" id="token-label" value="{{TOKEN_LABEL}}" maxlength="100">
-                <span class="form-hint">Use a name that will help you recognize this browser in your API token settings.</span>
+                <span class="form-hint">{{TOKEN_HINT}}</span>
             </div>
             <input type="hidden" id="redirect-uri" value="{{REDIRECT_URI}}">
             <input type="hidden" id="auth-state" value="{{STATE}}">
             <input type="hidden" id="code-challenge" value="{{CODE_CHALLENGE}}">
             <div id="error-msg" class="error-msg" style="display:none"></div>
-            <button class="btn btn-primary btn-full" id="approve-btn" type="button">Allow Extension</button>
+            <button class="btn btn-primary btn-full" id="approve-btn" type="button">{{ALLOW_LABEL}}</button>
             <a class="btn btn-outline btn-full" href="{{CANCEL_URL}}">Cancel</a>
         </div>
     </div>
@@ -143,6 +169,12 @@ pub async fn extension_authorize_page(
 </body>
 </html>"#
         .replace("{{THEME}}", theme_attr(user.theme_preference))
+        .replace("{{PAGE_TITLE}}", page_title)
+        .replace("{{HEADING}}", heading)
+        .replace("{{PROMPT}}", prompt)
+        .replace("{{ACCESS_MESSAGE}}", access_message)
+        .replace("{{ALLOW_LABEL}}", allow_label)
+        .replace("{{TOKEN_HINT}}", token_hint)
         .replace("{{DISPLAY_NAME}}", &html_escape(&user.display_name))
         .replace("{{TOKEN_LABEL}}", &html_escape(&default_token_label))
         .replace("{{REDIRECT_URI}}", &html_escape(&params.redirect_uri))
@@ -1023,10 +1055,12 @@ pub async fn settings_page(
                     <code id="new-token-value"></code>
                     <div class="token-actions">
                         <button class="btn btn-sm" id="copy-token-btn">Copy Token</button>
-                        <a class="btn btn-sm btn-primary" id="open-native-app-btn" href="" style="display:none">Configure ScreenshotSafe Desktop App</a>
                     </div>
                 </div>
-                <div class="token-qr" id="token-qr" aria-label="QR code for ScreenshotSafe iOS setup"></div>
+                <div class="token-qr-wrap">
+                    <div class="token-qr" id="token-qr" aria-label="QR code containing this ScreenshotSafe API token"></div>
+                    <span class="form-hint">Scan with the ScreenshotSafe iOS app. Anyone who scans or photographs this code can use the token.</span>
+                </div>
             </div>
             <table class="tokens-table">
                 <thead>
@@ -1143,14 +1177,10 @@ pub async fn settings_page(
                 tokenMessage.style.display = 'none';
                 const data = await resp.json();
                 document.getElementById('new-token-value').textContent = data.token;
-                const configureUrl = data.configure_url || `screenshotsafe://configure?server_url=${{encodeURIComponent(window.location.origin)}}&token=${{encodeURIComponent(data.token)}}`;
-                const openNativeAppBtn = document.getElementById('open-native-app-btn');
-                openNativeAppBtn.href = configureUrl;
-                openNativeAppBtn.style.display = 'inline-flex';
                 const qr = document.getElementById('token-qr');
                 qr.innerHTML = data.configure_qr_svg || '';
                 qr.style.display = data.configure_qr_svg ? 'flex' : 'none';
-                document.getElementById('new-token-display').style.display = 'block';
+                document.getElementById('new-token-display').style.display = 'flex';
                 document.getElementById('token-label').value = '';
 
                 // Add new row to table instead of reloading

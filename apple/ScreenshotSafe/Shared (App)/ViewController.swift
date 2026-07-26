@@ -6,6 +6,9 @@
 //
 
 import WebKit
+import AuthenticationServices
+import CryptoKit
+import Security
 
 #if os(iOS)
 import AVFoundation
@@ -19,25 +22,473 @@ typealias PlatformViewController = NSViewController
 
 let extensionBundleIdentifier = "com.screenshotsafe.SafariExtension"
 
+private nonisolated struct ScreenshotSafeTokenExchangeResponse: Decodable {
+    let token: String
+    let displayName: String
+    let username: String
+
+    enum CodingKeys: String, CodingKey {
+        case token
+        case displayName = "display_name"
+        case username
+    }
+}
+
+private enum ScreenshotSafeAuthorizationError: LocalizedError {
+    case incompatibleServer
+    case invalidCallback
+    case invalidState
+    case cancelled
+    case tokenExchange(String)
+    case couldNotStart
+
+    var errorDescription: String? {
+        switch self {
+        case .incompatibleServer:
+            return "This ScreenshotSafe server needs an update before the app can be configured."
+        case .invalidCallback:
+            return "ScreenshotSafe received an invalid login callback."
+        case .invalidState:
+            return "ScreenshotSafe could not verify the login callback."
+        case .cancelled:
+            return "Login was cancelled."
+        case .tokenExchange(let message):
+            return message
+        case .couldNotStart:
+            return "ScreenshotSafe could not open the login session."
+        }
+    }
+}
+
+private final class ScreenshotSafeRedirectBlocker: NSObject, URLSessionTaskDelegate {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
+    }
+}
+
+private final class ScreenshotSafeAuthorizationCoordinator:
+    NSObject,
+    ASWebAuthenticationPresentationContextProviding
+{
+    private let settingsStore: ScreenshotSafeSettingsStore
+    private let uploadClient: ScreenshotSafeUploadClient
+    private let anchorProvider: () -> ASPresentationAnchor
+    private let redirectBlocker = ScreenshotSafeRedirectBlocker()
+    private var authenticationSession: ASWebAuthenticationSession?
+    private var preflightSession: URLSession?
+    private var activeAttemptID: UUID?
+
+    init(
+        settingsStore: ScreenshotSafeSettingsStore,
+        uploadClient: ScreenshotSafeUploadClient,
+        anchorProvider: @escaping () -> ASPresentationAnchor
+    ) {
+        self.settingsStore = settingsStore
+        self.uploadClient = uploadClient
+        self.anchorProvider = anchorProvider
+    }
+
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        anchorProvider()
+    }
+
+    func cancel() {
+        activeAttemptID = nil
+        authenticationSession?.cancel()
+        authenticationSession = nil
+        preflightSession?.invalidateAndCancel()
+        preflightSession = nil
+    }
+
+    func logIn(
+        serverInput: String,
+        completion: @escaping (Result<ScreenshotSafeConnection, Error>) -> Void
+    ) {
+        cancel()
+
+        let origin: String
+        do {
+            origin = try ScreenshotSafeServerURLNormalizer.normalize(serverInput)
+        } catch {
+            completionOnMain(.failure(error), completion)
+            return
+        }
+        let attemptID = UUID()
+        activeAttemptID = attemptID
+
+        guard
+            let state = randomBase64URL(byteCount: 32),
+            let verifier = randomBase64URL(byteCount: 64)
+        else {
+            finish(
+                attemptID: attemptID,
+                result: .failure(ScreenshotSafeAuthorizationError.couldNotStart),
+                completion: completion
+            )
+            return
+        }
+        let challenge = Data(SHA256.hash(data: Data(verifier.utf8))).base64URLEncodedString()
+#if os(iOS)
+        let redirectURI = "com.screenshotsafe:/authorize/ios"
+#else
+        let redirectURI = "com.screenshotsafe:/authorize/macos"
+#endif
+
+        guard
+            let authorizeURL = endpoint(origin: origin, path: "/extension/authorize", queryItems: [
+                URLQueryItem(name: "redirect_uri", value: redirectURI),
+                URLQueryItem(name: "state", value: state),
+                URLQueryItem(name: "code_challenge", value: challenge),
+                URLQueryItem(name: "code_challenge_method", value: "S256"),
+            ])
+        else {
+            finish(
+                attemptID: attemptID,
+                result: .failure(ScreenshotSafeConfigurationError.invalidServerURL),
+                completion: completion
+            )
+            return
+        }
+
+        preflight(authorizeURL: authorizeURL, attemptID: attemptID) { [weak self] result in
+            guard let self = self, self.activeAttemptID == attemptID else { return }
+            switch result {
+            case .failure(let error):
+                self.finish(attemptID: attemptID, result: .failure(error), completion: completion)
+            case .success:
+                self.beginAuthentication(
+                    attemptID: attemptID,
+                    authorizeURL: authorizeURL,
+                    origin: origin,
+                    redirectURI: redirectURI,
+                    expectedState: state,
+                    verifier: verifier,
+                    completion: completion
+                )
+            }
+        }
+    }
+
+    private func preflight(
+        authorizeURL: URL,
+        attemptID: UUID,
+        completion: @escaping (Result<Void, Error>) -> Void
+    ) {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.httpShouldSetCookies = false
+        let session = URLSession(
+            configuration: configuration,
+            delegate: redirectBlocker,
+            delegateQueue: nil
+        )
+        preflightSession = session
+        var request = URLRequest(url: authorizeURL)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
+        session.dataTask(with: request) { [weak self] _, response, error in
+            defer {
+                session.finishTasksAndInvalidate()
+                if self?.preflightSession === session {
+                    self?.preflightSession = nil
+                }
+            }
+            guard self?.activeAttemptID == attemptID else { return }
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let http = response as? HTTPURLResponse else {
+                completion(.failure(ScreenshotSafeUploadError.invalidResponse))
+                return
+            }
+            if http.statusCode == 200 || (300..<400).contains(http.statusCode) {
+                completion(.success(()))
+            } else if http.statusCode == 400 || http.statusCode == 404 {
+                completion(.failure(ScreenshotSafeAuthorizationError.incompatibleServer))
+            } else {
+                completion(.failure(ScreenshotSafeUploadError.server("Server returned \(http.statusCode).")))
+            }
+        }.resume()
+    }
+
+    private func beginAuthentication(
+        attemptID: UUID,
+        authorizeURL: URL,
+        origin: String,
+        redirectURI: String,
+        expectedState: String,
+        verifier: String,
+        completion: @escaping (Result<ScreenshotSafeConnection, Error>) -> Void
+    ) {
+        let session = ASWebAuthenticationSession(
+            url: authorizeURL,
+            callbackURLScheme: "com.screenshotsafe"
+        ) { [weak self] callbackURL, error in
+            guard let self = self, self.activeAttemptID == attemptID else { return }
+            self.authenticationSession = nil
+            if let authenticationError = error as? ASWebAuthenticationSessionError,
+               authenticationError.code == .canceledLogin {
+                self.finish(
+                    attemptID: attemptID,
+                    result: .failure(ScreenshotSafeAuthorizationError.cancelled),
+                    completion: completion
+                )
+                return
+            }
+            if let error = error {
+                self.finish(attemptID: attemptID, result: .failure(error), completion: completion)
+                return
+            }
+            do {
+                let code = try self.authorizationCode(
+                    callbackURL: callbackURL,
+                    redirectURI: redirectURI,
+                    expectedState: expectedState
+                )
+                self.exchange(
+                    attemptID: attemptID,
+                    code: code,
+                    verifier: verifier,
+                    redirectURI: redirectURI,
+                    origin: origin,
+                    completion: completion
+                )
+            } catch {
+                self.finish(attemptID: attemptID, result: .failure(error), completion: completion)
+            }
+        }
+        session.presentationContextProvider = self
+        session.prefersEphemeralWebBrowserSession = false
+        authenticationSession = session
+        guard session.start() else {
+            authenticationSession = nil
+            finish(
+                attemptID: attemptID,
+                result: .failure(ScreenshotSafeAuthorizationError.couldNotStart),
+                completion: completion
+            )
+            return
+        }
+    }
+
+    private func authorizationCode(
+        callbackURL: URL?,
+        redirectURI: String,
+        expectedState: String
+    ) throws -> String {
+        guard
+            let callbackURL = callbackURL,
+            let expectedURL = URL(string: redirectURI),
+            callbackURL.scheme == expectedURL.scheme,
+            callbackURL.host == nil,
+            callbackURL.path == expectedURL.path,
+            let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)
+        else {
+            throw ScreenshotSafeAuthorizationError.invalidCallback
+        }
+        var values: [String: String] = [:]
+        for item in components.queryItems ?? [] {
+            guard values[item.name] == nil, let value = item.value else {
+                throw ScreenshotSafeAuthorizationError.invalidCallback
+            }
+            values[item.name] = value
+        }
+        guard values["state"] == expectedState else {
+            throw ScreenshotSafeAuthorizationError.invalidState
+        }
+        if values["error"] != nil {
+            throw ScreenshotSafeAuthorizationError.cancelled
+        }
+        guard let code = values["code"], !code.isEmpty else {
+            throw ScreenshotSafeAuthorizationError.invalidCallback
+        }
+        return code
+    }
+
+    private func exchange(
+        attemptID: UUID,
+        code: String,
+        verifier: String,
+        redirectURI: String,
+        origin: String,
+        completion: @escaping (Result<ScreenshotSafeConnection, Error>) -> Void
+    ) {
+        guard let url = endpoint(origin: origin, path: "/api/auth/extension/token") else {
+            finish(
+                attemptID: attemptID,
+                result: .failure(ScreenshotSafeConfigurationError.invalidServerURL),
+                completion: completion
+            )
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "code": code,
+            "code_verifier": verifier,
+            "redirect_uri": redirectURI,
+        ])
+
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self, self.activeAttemptID == attemptID else { return }
+            if let error = error {
+                self.finish(attemptID: attemptID, result: .failure(error), completion: completion)
+                return
+            }
+            guard let http = response as? HTTPURLResponse, let data = data else {
+                self.finish(
+                    attemptID: attemptID,
+                    result: .failure(ScreenshotSafeUploadError.invalidResponse),
+                    completion: completion
+                )
+                return
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+                self.finish(
+                    attemptID: attemptID,
+                    result: .failure(ScreenshotSafeAuthorizationError.tokenExchange(
+                        message ?? "Token exchange failed (\(http.statusCode))."
+                    )),
+                    completion: completion
+                )
+                return
+            }
+
+            let exchange: ScreenshotSafeTokenExchangeResponse
+            do {
+                exchange = try JSONDecoder().decode(ScreenshotSafeTokenExchangeResponse.self, from: data)
+            } catch {
+                self.finish(attemptID: attemptID, result: .failure(error), completion: completion)
+                return
+            }
+            let settings = ScreenshotSafeSettings(
+                serverURL: origin,
+                apiToken: exchange.token,
+                defaultExpiry: self.settingsStore.loadRegistry().defaultExpiry
+            )
+            self.uploadClient.verify(settings: settings) { result in
+                guard self.activeAttemptID == attemptID else {
+                    self.uploadClient.revoke(settings: settings) { _ in }
+                    return
+                }
+                switch result {
+                case .failure(let error):
+                    self.uploadClient.revoke(settings: settings) { _ in }
+                    self.finish(attemptID: attemptID, result: .failure(error), completion: completion)
+                case .success(let ping):
+                    do {
+                        let saved = try self.settingsStore.upsertVerifiedConnection(
+                            origin: origin,
+                            token: exchange.token,
+                            displayName: ping.displayName.isEmpty ? exchange.displayName : ping.displayName,
+                            username: ping.username.isEmpty ? exchange.username : ping.username
+                        )
+                        if let superseded = saved.superseded {
+                            let oldSettings = ScreenshotSafeSettings(
+                                serverURL: origin,
+                                apiToken: superseded.token,
+                                defaultExpiry: ""
+                            )
+                            self.uploadClient.revoke(settings: oldSettings) { _ in
+                                self.settingsStore.deleteCredential(superseded)
+                            }
+                        }
+                        self.finish(
+                            attemptID: attemptID,
+                            result: .success(saved.connection),
+                            completion: completion
+                        )
+                    } catch {
+                        self.uploadClient.revoke(settings: settings) { _ in }
+                        self.finish(attemptID: attemptID, result: .failure(error), completion: completion)
+                    }
+                }
+            }
+        }.resume()
+    }
+
+    private func endpoint(origin: String, path: String, queryItems: [URLQueryItem] = []) -> URL? {
+        guard let base = URL(string: origin) else {
+            return nil
+        }
+        let url = base.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+        guard !queryItems.isEmpty else {
+            return url
+        }
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = queryItems
+        return components?.url
+    }
+
+    private func randomBase64URL(byteCount: Int) -> String? {
+        var bytes = [UInt8](repeating: 0, count: byteCount)
+        guard SecRandomCopyBytes(kSecRandomDefault, byteCount, &bytes) == errSecSuccess else {
+            return nil
+        }
+        return Data(bytes).base64URLEncodedString()
+    }
+
+    private func finish<T>(
+        attemptID: UUID,
+        result: Result<T, Error>,
+        completion: @escaping (Result<T, Error>) -> Void
+    ) {
+        guard activeAttemptID == attemptID else { return }
+        activeAttemptID = nil
+        completionOnMain(result, completion)
+    }
+
+    private func completionOnMain<T>(
+        _ result: Result<T, Error>,
+        _ completion: @escaping (Result<T, Error>) -> Void
+    ) {
+        DispatchQueue.main.async {
+            completion(result)
+        }
+    }
+}
+
+private extension Data {
+    func base64URLEncodedString() -> String {
+        base64EncodedString()
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+}
+
 class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMessageHandler {
 
     @IBOutlet var webView: WKWebView!
 
-#if os(macOS)
     private let settingsStore = ScreenshotSafeSettingsStore()
     private let uploadClient = ScreenshotSafeUploadClient()
+    private var authorizationCoordinator: ScreenshotSafeAuthorizationCoordinator!
+    private var refreshTimer: Timer?
+
+#if os(macOS)
     private let serverURLField = NSTextField()
-    private let apiTokenField = NSSecureTextField()
     private let expiryPopup = NSPopUpButton()
     private let statusLabel = NSTextField(labelWithString: "")
     private let safariStatusLabel = NSTextField(labelWithString: "")
+    private let serverListStack = NSStackView()
+    private let serverScrollView = NSScrollView()
+    private let emptyServersLabel = NSTextField(labelWithString: "No ScreenshotSafe servers are connected yet.")
+    private let loginButton = NSButton()
 #elseif os(iOS)
-    private let settingsStore = ScreenshotSafeSettingsStore()
-    private let uploadClient = ScreenshotSafeUploadClient()
     private let serverURLField = UITextField()
-    private let apiTokenField = UITextField()
     private let expiryButton = UIButton(type: .system)
     private let statusLabel = UILabel()
+    private let serverListStack = UIStackView()
+    private let emptyServersLabel = UILabel()
+    private let loginButton = UIButton(type: .system)
     private var selectedExpiry = ""
 #endif
 
@@ -45,6 +496,11 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         super.viewDidLoad()
 
 #if os(macOS)
+        authorizationCoordinator = ScreenshotSafeAuthorizationCoordinator(
+            settingsStore: settingsStore,
+            uploadClient: uploadClient,
+            anchorProvider: { [weak self] in self?.view.window ?? NSWindow() }
+        )
         buildMacSettingsView()
         refreshSafariExtensionState()
         NotificationCenter.default.addObserver(
@@ -54,6 +510,11 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             object: nil
         )
 #else
+        authorizationCoordinator = ScreenshotSafeAuthorizationCoordinator(
+            settingsStore: settingsStore,
+            uploadClient: uploadClient,
+            anchorProvider: { [weak self] in self?.view.window ?? UIWindow() }
+        )
         buildIOSSettingsView()
         NotificationCenter.default.addObserver(
             self,
@@ -62,6 +523,74 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             object: nil
         )
 #endif
+        cleanUpLegacyConfiguration()
+    }
+
+#if os(macOS)
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        startRefreshTimer()
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        stopRefreshTimer()
+    }
+#elseif os(iOS)
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        startRefreshTimer()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        stopRefreshTimer()
+    }
+#endif
+
+    private func startRefreshTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.refreshAllConnections()
+        }
+    }
+
+    private func stopRefreshTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+    }
+
+    deinit {
+        refreshTimer?.invalidate()
+        authorizationCoordinator?.cancel()
+    }
+
+    private func cleanUpLegacyConfiguration() {
+        guard let legacy = settingsStore.legacyConfiguration() else {
+            return
+        }
+        settingsStore.clearLegacyConfiguration()
+        let settings = ScreenshotSafeSettings(
+            serverURL: legacy.serverURL,
+            apiToken: legacy.token,
+            defaultExpiry: ""
+        )
+        uploadClient.revoke(settings: settings) { [weak self] revoked in
+            guard !revoked else { return }
+            DispatchQueue.main.async {
+#if os(macOS)
+                self?.showStatus(
+                    "The previous token could not be revoked. Revoke it from the server's API-token settings.",
+                    isError: true
+                )
+#else
+                self?.showStatus(
+                    "The previous token could not be revoked. Revoke it from the server's API-token settings.",
+                    isError: true
+                )
+#endif
+            }
+        }
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -144,27 +673,42 @@ private extension ViewController {
         titleLabel.adjustsFontForContentSizeCategory = true
 
         let subtitleLabel = UILabel()
-        subtitleLabel.text = "Set the upload destination used by the Safari and share extensions."
+        subtitleLabel.text = "Connect ScreenshotSafe servers and choose where Safari and the share extension upload."
         subtitleLabel.font = .preferredFont(forTextStyle: .subheadline)
         subtitleLabel.textColor = .secondaryLabel
         subtitleLabel.adjustsFontForContentSizeCategory = true
         subtitleLabel.numberOfLines = 0
 
-        configureTextField(serverURLField, placeholder: "https://screenshots.example.com", keyboardType: .URL, secure: false)
-        configureTextField(apiTokenField, placeholder: "API token", keyboardType: .default, secure: true)
+        let connectedHeading = sectionHeading("Connected servers")
+        let refreshButton = UIButton(type: .system)
+        refreshButton.setTitle("Refresh all", for: .normal)
+        refreshButton.addTarget(self, action: #selector(refreshAllConnections), for: .touchUpInside)
+        connectedHeading.addArrangedSubview(refreshButton)
+
+        serverListStack.axis = .vertical
+        serverListStack.spacing = 12
+        emptyServersLabel.text = "No ScreenshotSafe servers are connected yet."
+        emptyServersLabel.textColor = .secondaryLabel
+        emptyServersLabel.numberOfLines = 0
+
+        configureTextField(serverURLField, placeholder: "screenshots.example.com", keyboardType: .URL, secure: false)
+        serverURLField.addTarget(self, action: #selector(logInToServer), for: .editingDidEndOnExit)
         configureExpiryMenu()
 
         let scanButton = UIButton(type: .system)
         scanButton.setTitle("Scan Setup QR Code", for: .normal)
-        scanButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
         scanButton.addTarget(self, action: #selector(scanSetupQRCode), for: .touchUpInside)
         scanButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
 
-        let saveButton = UIButton(type: .system)
-        saveButton.setTitle("Save and Verify", for: .normal)
-        saveButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
-        saveButton.addTarget(self, action: #selector(saveAndVerifySettings), for: .touchUpInside)
-        saveButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+        loginButton.setTitle("Log in", for: .normal)
+        loginButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+        loginButton.addTarget(self, action: #selector(logInToServer), for: .touchUpInside)
+        loginButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+
+        let addActions = UIStackView(arrangedSubviews: [loginButton, scanButton])
+        addActions.axis = .horizontal
+        addActions.spacing = 12
+        addActions.distribution = .fillEqually
 
         statusLabel.textColor = .secondaryLabel
         statusLabel.font = .preferredFont(forTextStyle: .subheadline)
@@ -173,11 +717,13 @@ private extension ViewController {
 
         content.addArrangedSubview(titleLabel)
         content.addArrangedSubview(subtitleLabel)
-        content.addArrangedSubview(fieldStack(label: "Server URL", field: serverURLField))
-        content.addArrangedSubview(fieldStack(label: "API Token", field: apiTokenField))
+        content.addArrangedSubview(connectedHeading)
+        content.addArrangedSubview(emptyServersLabel)
+        content.addArrangedSubview(serverListStack)
+        content.addArrangedSubview(formLabel("Add a server"))
+        content.addArrangedSubview(serverURLField)
+        content.addArrangedSubview(addActions)
         content.addArrangedSubview(expiryStack())
-        content.addArrangedSubview(scanButton)
-        content.addArrangedSubview(saveButton)
         content.addArrangedSubview(statusLabel)
 
         NSLayoutConstraint.activate([
@@ -192,7 +738,19 @@ private extension ViewController {
             content.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor, constant: -48),
         ])
 
-        loadSettingsIntoForm()
+        loadConnectionsIntoView()
+        refreshAllConnections()
+    }
+
+    func sectionHeading(_ title: String) -> UIStackView {
+        let label = UILabel()
+        label.text = title
+        label.font = .preferredFont(forTextStyle: .headline)
+        let spacer = UIView()
+        let stack = UIStackView(arrangedSubviews: [label, spacer])
+        stack.axis = .horizontal
+        stack.alignment = .center
+        return stack
     }
 
     func configureTextField(_ textField: UITextField, placeholder: String, keyboardType: UIKeyboardType, secure: Bool) {
@@ -218,9 +776,15 @@ private extension ViewController {
     func updateExpiryMenu() {
         expiryButton.menu = UIMenu(children: expiryOptions.map { option in
             UIAction(title: option.title, state: option.value == selectedExpiry ? .on : .off) { [weak self] _ in
-                self?.selectedExpiry = option.value
-                self?.updateExpiryButtonTitle()
-                self?.updateExpiryMenu()
+                guard let self = self else { return }
+                self.selectedExpiry = option.value
+                do {
+                    try self.settingsStore.setDefaultExpiry(option.value)
+                    self.updateExpiryButtonTitle()
+                    self.updateExpiryMenu()
+                } catch {
+                    self.showStatus(error.localizedDescription, isError: true)
+                }
             }
         })
     }
@@ -283,14 +847,42 @@ private extension ViewController {
     }
 
     func handleScannedQRCode(_ value: String) {
-        guard let url = URL(string: value), settingsStore.saveConfiguration(from: url) else {
-            showQRScanError("That QR code is not a ScreenshotSafe setup code.")
+        let configuration: (origin: String, token: String)
+        do {
+            configuration = try settingsStore.parseQRCode(value)
+        } catch {
+            showQRScanError(error.localizedDescription)
             return
         }
-
-        loadSettingsIntoForm()
-        statusLabel.text = "Configuration imported from QR code."
-        statusLabel.textColor = .systemGreen
+        showStatus("Checking \(configuration.origin)…", isError: false)
+        let settings = ScreenshotSafeSettings(
+            serverURL: configuration.origin,
+            apiToken: configuration.token,
+            defaultExpiry: settingsStore.loadRegistry().defaultExpiry
+        )
+        uploadClient.verify(settings: settings) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                switch result {
+                case .failure(let error):
+                    self.showQRScanError(error.localizedDescription)
+                case .success(let ping):
+                    do {
+                        let saved = try self.settingsStore.upsertVerifiedConnection(
+                            origin: configuration.origin,
+                            token: configuration.token,
+                            displayName: ping.displayName,
+                            username: ping.username
+                        )
+                        self.finishSupersededCredential(saved.superseded, origin: configuration.origin)
+                        self.loadConnectionsIntoView()
+                        self.showStatus("Connected to \(configuration.origin). It is now used for uploads.", isError: false, success: true)
+                    } catch {
+                        self.showQRScanError(error.localizedDescription)
+                    }
+                }
+            }
+        }
     }
 
     func showQRScanError(_ message: String) {
@@ -298,49 +890,279 @@ private extension ViewController {
         statusLabel.textColor = .systemRed
     }
 
-    func loadSettingsIntoForm() {
-        let settings = settingsStore.load()
-        serverURLField.text = settings.serverURL
-        apiTokenField.text = settings.apiToken
-        selectedExpiry = settings.defaultExpiry
+    func loadConnectionsIntoView() {
+        let registry = settingsStore.loadRegistry()
+        selectedExpiry = registry.defaultExpiry
         updateExpiryButtonTitle()
         updateExpiryMenu()
+        serverListStack.arrangedSubviews.forEach {
+            serverListStack.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+        emptyServersLabel.isHidden = !registry.connections.isEmpty
+        for connection in registry.connections {
+            serverListStack.addArrangedSubview(
+                connectionRow(connection, isDefault: connection.id == registry.defaultConnectionID)
+            )
+        }
     }
 
-    @objc func saveAndVerifySettings() {
+    @objc func logInToServer() {
         dismissKeyboard()
-
-        let settings = ScreenshotSafeSettings(
-            serverURL: serverURLField.text ?? "",
-            apiToken: apiTokenField.text ?? "",
-            defaultExpiry: selectedExpiry
-        )
-        settingsStore.save(settings)
-        statusLabel.text = "Checking connection..."
-        statusLabel.textColor = .secondaryLabel
-
-        uploadClient.verify(settings: settings) { [weak self] result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    self?.statusLabel.text = "Connected. Safari and the Share Extension can upload screenshots."
-                    self?.statusLabel.textColor = .systemGreen
-                case .failure(let error):
-                    self?.statusLabel.text = error.localizedDescription
-                    self?.statusLabel.textColor = .systemRed
-                }
+        let input = serverURLField.text ?? ""
+        loginButton.isEnabled = false
+        loginButton.setTitle("Opening login…", for: .normal)
+        showStatus("Connecting to \(input)…", isError: false)
+        authorizationCoordinator.logIn(serverInput: input) { [weak self] result in
+            guard let self = self else { return }
+            self.loginButton.isEnabled = true
+            self.loginButton.setTitle("Log in", for: .normal)
+            switch result {
+            case .success(let connection):
+                self.serverURLField.text = ""
+                self.loadConnectionsIntoView()
+                self.showStatus("Connected to \(connection.origin). It is now used for uploads.", isError: false, success: true)
+            case .failure(let error):
+                self.showStatus(error.localizedDescription, isError: true)
             }
         }
     }
 
     @objc func settingsDidChange() {
-        loadSettingsIntoForm()
-        statusLabel.text = "Configuration imported from ScreenshotSafe link."
-        statusLabel.textColor = .systemGreen
+        loadConnectionsIntoView()
     }
 
     @objc func dismissKeyboard() {
         view.endEditing(true)
+    }
+
+    @objc func refreshAllConnections() {
+        let registry = settingsStore.loadRegistry()
+        for connection in registry.connections {
+            refreshConnection(connection.id)
+        }
+    }
+
+    @objc func selectDefaultConnection(_ sender: UIButton) {
+        guard let id = connectionID(from: sender) else { return }
+        do {
+            try settingsStore.setDefaultConnection(id: id)
+            loadConnectionsIntoView()
+            if let connection = settingsStore.loadRegistry().connections.first(where: { $0.id == id }) {
+                showStatus("Uploads will use \(connection.origin).", isError: false, success: true)
+            }
+        } catch {
+            showStatus(error.localizedDescription, isError: true)
+        }
+    }
+
+    @objc func retryConnection(_ sender: UIButton) {
+        guard let id = connectionID(from: sender) else { return }
+        refreshConnection(id)
+    }
+
+    @objc func reconnectConnection(_ sender: UIButton) {
+        guard
+            let id = connectionID(from: sender),
+            let connection = settingsStore.loadRegistry().connections.first(where: { $0.id == id })
+        else { return }
+        serverURLField.text = connection.origin
+        logInToServer()
+    }
+
+    @objc func logOutConnection(_ sender: UIButton) {
+        guard
+            let id = connectionID(from: sender),
+            let connection = settingsStore.loadRegistry().connections.first(where: { $0.id == id })
+        else { return }
+        let token = try? settingsStore.token(for: connection)
+        guard let token = token else {
+            removeConnection(id)
+            return
+        }
+        let settings = ScreenshotSafeSettings(serverURL: connection.origin, apiToken: token, defaultExpiry: "")
+        uploadClient.revoke(settings: settings) { [weak self] revoked in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                if revoked {
+                    self.removeConnection(id)
+                } else {
+                    let alert = UIAlertController(
+                        title: "Could not revoke token",
+                        message: "Forget this server locally anyway? Revoke its token from the server settings later.",
+                        preferredStyle: .alert
+                    )
+                    alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                    alert.addAction(UIAlertAction(title: "Forget", style: .destructive) { _ in
+                        self.removeConnection(id)
+                    })
+                    self.present(alert, animated: true)
+                }
+            }
+        }
+    }
+
+    func connectionRow(_ connection: ScreenshotSafeConnection, isDefault: Bool) -> UIView {
+        let container = UIView()
+        container.backgroundColor = .secondarySystemBackground
+        container.layer.cornerRadius = 10
+
+        let defaultButton = UIButton(type: .system)
+        defaultButton.setTitle(isDefault ? "✓" : "○", for: .normal)
+        defaultButton.titleLabel?.font = .systemFont(ofSize: 22, weight: .semibold)
+        defaultButton.accessibilityLabel = "Use \(connection.origin) for uploads"
+        defaultButton.accessibilityIdentifier = connection.id.uuidString
+        defaultButton.addTarget(self, action: #selector(selectDefaultConnection), for: .touchUpInside)
+
+        let origin = UILabel()
+        origin.text = connection.origin
+        origin.font = .preferredFont(forTextStyle: .headline)
+        origin.numberOfLines = 1
+        origin.adjustsFontForContentSizeCategory = true
+
+        let account = UILabel()
+        account.text = connection.displayName.isEmpty
+            ? "Not logged in"
+            : "\(connection.displayName)\(connection.username.isEmpty ? "" : " (\(connection.username))")"
+        account.textColor = .secondaryLabel
+        account.font = .preferredFont(forTextStyle: .caption1)
+        account.numberOfLines = 1
+
+        let details = UIStackView(arrangedSubviews: [origin, account])
+        details.axis = .vertical
+        details.spacing = 2
+        let header = UIStackView(arrangedSubviews: [defaultButton, details])
+        header.axis = .horizontal
+        header.spacing = 10
+        header.alignment = .center
+
+        let state = UILabel()
+        state.text = statusText(connection)
+        state.textColor = statusColor(connection.lastStatus)
+        state.font = .preferredFont(forTextStyle: .caption1)
+
+        let retry = connectionButton("Retry", id: connection.id, action: #selector(retryConnection))
+        let reconnect = connectionButton("Log in again", id: connection.id, action: #selector(reconnectConnection))
+        reconnect.isHidden = connection.lastStatus == .connected
+        let logout = connectionButton("Log out", id: connection.id, action: #selector(logOutConnection))
+        logout.setTitleColor(.systemRed, for: .normal)
+        let actions = UIStackView(arrangedSubviews: [retry, reconnect, logout])
+        actions.axis = .horizontal
+        actions.spacing = 12
+
+        let stack = UIStackView(arrangedSubviews: [header, state, actions])
+        stack.axis = .vertical
+        stack.spacing = 8
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 12),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12),
+        ])
+        return container
+    }
+
+    func connectionButton(_ title: String, id: UUID, action: Selector) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setTitle(title, for: .normal)
+        button.accessibilityIdentifier = id.uuidString
+        button.addTarget(self, action: action, for: .touchUpInside)
+        return button
+    }
+
+    func connectionID(from button: UIButton) -> UUID? {
+        button.accessibilityIdentifier.flatMap(UUID.init(uuidString:))
+    }
+
+    func refreshConnection(_ id: UUID) {
+        guard let connection = settingsStore.loadRegistry().connections.first(where: { $0.id == id }) else {
+            return
+        }
+        try? settingsStore.updateConnection(id: id, status: .checking)
+        loadConnectionsIntoView()
+        guard let token = try? settingsStore.token(for: connection) else {
+            try? settingsStore.updateConnection(id: id, status: .loginRequired)
+            loadConnectionsIntoView()
+            return
+        }
+        let settings = ScreenshotSafeSettings(serverURL: connection.origin, apiToken: token, defaultExpiry: "")
+        uploadClient.verify(settings: settings) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                switch result {
+                case .success(let ping):
+                    try? self.settingsStore.updateConnection(
+                        id: id,
+                        status: .connected,
+                        displayName: ping.displayName,
+                        username: ping.username
+                    )
+                case .failure(let error):
+                    try? self.settingsStore.updateConnection(id: id, status: self.connectionStatus(for: error))
+                }
+                self.loadConnectionsIntoView()
+            }
+        }
+    }
+
+    func removeConnection(_ id: UUID) {
+        do {
+            let removed = try settingsStore.removeConnection(id: id)
+            loadConnectionsIntoView()
+            showStatus("Removed \(removed.origin).", isError: false, success: true)
+        } catch {
+            showStatus(error.localizedDescription, isError: true)
+        }
+    }
+
+    func finishSupersededCredential(
+        _ credential: ScreenshotSafeSupersededCredential?,
+        origin: String
+    ) {
+        guard let credential = credential else { return }
+        let settings = ScreenshotSafeSettings(serverURL: origin, apiToken: credential.token, defaultExpiry: "")
+        uploadClient.revoke(settings: settings) { [weak self] _ in
+            self?.settingsStore.deleteCredential(credential)
+        }
+    }
+
+    func connectionStatus(for error: Error) -> ScreenshotSafeConnectionStatus {
+        let message = error.localizedDescription.lowercased()
+        if message.contains("token was rejected") { return .loginRequired }
+        if message.contains("account is disabled") { return .accountDisabled }
+        if message.contains("needs an update") { return .incompatible }
+        if error is URLError { return .unreachable }
+        return .serverError
+    }
+
+    func statusText(_ connection: ScreenshotSafeConnection) -> String {
+        let label: String
+        switch connection.lastStatus {
+        case .connected: label = "Connected"
+        case .loginRequired: label = "Login required"
+        case .accountDisabled: label = "Account disabled"
+        case .unreachable: label = "Server unreachable"
+        case .incompatible: label = "Server needs an update"
+        case .serverError: label = "Server error"
+        case .checking: label = "Checking…"
+        }
+        guard let date = connection.lastCheckedAt else { return label }
+        return "\(label) · \(date.formatted(date: .omitted, time: .shortened))"
+    }
+
+    func statusColor(_ status: ScreenshotSafeConnectionStatus) -> UIColor {
+        switch status {
+        case .connected: return .systemGreen
+        case .checking: return .secondaryLabel
+        default: return .systemRed
+        }
+    }
+
+    func showStatus(_ message: String, isError: Bool, success: Bool = false) {
+        statusLabel.text = message
+        statusLabel.textColor = isError ? .systemRed : (success ? .systemGreen : .secondaryLabel)
     }
 }
 
@@ -411,11 +1233,13 @@ private final class QRCodeScannerViewController: UIViewController, AVCaptureMeta
 
     private func configureOverlay() {
         let cancelButton = UIButton(type: .system)
-        cancelButton.setTitle("Cancel", for: .normal)
+        var cancelConfiguration = UIButton.Configuration.plain()
+        cancelConfiguration.title = "Cancel"
+        cancelConfiguration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
+        cancelButton.configuration = cancelConfiguration
         cancelButton.tintColor = .white
         cancelButton.backgroundColor = UIColor.black.withAlphaComponent(0.45)
         cancelButton.layer.cornerRadius = 8
-        cancelButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
         cancelButton.addTarget(self, action: #selector(cancelScan), for: .touchUpInside)
         cancelButton.translatesAutoresizingMaskIntoConstraints = false
 
@@ -483,14 +1307,15 @@ private extension ViewController {
         title.font = .systemFont(ofSize: 28, weight: .semibold)
         title.textColor = .labelColor
 
-        let subtitle = NSTextField(labelWithString: "Configure Safari and the Share Extension to upload screenshots to your ScreenshotSafe server.")
+        let subtitle = NSTextField(labelWithString: "Connect ScreenshotSafe servers and choose where Safari and the Share Extension upload.")
         subtitle.font = .systemFont(ofSize: 13)
         subtitle.textColor = .secondaryLabelColor
         subtitle.maximumNumberOfLines = 2
         subtitle.lineBreakMode = .byWordWrapping
 
         serverURLField.placeholderString = "https://screenshots.example.com"
-        apiTokenField.placeholderString = "API token"
+        serverURLField.target = self
+        serverURLField.action = #selector(logInToServer)
 
         expiryPopup.addItems(withTitles: [
             "Server default",
@@ -506,9 +1331,13 @@ private extension ViewController {
         expiryPopup.item(at: 3)?.representedObject = "7d"
         expiryPopup.item(at: 4)?.representedObject = "30d"
         expiryPopup.item(at: 5)?.representedObject = "never"
+        expiryPopup.target = self
+        expiryPopup.action = #selector(defaultExpiryDidChange)
 
-        let saveButton = NSButton(title: "Save and Verify", target: self, action: #selector(saveAndVerifySettings))
-        saveButton.bezelStyle = .rounded
+        loginButton.title = "Log in"
+        loginButton.target = self
+        loginButton.action = #selector(logInToServer)
+        loginButton.bezelStyle = .rounded
 
         let safariButton = NSButton(title: "Open Safari Extension Settings", target: self, action: #selector(openSafariExtensionSettings))
         safariButton.bezelStyle = .rounded
@@ -518,9 +1347,32 @@ private extension ViewController {
         safariStatusLabel.textColor = .secondaryLabelColor
         safariStatusLabel.maximumNumberOfLines = 2
 
+        let connectedTitle = NSTextField(labelWithString: "Connected servers")
+        connectedTitle.font = .systemFont(ofSize: 16, weight: .semibold)
+        let refreshButton = NSButton(title: "Refresh all", target: self, action: #selector(refreshAllConnections))
+        refreshButton.bezelStyle = .rounded
+        let connectedHeader = NSStackView(views: [connectedTitle, NSView(), refreshButton])
+        connectedHeader.orientation = .horizontal
+        connectedHeader.alignment = .centerY
+        connectedHeader.distribution = .fill
+        connectedHeader.widthAnchor.constraint(equalToConstant: 640).isActive = true
+
+        serverListStack.orientation = .vertical
+        serverListStack.alignment = .leading
+        serverListStack.spacing = 10
+        serverScrollView.documentView = serverListStack
+        serverScrollView.drawsBackground = false
+        serverScrollView.borderType = .bezelBorder
+        serverScrollView.hasVerticalScroller = true
+        serverScrollView.hasHorizontalScroller = false
+        serverScrollView.widthAnchor.constraint(equalToConstant: 640).isActive = true
+        serverScrollView.heightAnchor.constraint(equalToConstant: 190).isActive = true
+        emptyServersLabel.textColor = .secondaryLabelColor
+
+        let addTitle = NSTextField(labelWithString: "Add a server")
+        addTitle.font = .systemFont(ofSize: 16, weight: .semibold)
         let form = NSGridView(views: [
-            [fieldLabel("Server URL"), serverURLField],
-            [fieldLabel("API Token"), apiTokenField],
+            [fieldLabel("ScreenshotSafe server"), serverURLField],
             [fieldLabel("Default Expiry"), expiryPopup],
         ])
         form.column(at: 0).xPlacement = .trailing
@@ -528,11 +1380,22 @@ private extension ViewController {
         form.rowSpacing = 12
         form.columnSpacing = 12
 
-        let buttonRow = NSStackView(views: [saveButton, safariButton])
+        let buttonRow = NSStackView(views: [loginButton, safariButton])
         buttonRow.orientation = .horizontal
         buttonRow.spacing = 10
 
-        let stack = NSStackView(views: [title, subtitle, form, buttonRow, statusLabel, safariStatusLabel])
+        let stack = NSStackView(views: [
+            title,
+            subtitle,
+            connectedHeader,
+            emptyServersLabel,
+            serverScrollView,
+            addTitle,
+            form,
+            buttonRow,
+            statusLabel,
+            safariStatusLabel,
+        ])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 16
@@ -540,57 +1403,293 @@ private extension ViewController {
         root.addSubview(stack)
 
         NSLayoutConstraint.activate([
-            root.widthAnchor.constraint(greaterThanOrEqualToConstant: 560),
-            root.heightAnchor.constraint(greaterThanOrEqualToConstant: 360),
+            root.widthAnchor.constraint(greaterThanOrEqualToConstant: 720),
+            root.heightAnchor.constraint(greaterThanOrEqualToConstant: 700),
             stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 32),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -32),
             stack.topAnchor.constraint(equalTo: root.topAnchor, constant: 30),
         ])
 
-        loadSettingsIntoForm()
+        loadConnectionsIntoView()
+        refreshAllConnections()
     }
 
-    func loadSettingsIntoForm() {
-        let settings = settingsStore.load()
-        serverURLField.stringValue = settings.serverURL
-        apiTokenField.stringValue = settings.apiToken
-
+    func loadConnectionsIntoView() {
+        let registry = settingsStore.loadRegistry()
         for index in 0..<expiryPopup.numberOfItems {
-            if expiryPopup.item(at: index)?.representedObject as? String == settings.defaultExpiry {
+            if expiryPopup.item(at: index)?.representedObject as? String == registry.defaultExpiry {
                 expiryPopup.selectItem(at: index)
                 break
             }
         }
+        serverListStack.arrangedSubviews.forEach {
+            serverListStack.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+        emptyServersLabel.isHidden = !registry.connections.isEmpty
+        serverScrollView.isHidden = registry.connections.isEmpty
+        for connection in registry.connections {
+            let row = connectionRow(connection, isDefault: connection.id == registry.defaultConnectionID)
+            serverListStack.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalToConstant: 620).isActive = true
+        }
+        let fittingSize = serverListStack.fittingSize
+        serverListStack.frame = NSRect(
+            x: 0,
+            y: 0,
+            width: 620,
+            height: max(fittingSize.height, 1)
+        )
     }
 
-    @objc func saveAndVerifySettings() {
-        let settings = ScreenshotSafeSettings(
-            serverURL: serverURLField.stringValue,
-            apiToken: apiTokenField.stringValue,
-            defaultExpiry: expiryPopup.selectedItem?.representedObject as? String ?? ""
-        )
-        settingsStore.save(settings)
-        statusLabel.stringValue = "Checking connection..."
-        statusLabel.textColor = .secondaryLabelColor
+    @objc func settingsDidChange() {
+        loadConnectionsIntoView()
+    }
 
-        uploadClient.verify(settings: settings) { [weak self] result in
+    @objc func logInToServer() {
+        let input = serverURLField.stringValue
+        loginButton.isEnabled = false
+        loginButton.title = "Opening login…"
+        showStatus("Connecting to \(input)…", isError: false)
+        authorizationCoordinator.logIn(serverInput: input) { [weak self] result in
+            guard let self = self else { return }
+            self.loginButton.isEnabled = true
+            self.loginButton.title = "Log in"
+            switch result {
+            case .success(let connection):
+                self.serverURLField.stringValue = ""
+                self.loadConnectionsIntoView()
+                self.showStatus("Connected to \(connection.origin). It is now used for uploads.", isError: false, success: true)
+            case .failure(let error):
+                self.showStatus(error.localizedDescription, isError: true)
+            }
+        }
+    }
+
+    @objc func defaultExpiryDidChange() {
+        do {
+            try settingsStore.setDefaultExpiry(
+                expiryPopup.selectedItem?.representedObject as? String ?? ""
+            )
+        } catch {
+            showStatus(error.localizedDescription, isError: true)
+        }
+    }
+
+    @objc func refreshAllConnections() {
+        for connection in settingsStore.loadRegistry().connections {
+            refreshConnection(connection.id)
+        }
+    }
+
+    @objc func selectDefaultConnection(_ sender: NSButton) {
+        guard let id = connectionID(from: sender) else { return }
+        do {
+            try settingsStore.setDefaultConnection(id: id)
+            loadConnectionsIntoView()
+            if let connection = settingsStore.loadRegistry().connections.first(where: { $0.id == id }) {
+                showStatus("Uploads will use \(connection.origin).", isError: false, success: true)
+            }
+        } catch {
+            showStatus(error.localizedDescription, isError: true)
+        }
+    }
+
+    @objc func retryConnection(_ sender: NSButton) {
+        guard let id = connectionID(from: sender) else { return }
+        refreshConnection(id)
+    }
+
+    @objc func reconnectConnection(_ sender: NSButton) {
+        guard
+            let id = connectionID(from: sender),
+            let connection = settingsStore.loadRegistry().connections.first(where: { $0.id == id })
+        else { return }
+        serverURLField.stringValue = connection.origin
+        logInToServer()
+    }
+
+    @objc func logOutConnection(_ sender: NSButton) {
+        guard
+            let id = connectionID(from: sender),
+            let connection = settingsStore.loadRegistry().connections.first(where: { $0.id == id })
+        else { return }
+        let storedToken = try? settingsStore.token(for: connection)
+        guard let token = storedToken else {
+            removeConnection(id)
+            return
+        }
+        let settings = ScreenshotSafeSettings(serverURL: connection.origin, apiToken: token, defaultExpiry: "")
+        uploadClient.revoke(settings: settings) { [weak self] revoked in
             DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    self?.statusLabel.stringValue = "Connected. Safari and the Share Extension can upload screenshots."
-                    self?.statusLabel.textColor = .systemGreen
-                case .failure(let error):
-                    self?.statusLabel.stringValue = error.localizedDescription
-                    self?.statusLabel.textColor = .systemRed
+                guard let self = self else { return }
+                if revoked {
+                    self.removeConnection(id)
+                    return
+                }
+                let alert = NSAlert()
+                alert.messageText = "Could not revoke token"
+                alert.informativeText = "Forget this server locally anyway? Revoke its token from the server settings later."
+                alert.addButton(withTitle: "Forget")
+                alert.addButton(withTitle: "Cancel")
+                if alert.runModal() == .alertFirstButtonReturn {
+                    self.removeConnection(id)
                 }
             }
         }
     }
 
-    @objc func settingsDidChange() {
-        loadSettingsIntoForm()
-        statusLabel.stringValue = "Configuration imported from ScreenshotSafe link."
-        statusLabel.textColor = .systemGreen
+    func connectionRow(_ connection: ScreenshotSafeConnection, isDefault: Bool) -> NSView {
+        let container = NSView()
+        container.wantsLayer = true
+        container.layer?.cornerRadius = 8
+        container.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+
+        let defaultButton = NSButton(
+            radioButtonWithTitle: "",
+            target: self,
+            action: #selector(selectDefaultConnection)
+        )
+        defaultButton.state = isDefault ? .on : .off
+        defaultButton.identifier = NSUserInterfaceItemIdentifier(connection.id.uuidString)
+        defaultButton.setAccessibilityLabel("Use \(connection.origin) for uploads")
+
+        let origin = NSTextField(labelWithString: connection.origin)
+        origin.font = .systemFont(ofSize: 13, weight: .semibold)
+        origin.lineBreakMode = .byTruncatingMiddle
+        let accountText = connection.displayName.isEmpty
+            ? "Not logged in"
+            : "\(connection.displayName)\(connection.username.isEmpty ? "" : " (\(connection.username))")"
+        let account = NSTextField(labelWithString: accountText)
+        account.font = .systemFont(ofSize: 11)
+        account.textColor = .secondaryLabelColor
+        let details = NSStackView(views: [origin, account])
+        details.orientation = .vertical
+        details.alignment = .leading
+        details.spacing = 2
+        details.widthAnchor.constraint(equalToConstant: 260).isActive = true
+
+        let state = NSTextField(labelWithString: statusText(connection))
+        state.font = .systemFont(ofSize: 11)
+        state.textColor = statusColor(connection.lastStatus)
+        state.widthAnchor.constraint(equalToConstant: 120).isActive = true
+
+        let retry = connectionButton("Retry", id: connection.id, action: #selector(retryConnection))
+        let reconnect = connectionButton("Log in again", id: connection.id, action: #selector(reconnectConnection))
+        reconnect.isHidden = connection.lastStatus == .connected
+        let logout = connectionButton("Log out", id: connection.id, action: #selector(logOutConnection))
+        logout.contentTintColor = .systemRed
+        let actions = NSStackView(views: [retry, reconnect, logout])
+        actions.orientation = .horizontal
+        actions.spacing = 6
+
+        let row = NSStackView(views: [defaultButton, details, state, actions])
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 10
+        row.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12),
+            row.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12),
+            row.topAnchor.constraint(equalTo: container.topAnchor, constant: 10),
+            row.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -10),
+        ])
+        return container
+    }
+
+    func connectionButton(_ title: String, id: UUID, action: Selector) -> NSButton {
+        let button = NSButton(title: title, target: self, action: action)
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.identifier = NSUserInterfaceItemIdentifier(id.uuidString)
+        return button
+    }
+
+    func connectionID(from button: NSButton) -> UUID? {
+        button.identifier.flatMap { UUID(uuidString: $0.rawValue) }
+    }
+
+    func refreshConnection(_ id: UUID) {
+        guard let connection = settingsStore.loadRegistry().connections.first(where: { $0.id == id }) else {
+            return
+        }
+        try? settingsStore.updateConnection(id: id, status: .checking)
+        loadConnectionsIntoView()
+        let storedToken = try? settingsStore.token(for: connection)
+        guard let token = storedToken else {
+            try? settingsStore.updateConnection(id: id, status: .loginRequired)
+            loadConnectionsIntoView()
+            return
+        }
+        let settings = ScreenshotSafeSettings(serverURL: connection.origin, apiToken: token, defaultExpiry: "")
+        uploadClient.verify(settings: settings) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                switch result {
+                case .success(let ping):
+                    try? self.settingsStore.updateConnection(
+                        id: id,
+                        status: .connected,
+                        displayName: ping.displayName,
+                        username: ping.username
+                    )
+                case .failure(let error):
+                    try? self.settingsStore.updateConnection(id: id, status: self.connectionStatus(for: error))
+                }
+                self.loadConnectionsIntoView()
+            }
+        }
+    }
+
+    func removeConnection(_ id: UUID) {
+        do {
+            let removed = try settingsStore.removeConnection(id: id)
+            loadConnectionsIntoView()
+            showStatus("Removed \(removed.origin).", isError: false, success: true)
+        } catch {
+            showStatus(error.localizedDescription, isError: true)
+        }
+    }
+
+    func connectionStatus(for error: Error) -> ScreenshotSafeConnectionStatus {
+        let message = error.localizedDescription.lowercased()
+        if message.contains("token was rejected") { return .loginRequired }
+        if message.contains("account is disabled") { return .accountDisabled }
+        if message.contains("needs an update") { return .incompatible }
+        if error is URLError { return .unreachable }
+        return .serverError
+    }
+
+    func statusText(_ connection: ScreenshotSafeConnection) -> String {
+        let label: String
+        switch connection.lastStatus {
+        case .connected: label = "Connected"
+        case .loginRequired: label = "Login required"
+        case .accountDisabled: label = "Account disabled"
+        case .unreachable: label = "Server unreachable"
+        case .incompatible: label = "Server needs an update"
+        case .serverError: label = "Server error"
+        case .checking: label = "Checking…"
+        }
+        guard let date = connection.lastCheckedAt else { return label }
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return "\(label) · \(formatter.string(from: date))"
+    }
+
+    func statusColor(_ status: ScreenshotSafeConnectionStatus) -> NSColor {
+        switch status {
+        case .connected: return .systemGreen
+        case .checking: return .secondaryLabelColor
+        default: return .systemRed
+        }
+    }
+
+    func showStatus(_ message: String, isError: Bool, success: Bool = false) {
+        statusLabel.stringValue = message
+        statusLabel.textColor = isError ? .systemRed : (success ? .systemGreen : .secondaryLabelColor)
     }
 
     @objc func openSafariExtensionSettings() {

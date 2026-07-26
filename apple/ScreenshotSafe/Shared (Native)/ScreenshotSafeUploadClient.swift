@@ -14,6 +14,16 @@ struct ScreenshotSafeUploadResult: Decodable {
     }
 }
 
+struct ScreenshotSafePingResult: Decodable {
+    let username: String
+    let displayName: String
+
+    enum CodingKeys: String, CodingKey {
+        case username
+        case displayName = "display_name"
+    }
+}
+
 enum ScreenshotSafeUploadError: LocalizedError {
     case notConfigured
     case invalidServerURL
@@ -23,7 +33,7 @@ enum ScreenshotSafeUploadError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .notConfigured:
-            return "Add your ScreenshotSafe server URL and API token first."
+            return "Log in to a ScreenshotSafe server first."
         case .invalidServerURL:
             return "The ScreenshotSafe server URL is invalid."
         case .invalidResponse:
@@ -41,7 +51,10 @@ final class ScreenshotSafeUploadClient {
         self.session = session
     }
 
-    func verify(settings: ScreenshotSafeSettings, completion: @escaping (Result<Void, Error>) -> Void) {
+    func verify(
+        settings: ScreenshotSafeSettings,
+        completion: @escaping (Result<ScreenshotSafePingResult, Error>) -> Void
+    ) {
         guard settings.isConfigured else {
             completion(.failure(ScreenshotSafeUploadError.notConfigured))
             return
@@ -55,7 +68,7 @@ final class ScreenshotSafeUploadClient {
         var request = URLRequest(url: url)
         request.setValue("Bearer \(settings.apiToken)", forHTTPHeaderField: "Authorization")
 
-        session.dataTask(with: request) { _, response, error in
+        session.dataTask(with: request) { data, response, error in
             if let error = error {
                 completion(.failure(error))
                 return
@@ -66,13 +79,42 @@ final class ScreenshotSafeUploadClient {
                 return
             }
 
-            if http.statusCode == 200 {
-                completion(.success(()))
+            if http.statusCode == 200, let data = data {
+                do {
+                    completion(.success(try JSONDecoder().decode(ScreenshotSafePingResult.self, from: data)))
+                } catch {
+                    completion(.failure(error))
+                }
             } else if http.statusCode == 401 {
                 completion(.failure(ScreenshotSafeUploadError.server("The API token was rejected.")))
+            } else if http.statusCode == 403 {
+                completion(.failure(ScreenshotSafeUploadError.server("This ScreenshotSafe account is disabled.")))
+            } else if http.statusCode == 404 {
+                completion(.failure(ScreenshotSafeUploadError.server("This ScreenshotSafe server needs an update.")))
             } else {
                 completion(.failure(ScreenshotSafeUploadError.server("Server returned \(http.statusCode).")))
             }
+        }.resume()
+    }
+
+    func revoke(settings: ScreenshotSafeSettings, completion: @escaping (Bool) -> Void) {
+        guard
+            settings.isConfigured,
+            let url = endpoint(path: "/api/auth/extension/token", serverURL: settings.serverURL)
+        else {
+            completion(false)
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("Bearer \(settings.apiToken)", forHTTPHeaderField: "Authorization")
+        session.dataTask(with: request) { _, response, _ in
+            guard let http = response as? HTTPURLResponse else {
+                completion(false)
+                return
+            }
+            completion((200..<300).contains(http.statusCode) || http.statusCode == 401)
         }.resume()
     }
 
