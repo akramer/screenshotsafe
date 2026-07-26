@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <title>ScreenshotSafe Settings</title>
     <script src="webext-api.js"></script>
+    <script src="connections.js"></script>
     <script src="theme.js"></script>
     <style>
         :root {
@@ -108,7 +109,7 @@
             color: var(--text);
         }
         main {
-            width: min(520px, 100%);
+            width: min(760px, 100%);
             padding: 22px;
             border: 1px solid var(--border-subtle);
             border-radius: 10px;
@@ -205,21 +206,109 @@
         }
         .status.ok { color: var(--ok); }
         .status.bad { color: var(--bad); }
+        .section-heading {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin: 18px 0 10px;
+        }
+        .section-heading h2 { font-size: 14px; }
+        .server-list {
+            display: grid;
+            gap: 8px;
+        }
+        .server-row {
+            display: grid;
+            grid-template-columns: auto minmax(170px, 1fr) minmax(150px, auto) auto;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            background: var(--field-bg);
+        }
+        .server-row.active { border-color: var(--primary); }
+        .server-details { display: grid; gap: 3px; min-width: 0; }
+        .server-details strong {
+            overflow: hidden;
+            font-size: 13px;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .server-account { color: var(--muted); font-size: 12px; }
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 12px;
+        }
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--bad);
+        }
+        .status-connected .connection-dot { background: var(--ok); }
+        .status-checking .connection-dot { background: var(--muted); }
+        .server-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+        .small-button { min-height: 30px; padding: 5px 9px; font-size: 12px; }
+        .small-button.primary { background: var(--primary); color: #fff; }
+        .small-button.secondary {
+            border: 1px solid var(--border-strong);
+            background: var(--secondary-bg);
+            color: var(--text);
+        }
+        .small-button.danger {
+            border: 1px solid color-mix(in srgb, var(--bad) 35%, transparent);
+            background: transparent;
+            color: var(--bad);
+        }
+        .empty-state {
+            padding: 16px;
+            border: 1px dashed var(--border-strong);
+            border-radius: 8px;
+            color: var(--muted);
+            font-size: 13px;
+            text-align: center;
+        }
+        .add-server {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+        }
+        .add-server label { grid-column: 1 / -1; }
+        @media (max-width: 680px) {
+            .server-row { grid-template-columns: auto 1fr; }
+            .connection-status, .server-actions { grid-column: 2; justify-content: flex-start; }
+        }
     </style>
 </head>
 <body>
     <main>
         <h1>ScreenshotSafe Settings</h1>
-        <p class="subhead">Tell the extension where your ScreenshotSafe server lives. It will use your browser sign-in for uploads.</p>
+        <p class="subhead">Connect one or more ScreenshotSafe servers and choose where new screenshots are uploaded.</p>
         <div class="notice" id="notice"></div>
 
-        <div class="form-group">
+        <div class="section-heading">
+            <h2>Connected servers</h2>
+            <button class="small-button secondary" id="refresh-btn" type="button">Refresh all</button>
+        </div>
+        <div class="empty-state" id="empty-state">No ScreenshotSafe servers are connected yet.</div>
+        <div class="server-list" id="server-list"></div>
+
+        <div class="section-heading">
+            <h2>Add a server</h2>
+        </div>
+        <div class="form-group add-server">
             <label for="server-url">ScreenshotSafe Server</label>
-            <input type="text" id="server-url" placeholder="screenshots.example.com">
+            <input type="text" id="server-url" placeholder="screenshots.example.com" aria-label="ScreenshotSafe server">
+            <button class="primary" id="login-btn" type="button">Log in</button>
         </div>
 
         <div class="actions">
-            <button class="primary" id="save-btn" type="button">Save and Check</button>
+            <div></div>
             <button class="secondary" id="close-btn" type="button">Close</button>
         </div>
 

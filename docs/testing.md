@@ -22,6 +22,8 @@ Current tests cover these broad areas:
 - Expiry and cleanup behavior.
 - Buffered full-image hit counting, periodic and post-idle flush behavior, conditional `304` responses, and non-counted preview/failed requests.
 - API token creation/use/revocation behavior.
+- Chromium extension PKCE authorization, callback validation, one-time code
+  exchange, and self-revocation behavior.
 - OAuth account and identity edge cases where practical without an external provider.
 
 Unit-style tests also live near implementation code where useful, such as preview dimension behavior in `src/routes/share.rs` or image helpers.
@@ -35,7 +37,7 @@ Use these when a change touches frontend, extension, Safari, OAuth provider beha
 | Web dashboard | `cargo run`, create/login user, upload image, list and delete screenshots. |
 | Web editor | Open `/screenshots/{id}/edit`, add annotations, crop if relevant, save, reload share URL. |
 | Public share | Verify `/s/{share_id}`, `/s/{share_id}.png`, and `/s/{share_id}.preview.png`. |
-| Chromium extension | Load `extension/` unpacked, configure the server, capture a visible tab, edit, and upload. |
+| Chromium extension | Load `extension/` unpacked; log in to two servers; verify ping status, active-server switching, capture/edit/upload to each, reconnect, logout/revocation, and migration from a legacy `serverUrl`. |
 | Safari extension | Configure the native app with a setup link or QR code, run `scripts/build-safari-extension.sh`, enable the extension, check its connection, capture, edit, and upload. Confirm Safari never requests access to the ScreenshotSafe server. |
 | iOS Safari extension | Run `scripts/build-safari-extension.sh --ios`, then test the containing app and extension in the simulator or on a signed device. |
 | OAuth | Test against the configured provider with callback URL matching deployment config. |

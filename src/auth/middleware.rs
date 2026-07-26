@@ -208,3 +208,42 @@ impl FromRequestParts<SharedState> for ApiOrSessionUser {
         }
     }
 }
+
+/// Extractor for bearer-token-only routes that also need the token ID.
+pub struct ApiTokenUser {
+    pub user: User,
+    pub token_id: uuid::Uuid,
+}
+
+impl FromRequestParts<SharedState> for ApiTokenUser {
+    type Rejection = AppError;
+
+    fn from_request_parts(
+        parts: &mut Parts,
+        state: &SharedState,
+    ) -> impl std::future::Future<Output = Result<Self, Self::Rejection>> + Send {
+        let state = state.clone();
+        let headers = parts.headers.clone();
+        async move {
+            let token = headers
+                .get(header::AUTHORIZATION)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.strip_prefix("Bearer "))
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| AppError::unauthorized("missing bearer token"))?;
+            let token_hash = crate::auth::hash_token(token);
+            let (user, token_id) = state
+                .db
+                .get_user_by_token_hash(&token_hash)?
+                .ok_or_else(|| AppError::unauthorized("invalid or expired bearer token"))?;
+            if !user.account_status.is_enabled() {
+                return Err(AppError::forbidden(format!(
+                    "bearer token user '{}' is {}",
+                    user.username,
+                    user.account_status.as_str()
+                )));
+            }
+            Ok(ApiTokenUser { user, token_id })
+        }
+    }
+}

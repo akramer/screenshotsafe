@@ -37,7 +37,8 @@ By default ScreenshotSafe listens on:
 http://localhost:8080
 ```
 
-Open the app, create the first admin account, then use Settings to create an API token for the browser extension.
+Open the app and create the first admin account. The Chromium extension can then
+log in through the website and create its own revocable upload token.
 
 ## Configuration
 
@@ -205,9 +206,17 @@ For Chrome or another Chromium browser:
 1. Open the browser extension management page.
 2. Enable developer mode.
 3. Load `extension/` as an unpacked extension.
-4. Open the extension settings and enter your server URL.
+4. Open the extension settings, enter your server URL, and choose **Log in**.
+5. Sign in on the ScreenshotSafe website and approve the extension connection.
 
-The extension verifies the connection with `/api/ping`, captures the visible tab, opens a local editor, and uploads the finalized screenshot to your server.
+The extension can retain connections to multiple ScreenshotSafe servers. Its
+settings page shows the latest `/api/ping` result for each server and lets you
+choose the active upload destination. Connection checks and uploads use a
+per-installation bearer token rather than the website session cookie. Tokens can
+be revoked by logging out in the extension or from the server Settings page.
+
+The extension requires HTTPS for remote servers. Plain HTTP is accepted only for
+loopback development addresses such as `localhost` and `127.0.0.1`.
 
 The privacy policy for store listings or public installs is available in [docs/privacy-policy.md](docs/privacy-policy.md).
 

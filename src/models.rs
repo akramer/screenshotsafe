@@ -124,6 +124,17 @@ pub struct ApiToken {
     pub expires_at: Option<DateTime<Utc>>,
 }
 
+/// A short-lived, single-use code used to authorize a browser extension.
+#[derive(Debug, Clone)]
+pub struct ExtensionAuthorizationCode {
+    pub code_hash: String,
+    pub user_id: Uuid,
+    pub redirect_uri: String,
+    pub code_challenge: String,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: DateTime<Utc>,
+}
+
 /// A screenshot with its metadata and annotation state.
 #[derive(Debug, Clone, Serialize)]
 pub struct Screenshot {

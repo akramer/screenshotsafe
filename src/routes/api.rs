@@ -6,6 +6,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     Json,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use qrcode::{render::svg, QrCode};
@@ -13,10 +14,11 @@ use serde::{Deserialize, Serialize};
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
-use crate::auth::middleware::{AdminUser, ApiOrSessionUser, AuthUser, MaybeAuthUser};
+use crate::auth::middleware::{AdminUser, ApiOrSessionUser, ApiTokenUser, AuthUser, MaybeAuthUser};
 use crate::config::OAuthAccountMode;
 use crate::models::{
-    AccountStatus, Annotation, ApiToken, CropRect, OAuthIdentity, Screenshot, ThemePreference, User,
+    AccountStatus, Annotation, ApiToken, CropRect, ExtensionAuthorizationCode, OAuthIdentity,
+    Screenshot, ThemePreference, User,
 };
 use crate::{auth, image_processing, share_id, AppError, SharedState};
 
@@ -101,6 +103,7 @@ pub async fn setup(
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
+    pub return_to: Option<String>,
 }
 
 pub async fn login(
@@ -145,6 +148,7 @@ pub async fn login(
         ]),
         Json(serde_json::json!({
             "ok": true,
+            "redirect_to": safe_return_to(req.return_to.as_deref()).unwrap_or("/"),
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -161,12 +165,14 @@ pub async fn login(
 struct OAuthStateClaims {
     sub: Option<String>,
     nonce: String,
+    return_to: Option<String>,
     exp: usize,
 }
 
 #[derive(Deserialize)]
 pub struct OAuthStartQuery {
     link: Option<bool>,
+    return_to: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -231,6 +237,7 @@ pub async fn oauth_start(
     let oauth_state = OAuthStateClaims {
         sub: link_user_id,
         nonce: Uuid::new_v4().to_string(),
+        return_to: safe_return_to(params.return_to.as_deref()).map(str::to_string),
         exp: chrono::Utc::now().timestamp() as usize + 10 * 60,
     };
     let state_token = encode(
@@ -409,8 +416,9 @@ pub async fn oauth_callback(
             return Ok(Redirect::to("/login?oauth=pending").into_response());
         }
         state.db.update_user_last_login(&user.id)?;
+        let return_to = safe_return_to(state_claims.return_to.as_deref()).unwrap_or("/");
         return Ok(with_session_cookie(
-            Redirect::to("/").into_response(),
+            Redirect::to(return_to).into_response(),
             &state,
             &headers,
             &user.id,
@@ -452,8 +460,9 @@ pub async fn oauth_callback(
             state.db.create_user_with_oauth_identity(&user, &identity)?;
 
             if account_status.is_enabled() {
+                let return_to = safe_return_to(state_claims.return_to.as_deref()).unwrap_or("/");
                 Ok(with_session_cookie(
-                    Redirect::to("/").into_response(),
+                    Redirect::to(return_to).into_response(),
                     &state,
                     &headers,
                     &user.id,
@@ -557,6 +566,17 @@ fn non_empty(value: &str) -> Option<String> {
 
 fn non_empty_opt(value: &Option<String>) -> Option<String> {
     value.as_deref().and_then(non_empty)
+}
+
+pub(crate) fn safe_return_to(value: Option<&str>) -> Option<&str> {
+    value.filter(|value| {
+        value.starts_with('/')
+            && !value.starts_with("//")
+            && !value.contains('\\')
+            && !value.chars().any(|character| {
+                character.is_control() || matches!(character, '<' | '>' | '"' | '\'')
+            })
+    })
 }
 
 fn oauth_redirect_uri(
@@ -1451,7 +1471,8 @@ fn format_bytes(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        oauth_redirect_uri, openid_discovery_url, sanitize_email_username, sanitize_username,
+        oauth_redirect_uri, openid_discovery_url, safe_return_to, sanitize_email_username,
+        sanitize_username,
     };
     use crate::config::OAuthConfig;
     use axum::http::{header, HeaderMap, HeaderValue};
@@ -1468,6 +1489,20 @@ mod tests {
     fn oauth_non_email_username_uses_regular_sanitizer() {
         assert_eq!(sanitize_email_username("Not An Email"), "not-an-email");
         assert_eq!(sanitize_username("Display Name"), "display-name");
+    }
+
+    #[test]
+    fn return_to_only_accepts_safe_local_paths() {
+        assert_eq!(
+            safe_return_to(Some("/extension/authorize?state=safe")),
+            Some("/extension/authorize?state=safe")
+        );
+        assert_eq!(safe_return_to(Some("//attacker.example")), None);
+        assert_eq!(safe_return_to(Some("https://attacker.example")), None);
+        assert_eq!(
+            safe_return_to(Some("/</script><script>alert(1)</script>")),
+            None
+        );
     }
 
     #[test]
@@ -1841,6 +1876,222 @@ async fn stream_png_file(path: impl AsRef<std::path::Path>) -> std::io::Result<B
     Ok(Body::from_stream(ReaderStream::new(file)))
 }
 
+// ── Browser Extension Authorization ──
+
+#[derive(Deserialize)]
+pub struct AuthorizeExtensionRequest {
+    pub redirect_uri: String,
+    pub state: String,
+    pub code_challenge: String,
+    pub code_challenge_method: String,
+}
+
+#[derive(Deserialize)]
+pub struct ExchangeExtensionCodeRequest {
+    pub code: String,
+    pub code_verifier: String,
+    pub redirect_uri: String,
+}
+
+pub async fn authorize_extension(
+    State(state): State<SharedState>,
+    AuthUser(user): AuthUser,
+    Json(req): Json<AuthorizeExtensionRequest>,
+) -> crate::Result<impl IntoResponse> {
+    validate_extension_redirect_uri(&req.redirect_uri)?;
+    validate_extension_state(&req.state)?;
+    validate_pkce_challenge(&req.code_challenge, &req.code_challenge_method)?;
+
+    let raw_code = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+    let now = Utc::now();
+    let code = ExtensionAuthorizationCode {
+        code_hash: auth::hash_token(&raw_code),
+        user_id: user.id,
+        redirect_uri: req.redirect_uri.clone(),
+        code_challenge: req.code_challenge,
+        created_at: now,
+        expires_at: now + chrono::Duration::minutes(5),
+    };
+    state.db.create_extension_authorization_code(&code)?;
+
+    let redirect_url = format!(
+        "{}?code={}&state={}",
+        req.redirect_uri,
+        urlencoding::encode(&raw_code),
+        urlencoding::encode(&req.state),
+    );
+    Ok(Json(serde_json::json!({ "redirect_url": redirect_url })))
+}
+
+pub async fn exchange_extension_code(
+    State(state): State<SharedState>,
+    Json(req): Json<ExchangeExtensionCodeRequest>,
+) -> crate::Result<impl IntoResponse> {
+    validate_extension_redirect_uri(&req.redirect_uri)?;
+    validate_pkce_verifier(&req.code_verifier)?;
+    if req.code.len() < 32 || req.code.len() > 256 {
+        return Err(AppError::BadRequest(
+            "Invalid extension authorization code.".into(),
+        ));
+    }
+
+    let code_hash = auth::hash_token(&req.code);
+    let authorization = state
+        .db
+        .get_extension_authorization_code(&code_hash)?
+        .ok_or_else(|| {
+            AppError::BadRequest("Invalid or expired extension authorization code.".into())
+        })?;
+    if authorization.redirect_uri != req.redirect_uri {
+        return Err(AppError::BadRequest(
+            "Extension redirect URI did not match.".into(),
+        ));
+    }
+
+    let challenge = pkce_challenge(&req.code_verifier);
+    if !constant_time_eq(
+        challenge.as_bytes(),
+        authorization.code_challenge.as_bytes(),
+    ) {
+        return Err(AppError::BadRequest(
+            "Extension PKCE verification failed.".into(),
+        ));
+    }
+
+    let user = state
+        .db
+        .get_user_by_id(&authorization.user_id)?
+        .ok_or_else(|| AppError::unauthorized("extension authorization user was not found"))?;
+    if !user.account_status.is_enabled() {
+        return Err(AppError::forbidden(format!(
+            "extension authorization user '{}' is {}",
+            user.username,
+            user.account_status.as_str()
+        )));
+    }
+
+    let raw_token = share_id::generate_api_token();
+    let token = ApiToken {
+        id: Uuid::new_v4(),
+        user_id: user.id,
+        token_hash: auth::hash_token(&raw_token),
+        label: format!("Chrome Extension — {}", Utc::now().format("%b %-d, %Y")),
+        created_at: Utc::now(),
+        last_used_at: None,
+        expires_at: None,
+    };
+    if !state
+        .db
+        .consume_extension_authorization_code(&code_hash, &token)?
+    {
+        return Err(AppError::BadRequest(
+            "Extension authorization code was already used.".into(),
+        ));
+    }
+
+    Ok((
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "token": raw_token,
+            "token_id": token.id,
+            "display_name": user.display_name,
+            "username": user.username,
+        })),
+    ))
+}
+
+pub async fn revoke_current_extension_token(
+    State(state): State<SharedState>,
+    auth: ApiTokenUser,
+) -> crate::Result<StatusCode> {
+    if !state.db.delete_token(&auth.token_id, &auth.user.id)? {
+        return Err(AppError::NotFound);
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub(crate) fn validate_extension_redirect_uri(redirect_uri: &str) -> crate::Result<()> {
+    let url = url::Url::parse(redirect_uri)
+        .map_err(|_| AppError::BadRequest("Invalid extension redirect URI.".into()))?;
+    let host = url
+        .host_str()
+        .ok_or_else(|| AppError::BadRequest("Invalid extension redirect URI.".into()))?;
+    let extension_id = host
+        .strip_suffix(".chromiumapp.org")
+        .ok_or_else(|| AppError::BadRequest("Invalid extension redirect URI.".into()))?;
+    let valid_id = extension_id.len() == 32
+        && extension_id
+            .bytes()
+            .all(|byte| (b'a'..=b'p').contains(&byte));
+    if url.scheme() != "https"
+        || !valid_id
+        || url.port().is_some()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || url.path() != "/screenshotsafe"
+    {
+        return Err(AppError::BadRequest(
+            "Invalid extension redirect URI.".into(),
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_extension_state(state: &str) -> crate::Result<()> {
+    if !(16..=512).contains(&state.len())
+        || !state
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(AppError::BadRequest("Invalid extension state.".into()));
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_pkce_challenge(challenge: &str, method: &str) -> crate::Result<()> {
+    if method != "S256"
+        || challenge.len() != 43
+        || !challenge
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(AppError::BadRequest(
+            "Invalid extension PKCE challenge.".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_pkce_verifier(verifier: &str) -> crate::Result<()> {
+    if !(43..=128).contains(&verifier.len())
+        || !verifier
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~'))
+    {
+        return Err(AppError::BadRequest(
+            "Invalid extension PKCE verifier.".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn pkce_challenge(verifier: &str) -> String {
+    use sha2::{Digest, Sha256};
+    URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()))
+}
+
+fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    left.iter()
+        .zip(right)
+        .fold(0u8, |difference, (a, b)| difference | (a ^ b))
+        == 0
+}
+
 // ── API Tokens ──
 
 #[derive(Deserialize)]
@@ -1942,6 +2193,8 @@ pub async fn ping(
 ) -> crate::Result<Json<serde_json::Value>> {
     Ok(Json(serde_json::json!({
         "ok": true,
+        "username": user.username,
+        "display_name": user.display_name,
         "theme_preference": user.theme_preference,
     })))
 }

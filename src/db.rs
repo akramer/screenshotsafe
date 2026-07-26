@@ -103,6 +103,15 @@ impl Database {
                 expires_at TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS extension_authorization_codes (
+                code_hash TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                redirect_uri TEXT NOT NULL,
+                code_challenge TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS screenshots (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -126,6 +135,8 @@ impl Database {
             CREATE INDEX IF NOT EXISTS idx_screenshots_expires_at ON screenshots(expires_at);
             CREATE INDEX IF NOT EXISTS idx_api_tokens_token_hash ON api_tokens(token_hash);
             CREATE INDEX IF NOT EXISTS idx_oauth_identities_user_id ON oauth_identities(user_id);
+            CREATE INDEX IF NOT EXISTS idx_extension_authorization_codes_expires_at
+                ON extension_authorization_codes(expires_at);
             ",
         )?;
         add_column_if_missing(&conn, "users", "is_admin", "INTEGER NOT NULL DEFAULT 0")?;
@@ -875,6 +886,93 @@ impl Database {
             params![id.to_string(), user_id.to_string()],
         )?;
         Ok(rows > 0)
+    }
+
+    pub fn create_extension_authorization_code(
+        &self,
+        code: &crate::models::ExtensionAuthorizationCode,
+    ) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "DELETE FROM extension_authorization_codes
+             WHERE datetime(expires_at) <= datetime('now')",
+            [],
+        )?;
+        conn.execute(
+            "INSERT INTO extension_authorization_codes
+                (code_hash, user_id, redirect_uri, code_challenge, created_at, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                code.code_hash,
+                code.user_id.to_string(),
+                code.redirect_uri,
+                code.code_challenge,
+                code.created_at.to_rfc3339(),
+                code.expires_at.to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_extension_authorization_code(
+        &self,
+        code_hash: &str,
+    ) -> Result<Option<crate::models::ExtensionAuthorizationCode>> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn
+            .query_row(
+                "SELECT code_hash, user_id, redirect_uri, code_challenge, created_at, expires_at
+                 FROM extension_authorization_codes
+                 WHERE code_hash = ?1 AND datetime(expires_at) > datetime('now')",
+                params![code_hash],
+                |row| {
+                    Ok(crate::models::ExtensionAuthorizationCode {
+                        code_hash: row.get(0)?,
+                        user_id: row.get::<_, String>(1)?.parse().unwrap(),
+                        redirect_uri: row.get(2)?,
+                        code_challenge: row.get(3)?,
+                        created_at: parse_datetime(&row.get::<_, String>(4)?),
+                        expires_at: parse_datetime(&row.get::<_, String>(5)?),
+                    })
+                },
+            )
+            .optional()?;
+        Ok(result)
+    }
+
+    /// Atomically consumes an authorization code and creates its API token.
+    pub fn consume_extension_authorization_code(
+        &self,
+        code_hash: &str,
+        token: &ApiToken,
+    ) -> Result<bool> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        let deleted = tx.execute(
+            "DELETE FROM extension_authorization_codes
+             WHERE code_hash = ?1
+               AND user_id = ?2
+               AND datetime(expires_at) > datetime('now')",
+            params![code_hash, token.user_id.to_string()],
+        )?;
+        if deleted != 1 {
+            tx.rollback()?;
+            return Ok(false);
+        }
+        tx.execute(
+            "INSERT INTO api_tokens (id, user_id, token_hash, label, created_at, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                token.id.to_string(),
+                token.user_id.to_string(),
+                token.token_hash,
+                token.label,
+                token.created_at.to_rfc3339(),
+                token.expires_at.map(|t| t.to_rfc3339()),
+            ],
+        )?;
+        tx.commit()?;
+        Ok(true)
     }
 
     /// Delete expired screenshots and return their file paths for cleanup.

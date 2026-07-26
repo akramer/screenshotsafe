@@ -3,7 +3,6 @@
 
     const themes = new Set(['light', 'dark', 'os_default']);
     const cachedThemeKey = 'sss:themePreference';
-    const ext = window.sssWebExt;
 
     document.documentElement.dataset.themeLoading = 'true';
     applyTheme(readCachedTheme());
@@ -11,22 +10,20 @@
 
     async function init() {
         try {
-            const settings = await ext.storage.get(['serverUrl']);
-            if (!settings.serverUrl) {
-                return;
-            }
-
-            const theme = await getAuthenticatedTheme(settings.serverUrl);
+            const connection = await window.sssConnections.getActiveConnection();
+            if (!connection) return;
+            const theme = await getAuthenticatedTheme(connection);
             if (theme) applyTheme(theme);
         } catch (_) {}
     }
 
-    async function getAuthenticatedTheme(serverUrl) {
+    async function getAuthenticatedTheme(connection) {
         try {
-            const resp = await fetch(`${serverUrl}/api/ping`, {
+            const resp = await fetch(`${connection.origin}/api/ping`, {
                 cache: 'no-store',
                 mode: 'cors',
-                credentials: 'include',
+                credentials: 'omit',
+                headers: window.sssConnections.authorizationHeaders(connection),
             });
             if (!resp.ok) return null;
 

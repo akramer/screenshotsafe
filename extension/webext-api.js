@@ -71,6 +71,14 @@
         return call(api.permissions, 'request', [{ origins: [origin] }]);
     }
 
+    async function removeOrigin(serverUrl) {
+        if (!api || !api.permissions || typeof api.permissions.remove !== 'function') {
+            return false;
+        }
+        const origin = new URL(serverUrl).origin + '/*';
+        return call(api.permissions, 'remove', [{ origins: [origin] }]);
+    }
+
     window.sssWebExt = {
         storage: {
             async get(keys) {
@@ -91,6 +99,18 @@
         },
         permissions: {
             requestOrigin,
+            removeOrigin,
+        },
+        identity: {
+            getRedirectURL(path) {
+                if (!api || !api.identity || typeof api.identity.getRedirectURL !== 'function') {
+                    throw new Error('Chrome identity API is unavailable.');
+                }
+                return api.identity.getRedirectURL(path);
+            },
+            launchWebAuthFlow(details) {
+                return call(api && api.identity, 'launchWebAuthFlow', [details]);
+            },
         },
         runtime: {
             getURL(path) {

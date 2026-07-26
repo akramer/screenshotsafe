@@ -52,6 +52,22 @@ SQLite stores users, OAuth identities, API token hashes, and screenshot metadata
 3. `POST /api/auth/login` verifies a password and sets the `session` JWT cookie.
 4. OAuth sign-in/linking starts at `/api/auth/oauth/start` and returns through `/api/auth/oauth/callback`.
 
+### Chromium Extension Authorization
+
+1. The extension requests runtime host access for a user-entered server.
+2. It generates a random state and PKCE-S256 verifier/challenge, then starts
+   Chrome's interactive web-auth flow at `/extension/authorize`.
+3. ScreenshotSafe preserves the authorization request through password or OAuth
+   login and displays an explicit approval page.
+4. Approval returns a short-lived, single-use code through Chrome's
+   `chromiumapp.org` callback.
+5. The extension verifies state and exchanges the code plus PKCE verifier at
+   `/api/auth/extension/token`.
+6. The server atomically consumes the code, stores a hash of a new API token, and
+   returns the raw token once.
+7. The extension stores connections locally and uses the selected server's
+   bearer token for ping and upload requests.
+
 ### Screenshot Upload
 
 1. Client posts multipart data to `POST /api/screenshots`.
@@ -85,5 +101,7 @@ SQLite stores users, OAuth identities, API token hashes, and screenshot metadata
 - Admin routes must use `AdminUser`.
 - Disabled and pending accounts cannot authenticate through password, session cookie, or API token.
 - Bearer API tokens are stored as hashes, never as plaintext.
+- Chromium extension authorization never places a permanent token in a redirect
+  URL. Its temporary codes are hashed, PKCE-bound, short-lived, and single-use.
 - Share IDs are public identifiers; database UUIDs remain internal API identifiers.
 - Full-image hit counts are eventually consistent and can lag by one flush interval. A process crash can lose the current in-memory batch.

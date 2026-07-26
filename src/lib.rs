@@ -122,6 +122,10 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/", get(routes::pages::dashboard))
         .route("/setup", get(routes::pages::setup_page))
         .route("/login", get(routes::pages::login_page))
+        .route(
+            "/extension/authorize",
+            get(routes::pages::extension_authorize_page),
+        )
         .route("/screenshots/{id}/edit", get(routes::pages::editor_page))
         .route("/settings", get(routes::pages::settings_page))
         .route("/admin", get(routes::pages::admin_page))
@@ -135,6 +139,14 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/api/auth/login", post(routes::api::login))
         .route("/api/auth/oauth/start", get(routes::api::oauth_start))
         .route("/api/auth/oauth/callback", get(routes::api::oauth_callback))
+        .route(
+            "/api/auth/extension/authorize",
+            post(routes::api::authorize_extension),
+        )
+        .route(
+            "/api/auth/extension/token",
+            post(routes::api::exchange_extension_code),
+        )
         .route("/api/auth/password", put(routes::api::change_password))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
@@ -187,6 +199,10 @@ pub fn build_router(state: SharedState) -> Router {
         .route("/api/auth/tokens", post(routes::api::create_token))
         .route("/api/auth/tokens", get(routes::api::list_tokens))
         .route("/api/auth/tokens/{id}", delete(routes::api::revoke_token))
+        .route(
+            "/api/auth/extension/token",
+            delete(routes::api::revoke_current_extension_token),
+        )
         .merge(sensitive_auth_routes);
 
     let cors_state = state.clone();

@@ -1,8 +1,9 @@
 use axum::{
     extract::{Path, Query, State},
-    http::HeaderMap,
-    response::{Html, IntoResponse, Redirect},
+    http::{header, HeaderMap, HeaderValue},
+    response::{Html, IntoResponse, Redirect, Response},
 };
+use serde::Deserialize;
 use std::collections::HashMap;
 
 use crate::auth::middleware::{AdminUser, AuthUser, MaybeAuthUser};
@@ -38,6 +39,122 @@ const LOCAL_TIME_SCRIPT: &str = r#"<script>
             });
         })();
     </script>"#;
+
+#[derive(Deserialize)]
+pub struct ExtensionAuthorizePageQuery {
+    redirect_uri: String,
+    state: String,
+    code_challenge: String,
+    code_challenge_method: String,
+}
+
+/// Interactive approval page for the Chromium extension PKCE flow.
+pub async fn extension_authorize_page(
+    Query(params): Query<ExtensionAuthorizePageQuery>,
+    user: MaybeAuthUser,
+) -> crate::Result<Response> {
+    crate::routes::api::validate_extension_redirect_uri(&params.redirect_uri)?;
+    crate::routes::api::validate_extension_state(&params.state)?;
+    crate::routes::api::validate_pkce_challenge(
+        &params.code_challenge,
+        &params.code_challenge_method,
+    )?;
+
+    let authorize_path = format!(
+        "/extension/authorize?redirect_uri={}&state={}&code_challenge={}&code_challenge_method=S256",
+        urlencoding::encode(&params.redirect_uri),
+        urlencoding::encode(&params.state),
+        urlencoding::encode(&params.code_challenge),
+    );
+    let Some(user) = user.0 else {
+        let login_url = format!(
+            "/login?extension=authorize&return_to={}",
+            urlencoding::encode(&authorize_path)
+        );
+        return Ok(Redirect::temporary(&login_url).into_response());
+    };
+
+    let cancel_url = format!(
+        "{}?error=access_denied&state={}",
+        params.redirect_uri,
+        urlencoding::encode(&params.state),
+    );
+    let html = r#"<!DOCTYPE html>
+<html lang="en" data-theme="{{THEME}}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Authorize ScreenshotSafe Extension</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="auth-header">
+                <h1>📸 Connect Chrome</h1>
+                <p>Allow the ScreenshotSafe Chrome extension to upload screenshots as <strong>{{DISPLAY_NAME}}</strong>?</p>
+            </div>
+            <div class="settings-message settings-message-success auth-message">
+                The extension will receive a permanent, revocable upload token. It will not receive your password.
+            </div>
+            <input type="hidden" id="redirect-uri" value="{{REDIRECT_URI}}">
+            <input type="hidden" id="auth-state" value="{{STATE}}">
+            <input type="hidden" id="code-challenge" value="{{CODE_CHALLENGE}}">
+            <div id="error-msg" class="error-msg" style="display:none"></div>
+            <button class="btn btn-primary btn-full" id="approve-btn" type="button">Allow Extension</button>
+            <a class="btn btn-outline btn-full" href="{{CANCEL_URL}}">Cancel</a>
+        </div>
+    </div>
+    <script>
+        document.getElementById('approve-btn').addEventListener('click', async () => {
+            const button = document.getElementById('approve-btn');
+            const error = document.getElementById('error-msg');
+            button.disabled = true;
+            error.style.display = 'none';
+            try {
+                const response = await fetch('/api/auth/extension/authorize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        redirect_uri: document.getElementById('redirect-uri').value,
+                        state: document.getElementById('auth-state').value,
+                        code_challenge: document.getElementById('code-challenge').value,
+                        code_challenge_method: 'S256',
+                    }),
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Authorization failed.');
+                window.location.assign(data.redirect_url);
+            } catch (err) {
+                error.textContent = err.message;
+                error.style.display = 'block';
+                button.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>"#
+        .replace("{{THEME}}", theme_attr(user.theme_preference))
+        .replace("{{DISPLAY_NAME}}", &html_escape(&user.display_name))
+        .replace("{{REDIRECT_URI}}", &html_escape(&params.redirect_uri))
+        .replace("{{STATE}}", &html_escape(&params.state))
+        .replace("{{CODE_CHALLENGE}}", &html_escape(&params.code_challenge))
+        .replace("{{CANCEL_URL}}", &html_escape(&cancel_url));
+    let mut response = Html(html).into_response();
+    response
+        .headers_mut()
+        .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response.headers_mut().insert(
+        header::REFERRER_POLICY,
+        HeaderValue::from_static("no-referrer"),
+    );
+    response
+        .headers_mut()
+        .insert(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY"));
+    Ok(response)
+}
+
 /// Dashboard page — lists all screenshots for the logged-in user.
 /// Redirects to /setup if no users exist, or /login if not authenticated.
 pub async fn dashboard(
@@ -313,16 +430,26 @@ pub async fn login_page(
             r#"<div class="settings-message settings-message-error auth-message">Extension not able to access ScreenshotSafe. Please log in and try again.</div>"#
                 .to_string()
         }
+        Some("authorize") => {
+            r#"<div class="settings-message settings-message-success auth-message">Sign in to connect the ScreenshotSafe Chrome extension.</div>"#
+                .to_string()
+        }
         _ => String::new(),
     };
+    let return_to = crate::routes::api::safe_return_to(params.get("return_to").map(String::as_str));
+    let oauth_return_to = return_to
+        .map(|value| format!("?return_to={}", urlencoding::encode(value)))
+        .unwrap_or_default();
     let oauth_button = if state.config.auth.oauth.enabled {
         format!(
-            r#"<a class="btn btn-outline btn-full oauth-login-btn" href="/api/auth/oauth/start">Sign in with {}</a>"#,
-            idp_name
+            r#"<a class="btn btn-outline btn-full oauth-login-btn" href="/api/auth/oauth/start{}">Sign in with {}</a>"#,
+            oauth_return_to, idp_name
         )
     } else {
         String::new()
     };
+    let return_to_json =
+        serde_json::to_string(&return_to.unwrap_or("/")).unwrap_or_else(|_| "\"/\"".to_string());
 
     let html = r#"<!DOCTYPE html>
 <html lang="en" data-theme="{{THEME}}">
@@ -366,6 +493,7 @@ pub async fn login_page(
             const body = {
                 username: document.getElementById('username').value,
                 password: document.getElementById('password').value,
+                return_to: {{RETURN_TO}},
             };
 
             const resp = await fetch('/api/auth/login', {
@@ -375,7 +503,8 @@ pub async fn login_page(
             });
 
             if (resp.ok) {
-                window.location.href = '/';
+                const data = await resp.json();
+                window.location.href = data.redirect_to || '/';
             } else {
                 errEl.textContent = 'Invalid username or password';
                 errEl.style.display = 'block';
@@ -387,6 +516,7 @@ pub async fn login_page(
     .replace("{{OAUTH_MESSAGE}}", &oauth_message)
     .replace("{{EXTENSION_MESSAGE}}", &extension_message)
     .replace("{{OAUTH_BUTTON}}", &oauth_button)
+    .replace("{{RETURN_TO}}", &return_to_json)
     .replace("{{THEME}}", theme_from_cookie(&headers).as_str());
 
     Ok(Html(html).into_response())

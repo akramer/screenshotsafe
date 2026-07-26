@@ -13,6 +13,8 @@ These are the assumptions that should stay true as the project evolves. When cha
 - `AdminUser` means session-cookie auth plus `is_admin`.
 - Cookie-authenticated `/api/*` requests must come from the app origin, a trusted Chrome extension origin, or a configured allowed extension origin. Safari WebExtension origins are not trusted by default.
 - API tokens are stored as hashes. The raw token is only returned when created.
+- Chromium extension authorization redirects contain only short-lived,
+  single-use codes; permanent API tokens must not appear in redirect URLs.
 
 ## OAuth
 
@@ -55,6 +57,11 @@ These are the assumptions that should stay true as the project evolves. When cha
 ## Browser Extension And Safari
 
 - `extension/` is the canonical Chromium WebExtension source.
+- Chromium stores a local list of server origins and bearer tokens, with exactly
+  zero or one active upload server.
+- Chromium server entries are origin-only, and non-loopback connections must use
+  HTTPS.
+- A screenshot draft remains bound to the server selected when it was captured.
 - `apple/ScreenshotSafe/Shared (Safari Extension)/Resources/` is the canonical Safari WebExtension source.
 - The checked-in Xcode project is maintained directly and must not be regenerated over with `safari-web-extension-converter`.
 - Safari WebExtension code must not request server host permissions or send server requests directly.

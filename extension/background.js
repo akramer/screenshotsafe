@@ -5,6 +5,8 @@
  * handoff for the full-tab editor.
  */
 
+importScripts('connections.js');
+
 const api = globalThis.browser || globalThis.chrome;
 const usesChromeCallbackApi = Boolean(globalThis.chrome && api === globalThis.chrome);
 
@@ -98,7 +100,7 @@ if (api && api.contextMenus && api.contextMenus.onClicked) {
 async function captureAndOpenEditor(tab) {
     const settings = await getSettings();
     const activeTab = tab || (await queryActiveTab());
-    if (!settings.serverUrl) {
+    if (!settings.serverUrl || !settings.connection || !settings.connection.token) {
         await openSettings('missing');
         return;
     }
@@ -118,6 +120,7 @@ async function captureAndOpenEditor(tab) {
         title: activeTab.title || 'Screenshot',
         sourceUrl: activeTab.url || '',
         viewportWidth: activeTab.width || null,
+        serverOrigin: settings.serverUrl,
     });
 
     await call(api.tabs, 'create', [{
@@ -135,16 +138,15 @@ function captureAfterDelay(tab, delayMs) {
 }
 
 async function getSettings() {
-    if (!api || !api.storage || !api.storage.local) {
-        return { serverUrl: '' };
-    }
-
     try {
-        const settings = await call(api.storage.local, 'get', [['serverUrl']]);
-        return { serverUrl: settings.serverUrl || '' };
+        const connection = await globalThis.sssConnections.getActiveConnection();
+        return {
+            serverUrl: connection ? connection.origin : '',
+            connection,
+        };
     } catch (err) {
         console.error('ScreenshotSafe settings load failed:', err.message);
-        return { serverUrl: '' };
+        return { serverUrl: '', connection: null };
     }
 }
 
@@ -167,12 +169,8 @@ async function openSettings(reason) {
     }]);
 }
 
-async function handleLoginRequired(settings, reason, tab) {
-    if (settings && settings.serverUrl) {
-        await call(api.tabs, 'create', [{ url: settings.serverUrl }]);
-    } else {
-        await openSettings('missing');
-    }
+async function handleLoginRequired(_settings, reason, _tab) {
+    await openSettings(reason || 'login-required');
 }
 
 async function createSettingsMenu() {

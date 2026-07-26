@@ -22,7 +22,11 @@
 
     async function init() {
         try {
-            settings = await ext.storage.get(['serverUrl']);
+            const connection = await window.sssConnections.getActiveConnection();
+            settings = {
+                serverUrl: connection ? connection.origin : '',
+                connection,
+            };
             await checkConnection();
         } catch (err) {
             markInvalid(err.message);
@@ -31,7 +35,7 @@
     }
 
     async function checkConnection() {
-        if (!settings.serverUrl) {
+        if (!settings.serverUrl || !settings.connection || !settings.connection.token) {
             markInvalid('Settings required');
             openSettings('missing');
             return;
@@ -41,7 +45,8 @@
             const resp = await fetch(`${settings.serverUrl}/api/ping`, {
                 cache: 'no-store',
                 mode: 'cors',
-                credentials: 'include',
+                credentials: 'omit',
+                headers: window.sssConnections.authorizationHeaders(settings.connection),
             });
 
             if (resp.ok) {
@@ -86,6 +91,7 @@
                     dataUrl,
                     title: tab.title || 'Screenshot',
                     sourceUrl: tab.url || '',
+                    serverOrigin: settings.serverUrl,
                 },
             });
 

@@ -18,12 +18,19 @@ This policy describes the ScreenshotSafe browser extension and the self-hosted S
 The ScreenshotSafe extension may handle the following information:
 
 - Server URL: the ScreenshotSafe server address configured for the browser extension or native app.
-- API token: the token configured in the native ScreenshotSafe app so Safari and native share extensions can upload screenshots.
+- API token: a revocable upload token created for a Chromium extension
+  connection or configured in the native ScreenshotSafe app.
 - Visible-tab screenshot: the image captured when you intentionally use the extension to take a screenshot.
 - Page metadata: the page title and source URL associated with the captured screenshot.
 - Edited screenshot content: cropped or redacted screenshot data that you choose to upload.
 
-The Chromium extension stores its server URL in local extension storage. On Apple platforms, the native ScreenshotSafe app stores the server URL and API token in an app group shared with its extensions; Safari WebExtension JavaScript does not receive the raw token. Screenshot drafts are held temporarily while you review, crop, or redact them before upload.
+The Chromium extension stores its connected server origins, selected server, API
+tokens, and latest connection-check results in local extension storage. These
+values are not stored in browser sync storage. On Apple platforms, the native
+ScreenshotSafe app stores the server URL and API token in an app group shared
+with its extensions; Safari WebExtension JavaScript does not receive the raw
+token. Screenshot drafts are held temporarily while you review, crop, or redact
+them before upload.
 
 ## How Information Is Used
 
@@ -53,7 +60,11 @@ Screenshots uploaded to a ScreenshotSafe server may be shared through links gene
 
 ## Retention and Deletion
 
-The Chromium extension keeps its configured server URL until you change it or uninstall the extension. On Apple platforms, the native app keeps the server URL and API token until you replace them or remove the app and its stored data.
+The Chromium extension keeps connected server origins and their API tokens until
+you log out, remove them, or uninstall the extension. Logging out attempts to
+revoke the corresponding server token before removing it locally. On Apple
+platforms, the native app keeps the server URL and API token until you replace
+them or remove the app and its stored data.
 
 Temporary screenshot drafts in the extension are short-lived and are used only to support the pre-upload editing flow.
 
@@ -65,7 +76,10 @@ The extensions request browser permissions needed for their core features:
 
 - `activeTab`: to capture the currently active visible tab after you invoke the extension.
 - `contextMenus`: to provide screenshot and settings actions from the browser context menu.
-- `storage` in Chromium: to save the configured server URL locally in the browser.
+- `storage` in Chromium: to save connected servers, bearer tokens, selected
+  upload destination, and connection status locally in the browser.
+- `identity` in Chromium: to complete the interactive ScreenshotSafe website
+  login and approval flow without exposing the permanent token in a redirect.
 - `nativeMessaging` in Safari: to ask the native app to check its configuration and upload finalized screenshots.
 
 The Safari extension does not request host permission for the configured ScreenshotSafe server. Its native component performs server requests.

@@ -55,19 +55,16 @@
                 throw new Error('Missing screenshot draft. Capture again from the extension popup.');
             }
 
-            settings = await ext.storage.get(['serverUrl']);
-            if (!settings.serverUrl) {
-                throw new Error('ScreenshotSafe is not configured. Save your server domain in the extension settings.');
-            }
-
-            await redirectToLoginIfNeeded();
-
             const response = await ext.runtime.sendMessage({ type: 'sss-get-draft', id });
             if (!response || !response.ok) {
                 throw new Error(response && response.error ? response.error : 'Could not load screenshot draft.');
             }
 
+            const connectionState = await window.sssConnections.loadState();
+            const targetOrigin = response.draft.serverOrigin || connectionState.activeServerOrigin;
+            const connection = connectionState.servers.find((server) => server.origin === targetOrigin);
             const image = await loadImage(response.draft.dataUrl);
+            settings = { serverUrl: targetOrigin, connection: connection || null };
             draft = {
                 image,
                 dataUrl: response.draft.dataUrl,
@@ -80,6 +77,16 @@
             pageTitleInput.value = draft.title;
             imageUrlInput.value = draft.sourceUrl;
             renderEditor();
+            try {
+                await refreshPinnedConnection();
+                await verifyConnection();
+            } catch (err) {
+                showError(err.message);
+                await ext.runtime.sendMessage({
+                    type: 'sss-login-required',
+                    reason: 'login-required',
+                });
+            }
         } catch (err) {
             showError(err.message);
             uploadBtn.disabled = true;
@@ -94,6 +101,7 @@
         uploadBtn.textContent = 'Uploading...';
 
         try {
+            await refreshPinnedConnection();
             const blob = await renderEditedBlob();
             const result = await uploadBlob(blob);
             finalized = true;
@@ -118,7 +126,8 @@
         const resp = await fetch(`${settings.serverUrl}/api/screenshots`, {
             method: 'POST',
             mode: 'cors',
-            credentials: 'include',
+            credentials: 'omit',
+            headers: window.sssConnections.authorizationHeaders(settings.connection),
             body: formData,
         });
 
@@ -129,7 +138,7 @@
                     settings,
                     reason: 'login-required',
                 });
-                throw new Error('Please sign in to ScreenshotSafe in your browser, then try uploading again.');
+                throw new Error('The selected ScreenshotSafe login expired or was revoked. Log in again, then retry.');
             }
 
             const errData = await resp.json().catch(() => ({}));
@@ -143,22 +152,36 @@
         return `${settings.serverUrl}/screenshots/${result.id}/edit`;
     }
 
-    async function redirectToLoginIfNeeded() {
+    async function verifyConnection() {
         try {
             const resp = await fetch(`${settings.serverUrl}/api/ping`, {
                 cache: 'no-store',
                 mode: 'cors',
-                credentials: 'include',
+                credentials: 'omit',
+                headers: window.sssConnections.authorizationHeaders(settings.connection),
             });
 
             if (resp.ok) {
                 return;
             }
         } catch (_) {
-            // A blocked CORS/cookie request looks like a failed fetch here.
+            // Report the same actionable connection error below.
         }
 
-        window.location.href = `${settings.serverUrl}/login?extension=login_required`;
+        await ext.runtime.sendMessage({
+            type: 'sss-login-required',
+            reason: 'login-required',
+        });
+        throw new Error('The selected ScreenshotSafe server is not connected. Check extension settings.');
+    }
+
+    async function refreshPinnedConnection() {
+        const state = await window.sssConnections.loadState();
+        const connection = state.servers.find((server) => server.origin === settings.serverUrl);
+        if (!connection || !connection.token) {
+            throw new Error('Log in to this ScreenshotSafe server in extension settings, then retry.');
+        }
+        settings.connection = connection;
     }
 
     async function renderEditedBlob() {
