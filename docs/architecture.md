@@ -58,7 +58,7 @@ SQLite stores users, OAuth identities, API token hashes, and screenshot metadata
 2. It generates a random state and PKCE-S256 verifier/challenge, then starts
    Chrome's interactive web-auth flow at `/extension/authorize`.
 3. ScreenshotSafe preserves the authorization request through password or OAuth
-   login and displays an explicit approval page.
+   login and displays an explicit approval page with an editable API token name.
 4. Approval returns a short-lived, single-use code through Chrome's
    `chromiumapp.org` callback.
 5. The extension verifies state and exchanges the code plus PKCE verifier at

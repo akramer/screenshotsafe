@@ -106,6 +106,12 @@ pub fn session_origin_allowed(headers: &HeaderMap, state: &SharedState) -> bool 
     }
 
     if origin.starts_with("chrome-extension://") {
+        // TODO(chrome-store-token-auth): Once extension version 1.1.0 (the
+        // bearer-token/PKCE release) is approved in the Chrome Web Store and
+        // existing installations have had time to update, remove this blanket
+        // Chrome-origin exception. Extension API requests should authenticate
+        // only with bearer tokens; any intentionally supported cookie client
+        // should require an exact entry in allowed_extension_origins.
         return true;
     }
 

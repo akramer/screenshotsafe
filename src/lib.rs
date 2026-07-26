@@ -222,6 +222,12 @@ pub fn build_router(state: SharedState) -> Router {
             Method::OPTIONS,
         ])
         .allow_headers(AllowHeaders::mirror_request())
+        // TODO(chrome-store-token-auth): After extension 1.1.0 is approved in
+        // the Chrome Web Store and the previous cookie-authenticated extension
+        // has aged out, remove credentialed CORS for extension origins. If the
+        // web UI still needs credentialed CORS, split the policy so only the
+        // application origin (and explicitly configured legacy origins) receive
+        // Access-Control-Allow-Credentials.
         .allow_credentials(true);
 
     Router::new()
@@ -248,6 +254,10 @@ fn cors_origin_allowed(origin: &str, headers: &HeaderMap, state: &SharedState) -
     }
 
     if origin.starts_with("chrome-extension://") {
+        // TODO(chrome-store-token-auth): Keep Chrome origins CORS-eligible for
+        // bearer-token requests, but after extension 1.1.0 is approved and the
+        // cookie-authenticated extension has aged out, stop combining this
+        // blanket origin rule with Access-Control-Allow-Credentials.
         return true;
     }
 

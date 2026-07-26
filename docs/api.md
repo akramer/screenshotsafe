@@ -46,7 +46,7 @@ Cookie-authenticated `/api/*` calls are origin-checked. Chrome extension origins
 | `GET` | `/api/auth/oauth/start` | Optional session | Query: optional `link=true` | Redirects to configured OAuth provider. |
 | `GET` | `/api/auth/oauth/callback` | Public | OAuth callback query | Links identity or signs in/creates user depending on account mode. |
 | `DELETE` | `/api/auth/oauth/identities/{id}` | Session | None | Disconnects one linked OAuth identity when allowed. |
-| `POST` | `/api/auth/extension/authorize` | Session | JSON: Chrome `redirect_uri`, `state`, PKCE challenge/method | Creates a five-minute, single-use authorization code after user approval. |
+| `POST` | `/api/auth/extension/authorize` | Session | JSON: Chrome `redirect_uri`, `state`, PKCE challenge/method, optional `token_label` | Creates a five-minute, single-use authorization code after user approval. A blank or omitted token label defaults to `Chrome Extension — <date>`. |
 | `POST` | `/api/auth/extension/token` | Public | JSON: authorization `code`, PKCE verifier, `redirect_uri` | Atomically consumes the code and returns a new extension API token once. |
 | `DELETE` | `/api/auth/extension/token` | API token | None | Revokes the bearer token used for the request. |
 | `PUT` | `/api/auth/password` | Session | JSON: current/new password fields | Changes password hash. |

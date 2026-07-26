@@ -108,6 +108,7 @@ impl Database {
                 user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 redirect_uri TEXT NOT NULL,
                 code_challenge TEXT NOT NULL,
+                token_label TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL
             );
@@ -153,6 +154,12 @@ impl Database {
             "users",
             "theme_preference",
             "TEXT NOT NULL DEFAULT 'os_default'",
+        )?;
+        add_column_if_missing(
+            &conn,
+            "extension_authorization_codes",
+            "token_label",
+            "TEXT NOT NULL DEFAULT ''",
         )?;
         add_column_if_missing(&conn, "users", "last_login_at", "TEXT")?;
         conn.execute(
@@ -900,13 +907,14 @@ impl Database {
         )?;
         conn.execute(
             "INSERT INTO extension_authorization_codes
-                (code_hash, user_id, redirect_uri, code_challenge, created_at, expires_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                (code_hash, user_id, redirect_uri, code_challenge, token_label, created_at, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 code.code_hash,
                 code.user_id.to_string(),
                 code.redirect_uri,
                 code.code_challenge,
+                code.token_label,
                 code.created_at.to_rfc3339(),
                 code.expires_at.to_rfc3339(),
             ],
@@ -921,7 +929,7 @@ impl Database {
         let conn = self.conn.lock().unwrap();
         let result = conn
             .query_row(
-                "SELECT code_hash, user_id, redirect_uri, code_challenge, created_at, expires_at
+                "SELECT code_hash, user_id, redirect_uri, code_challenge, token_label, created_at, expires_at
                  FROM extension_authorization_codes
                  WHERE code_hash = ?1 AND datetime(expires_at) > datetime('now')",
                 params![code_hash],
@@ -931,8 +939,9 @@ impl Database {
                         user_id: row.get::<_, String>(1)?.parse().unwrap(),
                         redirect_uri: row.get(2)?,
                         code_challenge: row.get(3)?,
-                        created_at: parse_datetime(&row.get::<_, String>(4)?),
-                        expires_at: parse_datetime(&row.get::<_, String>(5)?),
+                        token_label: row.get(4)?,
+                        created_at: parse_datetime(&row.get::<_, String>(5)?),
+                        expires_at: parse_datetime(&row.get::<_, String>(6)?),
                     })
                 },
             )

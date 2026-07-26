@@ -2189,7 +2189,7 @@ mod tests {
     #[tokio::test]
     async fn test_extension_pkce_flow_creates_one_time_revocable_token() {
         let dir = tempfile::tempdir().unwrap();
-        let (app, _state) = test_app(dir.path());
+        let (app, state) = test_app(dir.path());
         let cookie = setup_user(&app).await;
         let redirect_uri =
             "https://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/screenshotsafe";
@@ -2232,7 +2232,9 @@ mod tests {
             resp.headers().get(header::CACHE_CONTROL).unwrap(),
             "no-store"
         );
-        assert!(body_text(resp).await.contains("Allow Extension"));
+        let authorization_page = body_text(resp).await;
+        assert!(authorization_page.contains("Allow Extension"));
+        assert!(authorization_page.contains("Chrome Extension —"));
 
         let resp = app
             .clone()
@@ -2245,6 +2247,7 @@ mod tests {
                     "state": flow_state,
                     "code_challenge": challenge,
                     "code_challenge_method": "S256",
+                    "token_label": "My Work Chrome",
                 }),
             ))
             .await
@@ -2302,6 +2305,10 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::CREATED);
         let token = body_json(resp).await["token"].as_str().unwrap().to_string();
         assert!(token.starts_with("sss_"));
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+        let tokens = state.db.list_tokens_for_user(&admin.id).unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].label, "My Work Chrome");
 
         let resp = app
             .clone()

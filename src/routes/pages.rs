@@ -79,6 +79,7 @@ pub async fn extension_authorize_page(
         params.redirect_uri,
         urlencoding::encode(&params.state),
     );
+    let default_token_label = crate::routes::api::default_extension_token_label();
     let html = r#"<!DOCTYPE html>
 <html lang="en" data-theme="{{THEME}}">
 <head>
@@ -97,6 +98,11 @@ pub async fn extension_authorize_page(
             </div>
             <div class="settings-message settings-message-success auth-message">
                 The extension will receive a permanent, revocable upload token. It will not receive your password.
+            </div>
+            <div class="form-group">
+                <label for="token-label">Token name</label>
+                <input type="text" id="token-label" value="{{TOKEN_LABEL}}" maxlength="100">
+                <span class="form-hint">Use a name that will help you recognize this browser in your API token settings.</span>
             </div>
             <input type="hidden" id="redirect-uri" value="{{REDIRECT_URI}}">
             <input type="hidden" id="auth-state" value="{{STATE}}">
@@ -121,6 +127,7 @@ pub async fn extension_authorize_page(
                         state: document.getElementById('auth-state').value,
                         code_challenge: document.getElementById('code-challenge').value,
                         code_challenge_method: 'S256',
+                        token_label: document.getElementById('token-label').value,
                     }),
                 });
                 const data = await response.json();
@@ -137,6 +144,7 @@ pub async fn extension_authorize_page(
 </html>"#
         .replace("{{THEME}}", theme_attr(user.theme_preference))
         .replace("{{DISPLAY_NAME}}", &html_escape(&user.display_name))
+        .replace("{{TOKEN_LABEL}}", &html_escape(&default_token_label))
         .replace("{{REDIRECT_URI}}", &html_escape(&params.redirect_uri))
         .replace("{{STATE}}", &html_escape(&params.state))
         .replace("{{CODE_CHALLENGE}}", &html_escape(&params.code_challenge))

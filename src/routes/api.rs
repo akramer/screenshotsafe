@@ -1471,8 +1471,8 @@ fn format_bytes(bytes: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::{
-        oauth_redirect_uri, openid_discovery_url, safe_return_to, sanitize_email_username,
-        sanitize_username,
+        default_extension_token_label, extension_token_label, oauth_redirect_uri,
+        openid_discovery_url, safe_return_to, sanitize_email_username, sanitize_username,
     };
     use crate::config::OAuthConfig;
     use axum::http::{header, HeaderMap, HeaderValue};
@@ -1503,6 +1503,23 @@ mod tests {
             safe_return_to(Some("/</script><script>alert(1)</script>")),
             None
         );
+    }
+
+    #[test]
+    fn extension_token_names_default_trim_and_validate() {
+        assert!(default_extension_token_label().starts_with("Chrome Extension — "));
+        assert!(extension_token_label(None)
+            .unwrap()
+            .starts_with("Chrome Extension — "));
+        assert!(extension_token_label(Some("   "))
+            .unwrap()
+            .starts_with("Chrome Extension — "));
+        assert_eq!(
+            extension_token_label(Some("  Work Chrome  ")).unwrap(),
+            "Work Chrome"
+        );
+        assert!(extension_token_label(Some(&"x".repeat(101))).is_err());
+        assert!(extension_token_label(Some("Chrome\nExtension")).is_err());
     }
 
     #[test]
@@ -1884,6 +1901,7 @@ pub struct AuthorizeExtensionRequest {
     pub state: String,
     pub code_challenge: String,
     pub code_challenge_method: String,
+    pub token_label: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1901,6 +1919,7 @@ pub async fn authorize_extension(
     validate_extension_redirect_uri(&req.redirect_uri)?;
     validate_extension_state(&req.state)?;
     validate_pkce_challenge(&req.code_challenge, &req.code_challenge_method)?;
+    let token_label = extension_token_label(req.token_label.as_deref())?;
 
     let raw_code = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
     let now = Utc::now();
@@ -1909,6 +1928,7 @@ pub async fn authorize_extension(
         user_id: user.id,
         redirect_uri: req.redirect_uri.clone(),
         code_challenge: req.code_challenge,
+        token_label,
         created_at: now,
         expires_at: now + chrono::Duration::minutes(5),
     };
@@ -1971,11 +1991,12 @@ pub async fn exchange_extension_code(
     }
 
     let raw_token = share_id::generate_api_token();
+    let token_label = extension_token_label(Some(&authorization.token_label))?;
     let token = ApiToken {
         id: Uuid::new_v4(),
         user_id: user.id,
         token_hash: auth::hash_token(&raw_token),
-        label: format!("Chrome Extension — {}", Utc::now().format("%b %-d, %Y")),
+        label: token_label,
         created_at: Utc::now(),
         last_used_at: None,
         expires_at: None,
@@ -2075,6 +2096,25 @@ fn validate_pkce_verifier(verifier: &str) -> crate::Result<()> {
         ));
     }
     Ok(())
+}
+
+pub(crate) fn default_extension_token_label() -> String {
+    format!("Chrome Extension — {}", Utc::now().format("%b %-d, %Y"))
+}
+
+fn extension_token_label(value: Option<&str>) -> crate::Result<String> {
+    let label = value
+        .map(str::trim)
+        .filter(|label| !label.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(default_extension_token_label);
+    if label.chars().count() > 100 || label.chars().any(char::is_control) {
+        return Err(AppError::BadRequest(
+            "Extension token name must be 100 characters or fewer and contain no control characters."
+                .into(),
+        ));
+    }
+    Ok(label)
 }
 
 fn pkce_challenge(verifier: &str) -> String {

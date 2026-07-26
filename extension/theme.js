@@ -11,7 +11,7 @@
     async function init() {
         try {
             const connection = await window.sssConnections.getActiveConnection();
-            if (!connection) return;
+            if (!connection || !connection.token) return;
             const theme = await getAuthenticatedTheme(connection);
             if (theme) applyTheme(theme);
         } catch (_) {}

@@ -15,6 +15,8 @@
     const status = document.getElementById('status');
     const notice = document.getElementById('notice');
     let refreshing = false;
+    let openingReason = new URLSearchParams(window.location.search).get('reason');
+    let statusCheckedThisPage = false;
 
     init();
 
@@ -27,8 +29,6 @@
     window.setInterval(refreshAll, 60 * 1000);
 
     async function init() {
-        const reason = new URLSearchParams(window.location.search).get('reason');
-        if (reason && reason !== 'manual') showNotice(reasonMessage(reason));
         try {
             await render();
             await refreshAll();
@@ -97,6 +97,7 @@
             row.append(radio, details, connectionStatus, actions);
             serverList.append(row);
         }
+        updateNotice(state);
     }
 
     function smallButton(label, kind) {
@@ -137,6 +138,7 @@
             authorizeUrl.searchParams.set('code_challenge', challenge);
             authorizeUrl.searchParams.set('code_challenge_method', 'S256');
 
+            await verifyAuthorizationPage(authorizeUrl, origin);
             const finalUrl = await ext.identity.launchWebAuthFlow({
                 url: authorizeUrl.toString(),
                 interactive: true,
@@ -191,6 +193,7 @@
 
             await connections.upsertConnection(connection, true);
             savedConnection = true;
+            statusCheckedThisPage = true;
             if (previous && previous.token && previous.token !== data.token) {
                 revokeToken(previous).catch(() => {});
             }
@@ -209,6 +212,33 @@
             loginBtn.disabled = false;
             loginBtn.textContent = 'Log in';
         }
+    }
+
+    async function verifyAuthorizationPage(authorizeUrl, origin) {
+        let response;
+        try {
+            response = await fetch(authorizeUrl.toString(), {
+                cache: 'no-store',
+                mode: 'cors',
+                credentials: 'omit',
+            });
+        } catch (_) {
+            throw new Error(
+                `Could not load ${origin}/extension/authorize. Open the server in Chrome and check its HTTPS certificate and availability.`
+            );
+        }
+
+        if (response.ok) return;
+        if (response.status === 404) {
+            throw new Error(
+                'This ScreenshotSafe server does not have the extension authorization endpoint. Update and restart the server, then try again.'
+            );
+        }
+
+        const data = await response.json().catch(() => ({}));
+        throw new Error(
+            data.error || `The ScreenshotSafe authorization endpoint returned ${response.status}.`
+        );
     }
 
     async function refreshAll() {
@@ -232,6 +262,7 @@
                 if (result.username) server.username = result.username;
             }
             await connections.saveState(state);
+            statusCheckedThisPage = true;
             await render(state);
         } catch (err) {
             setStatus(err.message, false);
@@ -252,6 +283,7 @@
         if (result.displayName) server.displayName = result.displayName;
         if (result.username) server.username = result.username;
         await connections.saveState(state);
+        statusCheckedThisPage = true;
         await render(state);
     }
 
@@ -318,6 +350,55 @@
     function showNotice(message) {
         notice.textContent = message;
         notice.classList.add('show');
+    }
+
+    function updateNotice(state) {
+        if (!openingReason || openingReason === 'manual') {
+            hideNotice(false);
+            return;
+        }
+
+        const active = state.servers.find(
+            (server) => server.origin === state.activeServerOrigin
+        );
+        let unresolved = false;
+        switch (openingReason) {
+            case 'missing':
+                unresolved = !active || !active.token;
+                break;
+            case 'login-required':
+                unresolved = !active
+                    || !active.token
+                    || !statusCheckedThisPage
+                    || ['login_required', 'checking'].includes(active.lastPingStatus);
+                break;
+            case 'cannot-reach-server':
+                unresolved = !active
+                    || !statusCheckedThisPage
+                    || ['unreachable', 'checking'].includes(active.lastPingStatus);
+                break;
+            case 'server-error':
+                unresolved = !active
+                    || !statusCheckedThisPage
+                    || ['server_error', 'checking'].includes(active.lastPingStatus);
+                break;
+            default:
+                unresolved = false;
+        }
+
+        if (unresolved) {
+            showNotice(reasonMessage(openingReason));
+        } else {
+            hideNotice(true);
+        }
+    }
+
+    function hideNotice(clearReason) {
+        notice.classList.remove('show');
+        notice.textContent = '';
+        if (!clearReason || !openingReason) return;
+        openingReason = null;
+        window.history.replaceState(null, '', window.location.pathname);
     }
 
     function setStatus(message, ok) {
