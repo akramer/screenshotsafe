@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use crate::auth::middleware::{AdminUser, AuthUser, MaybeAuthUser};
 use crate::models::ThemePreference;
+use crate::retention::{effective_policy, UserDefaultMode, UserMaximumMode};
 use crate::{AppError, SharedState};
 
 const FAVICON_LINK: &str = r#"<link rel="icon" type="image/x-icon" href="/favicon.ico">"#;
@@ -599,11 +600,11 @@ pub async fn editor_page(
         .expires_at
         .map(|d| d.to_rfc3339())
         .unwrap_or_default();
-    let expires_never_selected = if screenshot.expires_at.is_none() {
-        "selected"
-    } else {
-        ""
-    };
+    let retention = effective_policy(
+        state.db.get_server_retention()?,
+        state.db.get_user_retention(&user.id)?,
+    );
+    let expiry_options = expiry_override_options(retention.effective_max_expiry_seconds);
 
     let html = EDITOR_TEMPLATE
         .replace("{{THEME}}", theme_attr(user.theme_preference))
@@ -659,7 +660,7 @@ pub async fn editor_page(
             &html_escape(&expiration_keep_label),
         )
         .replace("{{EXPIRATION_KEEP_DATETIME}}", &expiration_keep_datetime)
-        .replace("{{EXPIRES_NEVER_SELECTED}}", expires_never_selected)
+        .replace("{{EXPIRY_OPTIONS}}", &expiry_options)
         .replace("{{SHARE_URL}}", &html_escape(&share_url))
         .replace("{{ID}}", &screenshot.id.to_string())
         .replace("{{ANNOTATIONS}}", &annotations_json)
@@ -797,11 +798,7 @@ const EDITOR_TEMPLATE: &str = r##"<!DOCTYPE html>
                 <label for="screenshot-expires-in">Expires</label>
                 <select id="screenshot-expires-in">
                     <option value="" data-local-time data-local-format="datetime" data-local-prefix="Keep current (" data-local-suffix=")" data-datetime="{{EXPIRATION_KEEP_DATETIME}}">{{EXPIRATION_KEEP_LABEL}}</option>
-                    <option value="never" {{EXPIRES_NEVER_SELECTED}}>Never</option>
-                    <option value="1h">In 1 hour</option>
-                    <option value="24h">In 24 hours</option>
-                    <option value="7d">In 7 days</option>
-                    <option value="30d">In 30 days</option>
+                    {{EXPIRY_OPTIONS}}
                 </select>
             </div>
             <div class="form-group">
@@ -855,6 +852,10 @@ pub async fn settings_page(
 ) -> crate::Result<impl IntoResponse> {
     let tokens = state.db.list_tokens_for_user(&user.id)?;
     let oauth_identities = state.db.list_oauth_identities_for_user(&user.id)?;
+    let user_retention = state.db.get_user_retention(&user.id)?;
+    let retention = effective_policy(state.db.get_server_retention()?, user_retention);
+    let (default_value, default_unit) =
+        duration_parts(user_retention.default_seconds.unwrap_or(24 * 60 * 60));
 
     let token_rows: String = if tokens.is_empty() {
         "<tr><td colspan=\"4\" class=\"empty-cell\">No API tokens yet.</td></tr>".to_string()
@@ -1019,6 +1020,39 @@ pub async fn settings_page(
         </section>
 
         <section class="settings-section">
+            <h2>Default expiry</h2>
+            <p>Choose the default for new screenshots across the web app, browser extensions, and Apple apps. Your current maximum lifetime is <strong>{effective_maximum}</strong>.</p>
+            <form id="retention-form" class="admin-user-form">
+                <div class="form-group">
+                    <label for="default-expiry-mode">Default for new screenshots</label>
+                    <select id="default-expiry-mode">
+                        <option value="inherit" {default_inherit_selected}>Use server default — {server_default}</option>
+                        <option value="duration" {default_duration_selected}>Custom duration</option>
+                        <option value="never" {default_never_selected} {never_disabled}>Never expires</option>
+                    </select>
+                </div>
+                <div id="default-expiry-duration" class="admin-form-grid">
+                    <div class="form-group">
+                        <label for="default-expiry-value">Duration</label>
+                        <input type="number" id="default-expiry-value" min="1" step="1" value="{default_value}">
+                    </div>
+                    <div class="form-group">
+                        <label for="default-expiry-unit">Unit</label>
+                        <select id="default-expiry-unit">
+                            <option value="1" {default_seconds_selected}>Seconds</option>
+                            <option value="60" {default_minutes_selected}>Minutes</option>
+                            <option value="3600" {default_hours_selected}>Hours</option>
+                            <option value="86400" {default_days_selected}>Days</option>
+                            <option value="604800" {default_weeks_selected}>Weeks</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="retention-message" class="settings-message" style="display:none"></div>
+                <button class="btn btn-primary" type="submit">Save Default Expiry</button>
+            </form>
+        </section>
+
+        <section class="settings-section">
             <h2>Password</h2>
             <p>Change the password used to sign in to ScreenshotSafe.</p>
             <form id="password-form" class="password-form">
@@ -1084,6 +1118,8 @@ pub async fn settings_page(
         const passwordForm = document.getElementById('password-form');
         const passwordMessage = document.getElementById('password-message');
         const tokenMessage = document.getElementById('token-message');
+        const retentionForm = document.getElementById('retention-form');
+        const retentionMessage = document.getElementById('retention-message');
 
         function showThemeMessage(text, isError) {{
             themeMessage.textContent = text;
@@ -1102,6 +1138,35 @@ pub async fn settings_page(
             tokenMessage.className = `settings-message ${{isError ? 'settings-message-error' : 'settings-message-success'}}`;
             tokenMessage.style.display = 'block';
         }}
+
+        function updateRetentionVisibility() {{
+            document.getElementById('default-expiry-duration').style.display =
+                document.getElementById('default-expiry-mode').value === 'duration' ? '' : 'none';
+        }}
+
+        document.getElementById('default-expiry-mode').addEventListener('change', updateRetentionVisibility);
+        updateRetentionVisibility();
+
+        retentionForm.addEventListener('submit', async (event) => {{
+            event.preventDefault();
+            const mode = document.getElementById('default-expiry-mode').value;
+            const seconds = mode === 'duration'
+                ? Number(document.getElementById('default-expiry-value').value)
+                    * Number(document.getElementById('default-expiry-unit').value)
+                : undefined;
+            const resp = await fetch('/api/user/retention', {{
+                method: 'PUT',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{ mode, seconds }}),
+            }});
+            let data = {{}};
+            try {{ data = await resp.json(); }} catch (_) {{}}
+            retentionMessage.textContent = resp.ok
+                ? 'Default expiry saved for all clients.'
+                : (data.error || 'Unable to save default expiry.');
+            retentionMessage.className = `settings-message ${{resp.ok ? 'settings-message-success' : 'settings-message-error'}}`;
+            retentionMessage.style.display = 'block';
+        }});
 
         themeForm.addEventListener('change', async (event) => {{
             if (event.target.name !== 'theme-preference') return;
@@ -1264,6 +1329,30 @@ pub async fn settings_page(
         token_rows = token_rows,
         oauth_section = oauth_section,
         local_time_script = LOCAL_TIME_SCRIPT,
+        effective_maximum = retention
+            .effective_max_expiry_seconds
+            .map(format_retention_duration)
+            .unwrap_or_else(|| "No maximum".to_string()),
+        server_default = retention
+            .server_default_expiry_seconds
+            .map(format_retention_duration)
+            .unwrap_or_else(|| "Never".to_string()),
+        default_inherit_selected =
+            selected(user_retention.default_mode == UserDefaultMode::Inherit,),
+        default_duration_selected =
+            selected(user_retention.default_mode == UserDefaultMode::Duration,),
+        default_never_selected = selected(user_retention.default_mode == UserDefaultMode::Never,),
+        never_disabled = if retention.allow_never {
+            ""
+        } else {
+            "disabled"
+        },
+        default_value = default_value,
+        default_seconds_selected = selected(default_unit == 1),
+        default_minutes_selected = selected(default_unit == 60),
+        default_hours_selected = selected(default_unit == 3600),
+        default_days_selected = selected(default_unit == 86400),
+        default_weeks_selected = selected(default_unit == 604800),
     );
 
     Ok(Html(html).into_response())
@@ -1275,6 +1364,17 @@ pub async fn admin_page(
     AdminUser(admin): AdminUser,
 ) -> crate::Result<impl IntoResponse> {
     let users = state.db.list_users()?;
+    let server_retention = state.db.get_server_retention()?;
+    let (server_default_value, server_default_unit) = duration_parts(
+        server_retention
+            .default_expiry_seconds
+            .unwrap_or(30 * 24 * 60 * 60),
+    );
+    let (server_max_value, server_max_unit) = duration_parts(
+        server_retention
+            .default_max_expiry_seconds
+            .unwrap_or(90 * 24 * 60 * 60),
+    );
     let user_rows = users
         .iter()
         .map(|user| {
@@ -1359,6 +1459,55 @@ pub async fn admin_page(
         </div>
 
         <section class="settings-section">
+            <h2>Screenshot retention</h2>
+            <p>These are defaults for users. An administrator can give an individual user a shorter, longer, or unlimited maximum.</p>
+            <form id="server-retention-form" class="admin-user-form">
+                <div class="admin-form-grid">
+                    <div class="form-group">
+                        <label for="server-default-mode">Default expiry for new screenshots</label>
+                        <select id="server-default-mode">
+                            <option value="duration" {server_default_duration_selected}>After a duration</option>
+                            <option value="never" {server_default_never_selected}>Never expires</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="server-max-mode">Default maximum lifetime for users</label>
+                        <select id="server-max-mode">
+                            <option value="duration" {server_max_duration_selected}>Custom maximum</option>
+                            <option value="unlimited" {server_max_unlimited_selected}>No maximum</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="admin-form-grid">
+                    <div id="server-default-duration" class="form-group">
+                        <label for="server-default-value">Default duration</label>
+                        <input type="number" id="server-default-value" min="1" step="1" value="{server_default_value}">
+                        <select id="server-default-unit">
+                            <option value="1" {server_default_seconds_selected}>Seconds</option>
+                            <option value="60" {server_default_minutes_selected}>Minutes</option>
+                            <option value="3600" {server_default_hours_selected}>Hours</option>
+                            <option value="86400" {server_default_days_selected}>Days</option>
+                            <option value="604800" {server_default_weeks_selected}>Weeks</option>
+                        </select>
+                    </div>
+                    <div id="server-max-duration" class="form-group">
+                        <label for="server-max-value">Maximum duration</label>
+                        <input type="number" id="server-max-value" min="1" step="1" value="{server_max_value}">
+                        <select id="server-max-unit">
+                            <option value="1" {server_max_seconds_selected}>Seconds</option>
+                            <option value="60" {server_max_minutes_selected}>Minutes</option>
+                            <option value="3600" {server_max_hours_selected}>Hours</option>
+                            <option value="86400" {server_max_days_selected}>Days</option>
+                            <option value="604800" {server_max_weeks_selected}>Weeks</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="server-retention-message" class="settings-message" style="display:none"></div>
+                <button class="btn btn-primary" type="submit">Save Retention Defaults</button>
+            </form>
+        </section>
+
+        <section class="settings-section">
             <h2>Add User</h2>
             <form id="user-form" class="admin-user-form">
                 <div id="user-message" class="settings-message" style="display:none"></div>
@@ -1408,12 +1557,54 @@ pub async fn admin_page(
     <script>
         const form = document.getElementById('user-form');
         const message = document.getElementById('user-message');
+        const serverRetentionForm = document.getElementById('server-retention-form');
+        const serverRetentionMessage = document.getElementById('server-retention-message');
 
         function showMessage(text, isError) {{
             message.textContent = text;
             message.className = `settings-message ${{isError ? 'settings-message-error' : 'settings-message-success'}}`;
             message.style.display = 'block';
         }}
+
+        function updateServerRetentionVisibility() {{
+            document.getElementById('server-default-duration').style.display =
+                document.getElementById('server-default-mode').value === 'duration' ? '' : 'none';
+            document.getElementById('server-max-duration').style.display =
+                document.getElementById('server-max-mode').value === 'duration' ? '' : 'none';
+        }}
+
+        document.getElementById('server-default-mode').addEventListener('change', updateServerRetentionVisibility);
+        document.getElementById('server-max-mode').addEventListener('change', updateServerRetentionVisibility);
+        updateServerRetentionVisibility();
+
+        serverRetentionForm.addEventListener('submit', async (event) => {{
+            event.preventDefault();
+            const defaultMode = document.getElementById('server-default-mode').value;
+            const maxMode = document.getElementById('server-max-mode').value;
+            const defaultSeconds = defaultMode === 'duration'
+                ? Number(document.getElementById('server-default-value').value)
+                    * Number(document.getElementById('server-default-unit').value)
+                : null;
+            const maxSeconds = maxMode === 'duration'
+                ? Number(document.getElementById('server-max-value').value)
+                    * Number(document.getElementById('server-max-unit').value)
+                : null;
+            const resp = await fetch('/api/admin/server-retention', {{
+                method: 'PATCH',
+                headers: {{ 'Content-Type': 'application/json' }},
+                body: JSON.stringify({{
+                    default_expiry_seconds: defaultSeconds,
+                    default_max_expiry_seconds: maxSeconds,
+                }}),
+            }});
+            let data = {{}};
+            try {{ data = await resp.json(); }} catch (_) {{}}
+            serverRetentionMessage.textContent = resp.ok
+                ? `Retention defaults saved.${{data.adjusted_user_defaults ? ` ${{data.adjusted_user_defaults}} user default(s) were reduced to fit.` : ''}}`
+                : (data.error || 'Unable to save retention defaults.');
+            serverRetentionMessage.className = `settings-message ${{resp.ok ? 'settings-message-success' : 'settings-message-error'}}`;
+            serverRetentionMessage.style.display = 'block';
+        }});
 
         form.addEventListener('submit', async (event) => {{
             event.preventDefault();
@@ -1483,6 +1674,26 @@ pub async fn admin_page(
         theme = theme_attr(admin.theme_preference),
         user_rows = user_rows,
         local_time_script = LOCAL_TIME_SCRIPT,
+        server_default_duration_selected =
+            selected(server_retention.default_expiry_seconds.is_some(),),
+        server_default_never_selected =
+            selected(server_retention.default_expiry_seconds.is_none(),),
+        server_max_duration_selected =
+            selected(server_retention.default_max_expiry_seconds.is_some(),),
+        server_max_unlimited_selected =
+            selected(server_retention.default_max_expiry_seconds.is_none(),),
+        server_default_value = server_default_value,
+        server_default_seconds_selected = selected(server_default_unit == 1),
+        server_default_minutes_selected = selected(server_default_unit == 60),
+        server_default_hours_selected = selected(server_default_unit == 3600),
+        server_default_days_selected = selected(server_default_unit == 86400),
+        server_default_weeks_selected = selected(server_default_unit == 604800),
+        server_max_value = server_max_value,
+        server_max_seconds_selected = selected(server_max_unit == 1),
+        server_max_minutes_selected = selected(server_max_unit == 60),
+        server_max_hours_selected = selected(server_max_unit == 3600),
+        server_max_days_selected = selected(server_max_unit == 86400),
+        server_max_weeks_selected = selected(server_max_unit == 604800),
     );
 
     Ok(Html(html).into_response())
@@ -1499,16 +1710,11 @@ pub async fn admin_edit_user_page(
         .max_screenshot_size_bytes
         .map(|v| v.to_string())
         .unwrap_or_default();
-    let expiry_limit = user
-        .max_expiry_seconds
-        .map(|v| v.to_string())
-        .unwrap_or_default();
-    let server_expiry = state
-        .config
-        .server
-        .max_expiry_seconds
-        .map(|v| v.to_string())
-        .unwrap_or_else(|| "none".to_string());
+    let user_retention = state.db.get_user_retention(&user.id)?;
+    let server_retention = state.db.get_server_retention()?;
+    let retention = effective_policy(server_retention, user_retention);
+    let (maximum_value, maximum_unit) =
+        duration_parts(user_retention.maximum_seconds.unwrap_or(30 * 24 * 60 * 60));
 
     let html = format!(
         r#"<!DOCTYPE html>
@@ -1544,10 +1750,26 @@ pub async fn admin_edit_user_page(
                         <input type="number" id="max-screenshot-size-bytes" min="0" step="1" value="{size_limit}" placeholder="{server_size}">
                     </div>
                     <div class="form-group">
-                        <label for="max-expiry-seconds">Max Expiry Seconds</label>
-                        <input type="number" id="max-expiry-seconds" min="0" step="1" value="{expiry_limit}" placeholder="{server_expiry}">
+                        <label for="maximum-expiry-mode">Maximum screenshot lifetime</label>
+                        <select id="maximum-expiry-mode">
+                            <option value="inherit" {maximum_inherit_selected}>Use server default — {server_maximum}</option>
+                            <option value="duration" {maximum_duration_selected}>Custom maximum</option>
+                            <option value="unlimited" {maximum_unlimited_selected}>No maximum</option>
+                        </select>
+                    </div>
+                    <div id="maximum-expiry-duration" class="form-group">
+                        <label for="maximum-expiry-value">Custom maximum</label>
+                        <input type="number" id="maximum-expiry-value" min="1" step="1" value="{maximum_value}">
+                        <select id="maximum-expiry-unit">
+                            <option value="1" {maximum_seconds_selected}>Seconds</option>
+                            <option value="60" {maximum_minutes_selected}>Minutes</option>
+                            <option value="3600" {maximum_hours_selected}>Hours</option>
+                            <option value="86400" {maximum_days_selected}>Days</option>
+                            <option value="604800" {maximum_weeks_selected}>Weeks</option>
+                        </select>
                     </div>
                 </div>
+                <p class="form-hint">Effective maximum: {effective_maximum}. This may be higher or lower than the server default.</p>
                 <button class="btn btn-primary" type="submit">Save Limits</button>
             </form>
         </section>
@@ -1598,6 +1820,13 @@ pub async fn admin_edit_user_page(
             return value ? Number(value) : null;
         }}
 
+        function updateMaximumVisibility() {{
+            document.getElementById('maximum-expiry-duration').style.display =
+                document.getElementById('maximum-expiry-mode').value === 'duration' ? '' : 'none';
+        }}
+        document.getElementById('maximum-expiry-mode').addEventListener('change', updateMaximumVisibility);
+        updateMaximumVisibility();
+
         async function patchUser(payload) {{
             const resp = await fetch(`/api/admin/users/${{userId}}`, {{
                 method: 'PATCH',
@@ -1619,8 +1848,22 @@ pub async fn admin_edit_user_page(
             try {{
                 await patchUser({{
                     max_screenshot_size_bytes: optionalNumber('max-screenshot-size-bytes'),
-                    max_expiry_seconds: optionalNumber('max-expiry-seconds'),
                 }});
+                const mode = document.getElementById('maximum-expiry-mode').value;
+                const seconds = mode === 'duration'
+                    ? Number(document.getElementById('maximum-expiry-value').value)
+                        * Number(document.getElementById('maximum-expiry-unit').value)
+                    : undefined;
+                const retentionResp = await fetch(`/api/admin/users/${{userId}}/retention`, {{
+                    method: 'PATCH',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{ mode, seconds }}),
+                }});
+                if (!retentionResp.ok) {{
+                    let data = {{}};
+                    try {{ data = await retentionResp.json(); }} catch (_) {{}}
+                    throw new Error(data.error || 'Unable to update user retention.');
+                }}
                 showMessage('User limits saved.', false);
             }} catch (error) {{
                 showMessage(error.message, true);
@@ -1681,12 +1924,81 @@ pub async fn admin_edit_user_page(
         created_at = local_time(user.created_at, "date", "%b %d, %Y"),
         local_time_script = LOCAL_TIME_SCRIPT,
         size_limit = size_limit,
-        expiry_limit = expiry_limit,
         server_size = state.config.server.max_screenshot_size_bytes,
-        server_expiry = server_expiry,
+        server_maximum = server_retention
+            .default_max_expiry_seconds
+            .map(format_retention_duration)
+            .unwrap_or_else(|| "No maximum".to_string()),
+        effective_maximum = retention
+            .effective_max_expiry_seconds
+            .map(format_retention_duration)
+            .unwrap_or_else(|| "No maximum".to_string()),
+        maximum_inherit_selected =
+            selected(user_retention.maximum_mode == UserMaximumMode::Inherit,),
+        maximum_duration_selected =
+            selected(user_retention.maximum_mode == UserMaximumMode::Duration,),
+        maximum_unlimited_selected =
+            selected(user_retention.maximum_mode == UserMaximumMode::Unlimited,),
+        maximum_value = maximum_value,
+        maximum_seconds_selected = selected(maximum_unit == 1),
+        maximum_minutes_selected = selected(maximum_unit == 60),
+        maximum_hours_selected = selected(maximum_unit == 3600),
+        maximum_days_selected = selected(maximum_unit == 86400),
+        maximum_weeks_selected = selected(maximum_unit == 604800),
     );
 
     Ok(Html(html).into_response())
+}
+
+fn selected(value: bool) -> &'static str {
+    if value {
+        "selected"
+    } else {
+        ""
+    }
+}
+
+fn duration_parts(seconds: u64) -> (u64, u64) {
+    const MINUTE: u64 = 60;
+    const HOUR: u64 = 60 * MINUTE;
+    const DAY: u64 = 24 * HOUR;
+    const WEEK: u64 = 7 * DAY;
+    for unit in [WEEK, DAY, HOUR, MINUTE] {
+        if seconds >= unit && seconds.is_multiple_of(unit) {
+            return (seconds / unit, unit);
+        }
+    }
+    (seconds, 1)
+}
+
+fn format_retention_duration(seconds: u64) -> String {
+    let (value, unit) = duration_parts(seconds);
+    let name = match unit {
+        604800 => "week",
+        86400 => "day",
+        3600 => "hour",
+        60 => "minute",
+        _ => "second",
+    };
+    format!("{value} {name}{}", if value == 1 { "" } else { "s" })
+}
+
+fn expiry_override_options(maximum: Option<u64>) -> String {
+    let mut options = Vec::new();
+    if maximum.is_none() {
+        options.push(r#"<option value="never">Never</option>"#.to_string());
+    }
+    for (seconds, value, label) in [
+        (60 * 60, "1h", "In 1 hour"),
+        (24 * 60 * 60, "24h", "In 24 hours"),
+        (7 * 24 * 60 * 60, "7d", "In 7 days"),
+        (30 * 24 * 60 * 60, "30d", "In 30 days"),
+    ] {
+        if maximum.map(|limit| seconds <= limit).unwrap_or(true) {
+            options.push(format!(r#"<option value="{value}">{label}</option>"#));
+        }
+    }
+    options.join("\n")
 }
 
 fn html_escape(s: &str) -> String {

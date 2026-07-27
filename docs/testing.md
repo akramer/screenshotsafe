@@ -36,8 +36,11 @@ Use these when a change touches frontend, extension, Safari, OAuth provider beha
 | --- | --- |
 | Web dashboard | `cargo run`, create/login user, upload image, list and delete screenshots. |
 | Web editor | Open `/screenshots/{id}/edit`, add annotations, crop if relevant, save, reload share URL. |
+| Retention settings | Change server defaults, give users lower/higher/unlimited maximums, and verify web/client choices and actual `expires_at` values. |
+| User default expiry | Change the account default from web and Apple; verify omitted `expires_in` uses it while invalid explicit values and `never` under a finite maximum are rejected. |
 | Public share | Verify `/s/{share_id}`, `/s/{share_id}.png`, and `/s/{share_id}.preview.png`. |
 | Chromium extension | Load `extension/` unpacked; log in to two servers; verify ping status, active-server switching, capture/edit/upload to each, reconnect, logout/revocation, and migration from a legacy `serverUrl`. |
+| Apple configuration migration | Upgrade an installation with legacy `serverUrl` and `apiToken` preferences; verify a valid token moves to the shared Keychain and remains selected, while an unreachable server is retried later. |
 | Safari extension | Log in through the native app or scan a token-bearing setup QR on iOS, run both Apple builds, enable the extension, switch between two connected servers, capture, edit, and upload. Confirm Safari never receives the token or requests access to either server. |
 | iOS Safari extension | Run `scripts/build-safari-extension.sh --ios`, then test the containing app and extension in the simulator or on a signed device. |
 | OAuth | Test against the configured provider with callback URL matching deployment config. |

@@ -1,6 +1,6 @@
 # Apple Multi-Server Configuration and Login
 
-Status: Approved for implementation  
+Status: Implemented; migration behavior amended after macOS validation
 Date: 2026-07-26
 
 ## Summary
@@ -131,7 +131,12 @@ Refresh all connections when the screen appears, when the user explicitly refres
 
 ### Existing expiry and QR controls
 
-Keep **Default expiry** as a global upload preference below the connection sections. It is independent of which server is selected, as it is today.
+Keep **Default expiry** below the connection sections, but bind it to the
+selected server account through `/api/user/retention`. `/api/ping` returns the
+effective policy, including the user's default and maximum. Safari, the native
+share extensions, and the containing app omit `expires_in` when using the
+account default. The old local `defaultExpiry` value is retained only as legacy
+migration state.
 
 Keep an iOS **Scan setup QR code** action next to the add-server form. The user creates an API token while signed into ScreenshotSafe on a desktop, then scans the one-time QR display with the iOS app. The payload contains the canonical server origin and the complete bearer token.
 
@@ -330,17 +335,24 @@ On load:
 
 The native handler and share extensions load active settings for every user-initiated request, so cross-process notifications are not required. In-process notifications remain useful for updating the open app UI.
 
-## Legacy Configuration Removal
+## Legacy Configuration Migration
 
-Do not migrate a legacy `serverUrl` or `apiToken` into the new registry. Existing users start with an empty connection list and configure it again through browser login or a newly generated desktop QR.
+Migrate a valid legacy `serverUrl` and `apiToken` into the new registry so an
+existing installation remains connected after upgrading.
 
 On first launch of the new schema:
 
 1. Preserve the non-secret `defaultExpiry` preference.
-2. If a legacy origin and token exist, make a best-effort authenticated request to revoke that token.
-3. Delete the legacy `serverUrl` and `apiToken` values regardless of whether revocation succeeds.
-4. If revocation failed, tell the user that the old token may still be active and can be revoked from that server's API-token settings.
-5. Create an empty versioned registry.
+2. Normalize the legacy origin and verify its token with `/api/ping`.
+3. If verification succeeds, write the token to a new shared-Keychain
+   credential, add the server to the registry, and then delete the legacy
+   `serverUrl` and `apiToken` preferences.
+4. If the token is definitively invalid or the account is disabled, delete the
+   legacy preferences and ask the user to log in again.
+5. If verification fails because the server is unreachable, retain the legacy
+   preferences and retry migration on a later launch.
+6. Never let a delayed migration overwrite a connection created by a newer
+   interactive login.
 
 Remove all parsing of `screenshotsafe://configure` URLs, the `screenshotsafe` URL-scheme registration, and API-token fields from the Apple app. Retain the iOS QR scanner and camera permission. The scanner accepts only the versioned configuration payload and sends the embedded credential through verification and Keychain storage without invoking the browser authorization coordinator.
 
@@ -375,7 +387,7 @@ Suggested native types:
 Suggested phases:
 
 1. Generalize and test the server authorization flow for the two Apple callback URIs.
-2. Add the registry, shared Keychain store, normalization, and legacy cleanup.
+2. Add the registry, shared Keychain store, normalization, and legacy migration.
 3. Add the authorization coordinator using `ASWebAuthenticationSession`.
 4. Replace the macOS configuration form with the connected-server list and add-server section.
 5. Replace the iOS configuration form with the equivalent native list.
@@ -400,7 +412,8 @@ Suggested phases:
 
 - URL normalization matches Chrome, including HTTPS and loopback cases.
 - Registry decoding sanitizes duplicates and invalid defaults.
-- Legacy cleanup is idempotent, preserves default expiry, and never imports the old token.
+- Legacy migration is idempotent, preserves a valid connection, and never
+  overrides a newer interactive login.
 - QR parsing requires the supported payload type/version, validates the origin and token bounds, and stores nothing before `/api/ping` succeeds.
 - QR imports write the token only to the shared Keychain and never to app-group metadata.
 - Tokens are absent from serialized app-group metadata.
@@ -428,7 +441,8 @@ Run on both macOS and iOS:
 - rejection of old `screenshotsafe://configure` QR payloads, malformed JSON, invalid origins, and invalid tokens;
 - Safari capture/upload after switching;
 - native share-extension upload after switching;
-- upgrade from an existing configure-link/QR installation removes the old local credential and requires browser login or a newly generated desktop QR;
+- upgrade from an existing configure-link/QR installation imports a still-valid
+  credential into the shared Keychain without exposing a manual-token UI;
 - signed builds verifying shared Keychain access from every target.
 
 ## Acceptance Criteria
@@ -439,7 +453,8 @@ Run on both macOS and iOS:
 - A successful connection immediately works in Safari and the share extension.
 - Switching the default changes subsequent uploads without reauthorization.
 - Logging out revokes the server token when reachable.
-- Existing single-server users are prompted to use browser login or scan a newly generated desktop QR after upgrade.
+- Existing single-server users retain a valid connection through one-time
+  migration into the shared Keychain.
 - The app contains no configure-link or manual-token setup path.
 - The iOS QR scanner can configure a server and full token created from a desktop session without requiring web login on the phone.
 - QR-imported tokens are verified before being stored directly in the shared Keychain.
@@ -452,8 +467,10 @@ The approved design makes the following product choices:
 
 1. A newly logged-in server becomes the default, matching Chrome.
 2. The default is global across Safari profiles and share extensions.
-3. Default expiry remains global rather than per server.
-4. Existing Apple credentials are not migrated; users use browser login or a newly generated desktop QR after upgrading.
+3. Default expiry is stored by the active server account rather than as one
+   global Apple preference.
+4. Existing valid Apple credentials are verified once and migrated into the
+   shared Keychain; invalid credentials require login again.
 5. The old configure URL scheme and manual-token UI are removed.
 6. The iOS QR scanner remains and accepts a versioned payload containing the server origin and complete token.
 7. A QR-imported credential is verified and stored without requiring web login on the phone.

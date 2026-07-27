@@ -48,9 +48,12 @@ These are the assumptions that should stay true as the project evolves. When cha
 
 ## Limits And Expiry
 
-- Server defaults apply when a per-user screenshot size or expiry override is unset.
-- Blank or zero admin limit fields mean "follow the server setting."
-- Requested screenshot expiry must respect the configured maximum expiry when one exists.
+- The server maximum lifetime is a default for users, not a global ceiling.
+- An administrator may give a user an inherited, shorter, longer, or unlimited maximum lifetime.
+- A user's default expiry is inherited from the server or explicitly chosen by that user.
+- Explicit per-upload expiry must not exceed the user's effective maximum; invalid requests are rejected rather than silently shortened.
+- `never` is allowed only when the user's effective maximum is unlimited.
+- Changing retention settings affects new uploads and explicit expiry edits, not existing screenshots.
 - `expires_in` duration strings use `m`, `h`, `d`, or `w`.
 - Expired screenshots should be removed by the hourly cleanup task and should also be unavailable when fetched after expiry.
 

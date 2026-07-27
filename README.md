@@ -56,7 +56,7 @@ Example `config.toml`:
 bind = "0.0.0.0:8080"
 public_url = "https://screenshots.example.com"
 max_screenshot_size_bytes = 26214400
-# Optional. Omit or set to 0 for no global maximum.
+# Initial default maximum for users. Omit or set to 0 for no maximum.
 max_expiry_seconds = 7776000
 
 [storage]
@@ -98,6 +98,7 @@ SSS_BIND=127.0.0.1:8080
 SSS_PUBLIC_URL=https://screenshots.example.com
 SSS_MAX_SCREENSHOT_SIZE_BYTES=26214400
 SSS_MAX_EXPIRY_SECONDS=7776000
+SSS_DEFAULT_EXPIRY_SECONDS=2592000
 SSS_STORAGE_PATH=/data/storage
 SSS_DATABASE_PATH=/data/screenshotsafe.db
 SSS_JWT_SECRET=replace-with-a-long-random-secret
@@ -120,7 +121,14 @@ SSS_OAUTH_ALLOWED_EMAIL_DOMAINS=example.com,example.org
 
 If `jwt_secret` is omitted, ScreenshotSafe generates one and stores it next to the storage directory as `.jwt_secret`.
 
-`max_screenshot_size_bytes` defaults to 25 MiB. `default_expiry_seconds` controls the default retention window for newly uploaded screenshots, and `max_expiry_seconds` optionally caps requested expiry windows. Admins can set per-user overrides for both limits from the Admin page; blank or `0` means the user follows the server setting.
+`max_screenshot_size_bytes` defaults to 25 MiB. On a new database,
+`default_expiry_seconds` seeds the server default expiry and
+`max_expiry_seconds` seeds the default maximum lifetime assigned to users.
+After that initial seed, administrators manage both retention defaults from the
+Admin page and the database is authoritative. A user's administrator-configured
+maximum may be shorter, longer, unlimited, or inherited from the server
+default. Users choose their own default expiry from Settings, within their
+effective maximum.
 
 OAuth uses one configured identity provider. If `issuer_url` or `discovery_url` is set, ScreenshotSafe reads the OpenID discovery document and uses the discovered authorization, token, and userinfo endpoints unless explicit endpoint URLs are configured. `account_mode = "link_only"` only allows OAuth identities that users have linked from Settings. `account_mode = "pending"` creates disabled-by-default pending accounts for admins to enable. `account_mode = "auto_enabled"` creates enabled non-admin accounts immediately. When `allowed_email_domains` is set, the OAuth userinfo response must include an allowed verified email domain.
 

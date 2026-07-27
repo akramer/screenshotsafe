@@ -10,6 +10,7 @@ mod tests {
     use screenshotsafe::config::Config;
     use screenshotsafe::db::Database;
     use screenshotsafe::models::{AccountStatus, CropRect, OAuthIdentity, ThemePreference, User};
+    use screenshotsafe::retention::ServerRetentionSettings;
     use screenshotsafe::*;
 
     /// Create a test app with an in-memory database and temp storage.
@@ -30,6 +31,11 @@ mod tests {
         let mut config = Config::default();
         config.storage.path = storage_path.to_string_lossy().to_string();
         configure(&mut config);
+        db.initialize_server_retention(
+            config.auth.default_expiry_seconds,
+            config.server.max_expiry_seconds,
+        )
+        .unwrap();
 
         let state = Arc::new(AppState {
             db,
@@ -111,6 +117,35 @@ mod tests {
     }
 
     // ── Setup & Auth Tests ──
+
+    #[test]
+    fn test_server_retention_database_values_survive_config_reinitialization() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("retention.db");
+        {
+            let db = Database::open(path.to_str().unwrap()).unwrap();
+            db.run_migrations().unwrap();
+            db.initialize_server_retention(Some(3600), Some(7200))
+                .unwrap();
+            db.update_server_retention(ServerRetentionSettings {
+                default_expiry_seconds: Some(10800),
+                default_max_expiry_seconds: Some(14400),
+            })
+            .unwrap();
+        }
+        {
+            let db = Database::open(path.to_str().unwrap()).unwrap();
+            db.run_migrations().unwrap();
+            db.initialize_server_retention(Some(60), Some(120)).unwrap();
+            assert_eq!(
+                db.get_server_retention().unwrap(),
+                ServerRetentionSettings {
+                    default_expiry_seconds: Some(10800),
+                    default_max_expiry_seconds: Some(14400),
+                }
+            );
+        }
+    }
 
     #[tokio::test]
     async fn test_setup_creates_user_and_returns_session() {
@@ -745,6 +780,7 @@ mod tests {
             .unwrap();
         let html = String::from_utf8(bytes.to_vec()).unwrap();
         assert!(html.contains("<th>Last Login</th>"));
+        assert!(html.contains(r#"id="server-retention-form""#));
         assert!(html.contains(&format!(r#"datetime="{}""#, last_login_at.to_rfc3339())));
     }
 
@@ -769,7 +805,8 @@ mod tests {
             .unwrap();
         let html = String::from_utf8(bytes.to_vec()).unwrap();
         assert!(html.contains(r#"id="max-screenshot-size-bytes""#));
-        assert!(html.contains(r#"id="max-expiry-seconds""#));
+        assert!(html.contains(r#"id="maximum-expiry-mode""#));
+        assert!(html.contains("Use server default"));
         assert!(html.contains(r#"id="password-reset-form""#));
     }
 
@@ -1200,6 +1237,8 @@ mod tests {
         assert!(html.contains(r#"name="theme-preference" value="light" checked"#));
         assert!(html.contains(r#"name="theme-preference" value="dark" "#));
         assert!(html.contains(r#"name="theme-preference" value="os_default" "#));
+        assert!(html.contains(r#"id="retention-form""#));
+        assert!(html.contains("Use server default"));
         assert!(!html.contains(r#"data-theme-toggle"#));
 
         let req = authed_json_request(
@@ -1617,7 +1656,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_upload_clamps_per_user_expiry_limit_from_creation_time() {
+    async fn test_upload_rejects_expiry_above_per_user_maximum() {
         let dir = tempfile::tempdir().unwrap();
         let (app, state) = test_app(dir.path());
 
@@ -1629,18 +1668,13 @@ mod tests {
             .unwrap();
 
         let resp = upload_screenshot_response(&app, &cookie, &[("expires_in", "2h")]).await;
-        assert_eq!(resp.status(), StatusCode::CREATED);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
         let body = body_json(resp).await;
-        let id: uuid::Uuid = body["id"].as_str().unwrap().parse().unwrap();
-        let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
-        assert_eq!(
-            screenshot.expires_at.unwrap(),
-            screenshot.created_at + Duration::seconds(3600)
-        );
+        assert!(body["error"].as_str().unwrap().contains("maximum lifetime"));
     }
 
     #[tokio::test]
-    async fn test_update_clamps_expiry_limit_from_edit_time() {
+    async fn test_update_rejects_expiry_above_per_user_maximum() {
         let dir = tempfile::tempdir().unwrap();
         let (app, state) = test_app(dir.path());
 
@@ -1654,8 +1688,13 @@ mod tests {
         let upload_body = upload_screenshot(&app, &cookie).await;
         let id = upload_body["id"].as_str().unwrap();
         let parsed_id: uuid::Uuid = id.parse().unwrap();
+        let original_expiry = state
+            .db
+            .get_screenshot_by_id(&parsed_id)
+            .unwrap()
+            .unwrap()
+            .expires_at;
 
-        let before_update = Utc::now();
         let req = authed_json_request(
             "PATCH",
             &format!("/api/screenshots/{}", id),
@@ -1663,13 +1702,141 @@ mod tests {
             serde_json::json!({ "expires_in": "2h" }),
         );
         let resp = app.clone().oneshot(req).await.unwrap();
-        let after_update = Utc::now();
-        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
 
         let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
-        let expires_at = screenshot.expires_at.unwrap();
-        assert!(expires_at >= before_update + Duration::seconds(3600));
-        assert!(expires_at <= after_update + Duration::seconds(3600));
+        assert_eq!(screenshot.expires_at, original_expiry);
+    }
+
+    #[tokio::test]
+    async fn test_admin_user_maximum_can_exceed_server_default_maximum() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+
+        let req = authed_json_request(
+            "PATCH",
+            "/api/admin/server-retention",
+            &cookie,
+            serde_json::json!({
+                "default_expiry_seconds": 1800,
+                "default_max_expiry_seconds": 3600
+            }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/admin/users/{}/retention", admin.id),
+            &cookie,
+            serde_json::json!({ "mode": "duration", "seconds": 7200 }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body_json(resp).await;
+        assert_eq!(
+            body["retention"]["effective_max_expiry_seconds"],
+            serde_json::json!(7200)
+        );
+
+        let resp = upload_screenshot_response(&app, &cookie, &[("expires_in", "90m")]).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let body = body_json(resp).await;
+        let id: uuid::Uuid = body["id"].as_str().unwrap().parse().unwrap();
+        let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
+        assert_eq!(
+            screenshot.expires_at.unwrap(),
+            screenshot.created_at + Duration::minutes(90)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_never_requires_an_unlimited_effective_user_maximum() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app_with_config(dir.path(), |config| {
+            config.server.max_expiry_seconds = Some(3600);
+            config.auth.default_expiry_seconds = Some(1800);
+        });
+        let cookie = setup_user(&app).await;
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+
+        let resp = upload_screenshot_response(&app, &cookie, &[("expires_in", "never")]).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/admin/users/{}/retention", admin.id),
+            &cookie,
+            serde_json::json!({ "mode": "unlimited" }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req = authed_json_request(
+            "PATCH",
+            &format!("/api/admin/users/{}", admin.id),
+            &cookie,
+            serde_json::json!({ "password": "replacement-password" }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = upload_screenshot_response(&app, &cookie, &[("expires_in", "never")]).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let body = body_json(resp).await;
+        let id: uuid::Uuid = body["id"].as_str().unwrap().parse().unwrap();
+        assert!(state
+            .db
+            .get_screenshot_by_id(&id)
+            .unwrap()
+            .unwrap()
+            .expires_at
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn test_user_default_expiry_applies_to_uploads_and_ping() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app_with_config(dir.path(), |config| {
+            config.server.max_expiry_seconds = Some(4 * 3600);
+            config.auth.default_expiry_seconds = Some(3600);
+        });
+        let cookie = setup_user(&app).await;
+
+        let req = authed_json_request(
+            "PUT",
+            "/api/user/retention",
+            &cookie,
+            serde_json::json!({ "mode": "duration", "seconds": 7200 }),
+        );
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let resp = upload_screenshot_response(&app, &cookie, &[]).await;
+        assert_eq!(resp.status(), StatusCode::CREATED);
+        let body = body_json(resp).await;
+        assert!(body["expires_at"].is_string());
+        let id: uuid::Uuid = body["id"].as_str().unwrap().parse().unwrap();
+        let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
+        assert_eq!(
+            screenshot.expires_at.unwrap(),
+            screenshot.created_at + Duration::hours(2)
+        );
+
+        let req = authed_request("GET", "/api/ping", &cookie);
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body_json(resp).await;
+        assert_eq!(
+            body["retention"]["effective_default_expiry_seconds"],
+            serde_json::json!(7200)
+        );
+        assert_eq!(
+            body["retention"]["effective_max_expiry_seconds"],
+            serde_json::json!(14400)
+        );
     }
 
     #[tokio::test]

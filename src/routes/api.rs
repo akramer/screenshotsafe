@@ -20,6 +20,10 @@ use crate::models::{
     AccountStatus, Annotation, ApiToken, CropRect, ExtensionAuthorizationCode, OAuthIdentity,
     Screenshot, ThemePreference, User,
 };
+use crate::retention::{
+    effective_policy, EffectiveRetentionPolicy, ServerRetentionSettings, UserDefaultMode,
+    UserMaximumMode,
+};
 use crate::{auth, image_processing, share_id, AppError, SharedState};
 
 // ── Setup (first-run) ──
@@ -949,11 +953,18 @@ pub async fn admin_update_user_limits(
         }
     }
 
-    let updated =
-        state
+    if req.max_screenshot_size_bytes.is_some()
+        && !state
             .db
-            .update_user_limits(&id, max_screenshot_size_bytes, max_expiry_seconds)?;
-    if !updated {
+            .update_user_screenshot_size_limit(&id, max_screenshot_size_bytes)?
+    {
+        return Err(AppError::NotFound);
+    }
+    if req.max_expiry_seconds.is_some()
+        && !state
+            .db
+            .update_user_limits(&id, max_screenshot_size_bytes, max_expiry_seconds)?
+    {
         return Err(AppError::NotFound);
     }
     if let Some(password_hash) = password_hash {
@@ -1172,6 +1183,196 @@ pub async fn disconnect_oauth_identity(
     Ok(Json(serde_json::json!({ "ok": true })))
 }
 
+#[derive(Deserialize)]
+pub struct UpdateServerRetentionRequest {
+    pub default_expiry_seconds: Option<Option<u64>>,
+    pub default_max_expiry_seconds: Option<Option<u64>>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateUserMaximumRequest {
+    pub mode: UserMaximumMode,
+    pub seconds: Option<u64>,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateUserDefaultRequest {
+    pub mode: UserDefaultMode,
+    pub seconds: Option<u64>,
+}
+
+pub async fn admin_get_server_retention(
+    State(state): State<SharedState>,
+    AdminUser(_admin): AdminUser,
+) -> crate::Result<Json<serde_json::Value>> {
+    let settings = state.db.get_server_retention()?;
+    Ok(Json(server_retention_json(settings, 0)))
+}
+
+pub async fn admin_update_server_retention(
+    State(state): State<SharedState>,
+    AdminUser(_admin): AdminUser,
+    Json(req): Json<UpdateServerRetentionRequest>,
+) -> crate::Result<Json<serde_json::Value>> {
+    let current = state.db.get_server_retention()?;
+    let settings = ServerRetentionSettings {
+        default_expiry_seconds: req
+            .default_expiry_seconds
+            .unwrap_or(current.default_expiry_seconds),
+        default_max_expiry_seconds: req
+            .default_max_expiry_seconds
+            .unwrap_or(current.default_max_expiry_seconds),
+    };
+    validate_server_retention(settings)?;
+    let adjusted_users = state.db.update_server_retention(settings)?;
+    Ok(Json(server_retention_json(settings, adjusted_users)))
+}
+
+pub async fn admin_get_user_retention(
+    State(state): State<SharedState>,
+    AdminUser(_admin): AdminUser,
+    Path(id): Path<Uuid>,
+) -> crate::Result<Json<serde_json::Value>> {
+    let user = state.db.get_user_by_id(&id)?.ok_or(AppError::NotFound)?;
+    let policy = load_effective_retention(&state, &user)?;
+    Ok(Json(serde_json::json!({ "ok": true, "retention": policy })))
+}
+
+pub async fn admin_update_user_retention(
+    State(state): State<SharedState>,
+    AdminUser(_admin): AdminUser,
+    Path(id): Path<Uuid>,
+    Json(req): Json<UpdateUserMaximumRequest>,
+) -> crate::Result<Json<serde_json::Value>> {
+    let user = state.db.get_user_by_id(&id)?.ok_or(AppError::NotFound)?;
+    let seconds = match req.mode {
+        UserMaximumMode::Duration => Some(validate_duration(
+            req.seconds,
+            "A custom maximum duration is required",
+        )?),
+        UserMaximumMode::Inherit | UserMaximumMode::Unlimited => None,
+    };
+    let server = state.db.get_server_retention()?;
+    let effective_maximum = match req.mode {
+        UserMaximumMode::Inherit => server.default_max_expiry_seconds,
+        UserMaximumMode::Duration => seconds,
+        UserMaximumMode::Unlimited => None,
+    };
+    if !state
+        .db
+        .update_user_retention_maximum(&user.id, req.mode, seconds, effective_maximum)?
+    {
+        return Err(AppError::NotFound);
+    }
+    let updated_user = state.db.get_user_by_id(&id)?.ok_or(AppError::NotFound)?;
+    let policy = load_effective_retention(&state, &updated_user)?;
+    Ok(Json(serde_json::json!({ "ok": true, "retention": policy })))
+}
+
+pub async fn get_user_retention(
+    State(state): State<SharedState>,
+    ApiOrSessionUser(user): ApiOrSessionUser,
+) -> crate::Result<Json<serde_json::Value>> {
+    let policy = load_effective_retention(&state, &user)?;
+    Ok(Json(serde_json::json!({ "ok": true, "retention": policy })))
+}
+
+pub async fn update_user_retention(
+    State(state): State<SharedState>,
+    ApiOrSessionUser(user): ApiOrSessionUser,
+    Json(req): Json<UpdateUserDefaultRequest>,
+) -> crate::Result<Json<serde_json::Value>> {
+    let current_policy = load_effective_retention(&state, &user)?;
+    let seconds = match req.mode {
+        UserDefaultMode::Duration => Some(validate_duration(
+            req.seconds,
+            "A custom default duration is required",
+        )?),
+        UserDefaultMode::Inherit | UserDefaultMode::Never => None,
+    };
+    match (
+        req.mode,
+        seconds,
+        current_policy.effective_max_expiry_seconds,
+    ) {
+        (UserDefaultMode::Never, _, Some(maximum)) => {
+            return Err(AppError::BadRequest(format!(
+                "Never is not allowed because your maximum lifetime is {}",
+                format_duration(maximum)
+            )));
+        }
+        (UserDefaultMode::Duration, Some(duration), Some(maximum)) if duration > maximum => {
+            return Err(AppError::BadRequest(format!(
+                "Default expiry cannot exceed your maximum lifetime of {}",
+                format_duration(maximum)
+            )));
+        }
+        _ => {}
+    }
+    if !state
+        .db
+        .update_user_retention_default(&user.id, req.mode, seconds)?
+    {
+        return Err(AppError::NotFound);
+    }
+    let policy = load_effective_retention(&state, &user)?;
+    Ok(Json(serde_json::json!({ "ok": true, "retention": policy })))
+}
+
+fn validate_server_retention(settings: ServerRetentionSettings) -> crate::Result<()> {
+    if let Some(default) = settings.default_expiry_seconds {
+        validate_duration(Some(default), "Default expiry must be greater than zero")?;
+    }
+    if let Some(maximum) = settings.default_max_expiry_seconds {
+        validate_duration(
+            Some(maximum),
+            "Default maximum lifetime must be greater than zero",
+        )?;
+        match settings.default_expiry_seconds {
+            Some(default) if default <= maximum => {}
+            Some(_) => {
+                return Err(AppError::BadRequest(
+                    "Server default expiry cannot exceed the default maximum lifetime".into(),
+                ));
+            }
+            None => {
+                return Err(AppError::BadRequest(
+                    "Server default cannot be Never while a default maximum exists".into(),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_duration(value: Option<u64>, missing_message: &str) -> crate::Result<u64> {
+    value
+        .filter(|value| *value > 0 && i64::try_from(*value).is_ok())
+        .ok_or_else(|| AppError::BadRequest(missing_message.to_string()))
+}
+
+fn load_effective_retention(
+    state: &SharedState,
+    user: &User,
+) -> crate::Result<EffectiveRetentionPolicy> {
+    Ok(effective_policy(
+        state.db.get_server_retention()?,
+        state.db.get_user_retention(&user.id)?,
+    ))
+}
+
+fn server_retention_json(
+    settings: ServerRetentionSettings,
+    adjusted_users: usize,
+) -> serde_json::Value {
+    serde_json::json!({
+        "ok": true,
+        "default_expiry_seconds": settings.default_expiry_seconds,
+        "default_max_expiry_seconds": settings.default_max_expiry_seconds,
+        "adjusted_user_defaults": adjusted_users,
+    })
+}
+
 // ── Screenshot upload ──
 
 pub async fn upload_screenshot(
@@ -1273,12 +1474,8 @@ pub async fn upload_screenshot(
     let created_at = Utc::now();
 
     // Calculate expiration
-    let expires_at = resolve_expires_at(
-        expires_in.as_deref(),
-        state.config.auth.default_expiry_seconds,
-        effective_max_expiry_seconds(&state, &user),
-        created_at,
-    )?;
+    let retention = load_effective_retention(&state, &user)?;
+    let expires_at = resolve_expires_at(expires_in.as_deref(), retention, created_at)?;
 
     let screenshot = Screenshot {
         id,
@@ -1313,6 +1510,7 @@ pub async fn upload_screenshot(
             "share_url": share_url,
             "raw_url": raw_url,
             "image_dpi": screenshot.image_dpi,
+            "expires_at": screenshot.expires_at,
             "created_at": screenshot.created_at,
         })),
     ))
@@ -1404,37 +1602,51 @@ async fn read_image_field(mut field: Field<'_>, max_size_bytes: u64) -> crate::R
     Ok(image_data)
 }
 
-fn effective_max_expiry_seconds(state: &SharedState, user: &User) -> Option<u64> {
-    user.max_expiry_seconds
-        .or(state.config.server.max_expiry_seconds)
-}
-
 fn resolve_expires_at(
     requested: Option<&str>,
-    default_expiry_seconds: Option<u64>,
-    max_expiry_seconds: Option<u64>,
+    policy: EffectiveRetentionPolicy,
     base_time: chrono::DateTime<Utc>,
 ) -> crate::Result<Option<chrono::DateTime<Utc>>> {
-    let seconds = match requested {
-        Some(value) => parse_expiry_seconds(value)?,
-        None => default_expiry_seconds,
+    let choice = match requested.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) => parse_expiry_choice(value)?,
+        None => match policy.effective_default_expiry_seconds {
+            Some(seconds) => ExpiryChoice::Duration(seconds),
+            None => ExpiryChoice::Never,
+        },
     };
-    let Some(seconds) = seconds else {
-        return Ok(None);
-    };
-    let capped_seconds = max_expiry_seconds.map_or(seconds, |max| seconds.min(max));
-    if i64::try_from(capped_seconds).is_err() {
-        return Err(AppError::BadRequest("Expiry value is too large".into()));
+    match choice {
+        ExpiryChoice::Never => {
+            if let Some(maximum) = policy.effective_max_expiry_seconds {
+                return Err(AppError::BadRequest(format!(
+                    "Never is not allowed because your maximum lifetime is {}",
+                    format_duration(maximum)
+                )));
+            }
+            Ok(None)
+        }
+        ExpiryChoice::Duration(seconds) => {
+            if let Some(maximum) = policy.effective_max_expiry_seconds {
+                if seconds > maximum {
+                    return Err(AppError::BadRequest(format!(
+                        "Expiry cannot exceed your maximum lifetime of {}",
+                        format_duration(maximum)
+                    )));
+                }
+            }
+            Ok(Some(base_time + chrono::Duration::seconds(seconds as i64)))
+        }
     }
-    Ok(Some(
-        base_time + chrono::Duration::seconds(capped_seconds as i64),
-    ))
 }
 
-fn parse_expiry_seconds(s: &str) -> crate::Result<Option<u64>> {
+enum ExpiryChoice {
+    Never,
+    Duration(u64),
+}
+
+fn parse_expiry_choice(s: &str) -> crate::Result<ExpiryChoice> {
     let s = s.trim();
-    if s.is_empty() || s == "0" || s == "never" {
-        return Ok(None);
+    if s == "0" || s.eq_ignore_ascii_case("never") {
+        return Ok(ExpiryChoice::Never);
     }
 
     // Parse formats like "30d", "24h", "1w"
@@ -1456,7 +1668,41 @@ fn parse_expiry_seconds(s: &str) -> crate::Result<Option<u64>> {
         .checked_mul(multiplier)
         .filter(|seconds| i64::try_from(*seconds).is_ok())
         .ok_or_else(|| AppError::BadRequest("Expiry value is too large".into()))?;
-    Ok(Some(seconds))
+    Ok(ExpiryChoice::Duration(seconds))
+}
+
+fn format_duration(seconds: u64) -> String {
+    const MINUTE: u64 = 60;
+    const HOUR: u64 = 60 * MINUTE;
+    const DAY: u64 = 24 * HOUR;
+    const WEEK: u64 = 7 * DAY;
+    if seconds.is_multiple_of(WEEK) {
+        format!(
+            "{} week{}",
+            seconds / WEEK,
+            if seconds == WEEK { "" } else { "s" }
+        )
+    } else if seconds.is_multiple_of(DAY) {
+        format!(
+            "{} day{}",
+            seconds / DAY,
+            if seconds == DAY { "" } else { "s" }
+        )
+    } else if seconds.is_multiple_of(HOUR) {
+        format!(
+            "{} hour{}",
+            seconds / HOUR,
+            if seconds == HOUR { "" } else { "s" }
+        )
+    } else if seconds.is_multiple_of(MINUTE) {
+        format!(
+            "{} minute{}",
+            seconds / MINUTE,
+            if seconds == MINUTE { "" } else { "s" }
+        )
+    } else {
+        format!("{} seconds", seconds)
+    }
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -1746,13 +1992,9 @@ pub async fn update_screenshot(
         }
     }
 
+    let retention = load_effective_retention(&state, &user)?;
     let expires_at = match req.expires_in.as_deref() {
-        Some(value) => Some(resolve_expires_at(
-            Some(value),
-            state.config.auth.default_expiry_seconds,
-            effective_max_expiry_seconds(&state, &user),
-            Utc::now(),
-        )?),
+        Some(value) => Some(resolve_expires_at(Some(value), retention, Utc::now())?),
         None => None,
     };
     let source_url = req.source_url.as_ref().map(|url| {
@@ -1802,7 +2044,14 @@ pub async fn update_screenshot(
             .update_screenshot_rendered_path(&id, &rendered_path_str)?;
     }
 
-    Ok(Json(serde_json::json!({ "ok": true })))
+    let stored_expiry = match expires_at {
+        Some(value) => value,
+        None => screenshot.expires_at,
+    };
+    Ok(Json(serde_json::json!({
+        "ok": true,
+        "expires_at": stored_expiry,
+    })))
 }
 
 // ── Delete screenshot ──
@@ -2315,12 +2564,15 @@ pub async fn revoke_token(
 // ── Ping ──
 
 pub async fn ping(
+    State(state): State<SharedState>,
     ApiOrSessionUser(user): ApiOrSessionUser,
 ) -> crate::Result<Json<serde_json::Value>> {
+    let retention = load_effective_retention(&state, &user)?;
     Ok(Json(serde_json::json!({
         "ok": true,
         "username": user.username,
         "display_name": user.display_name,
         "theme_preference": user.theme_preference,
+        "retention": retention,
     })))
 }

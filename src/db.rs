@@ -3,6 +3,9 @@ use rusqlite::{params, Connection, OptionalExtension, Row};
 use std::sync::Mutex;
 
 use crate::models::{AccountStatus, ApiToken, OAuthIdentity, Screenshot, ThemePreference, User};
+use crate::retention::{
+    ServerRetentionSettings, UserDefaultMode, UserMaximumMode, UserRetentionSettings,
+};
 use crate::Result;
 
 type ScreenshotFilePaths = Vec<(String, Option<String>)>;
@@ -131,6 +134,21 @@ impl Database {
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
 
+            CREATE TABLE IF NOT EXISTS server_retention_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                default_expiry_seconds INTEGER,
+                default_max_expiry_seconds INTEGER,
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE TABLE IF NOT EXISTS user_retention_settings (
+                user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                maximum_mode TEXT NOT NULL DEFAULT 'inherit',
+                maximum_seconds INTEGER,
+                default_mode TEXT NOT NULL DEFAULT 'inherit',
+                default_seconds INTEGER
+            );
+
             CREATE INDEX IF NOT EXISTS idx_screenshots_share_id ON screenshots(share_id);
             CREATE INDEX IF NOT EXISTS idx_screenshots_user_id ON screenshots(user_id);
             CREATE INDEX IF NOT EXISTS idx_screenshots_expires_at ON screenshots(expires_at);
@@ -149,6 +167,15 @@ impl Database {
         )?;
         add_column_if_missing(&conn, "users", "max_screenshot_size_bytes", "INTEGER")?;
         add_column_if_missing(&conn, "users", "max_expiry_seconds", "INTEGER")?;
+        conn.execute(
+            "INSERT INTO user_retention_settings
+                (user_id, maximum_mode, maximum_seconds, default_mode, default_seconds)
+             SELECT id, 'duration', max_expiry_seconds, 'inherit', NULL
+             FROM users
+             WHERE max_expiry_seconds IS NOT NULL
+             ON CONFLICT(user_id) DO NOTHING",
+            [],
+        )?;
         add_column_if_missing(
             &conn,
             "users",
@@ -181,6 +208,190 @@ impl Database {
             "INTEGER NOT NULL DEFAULT 0",
         )?;
         Ok(())
+    }
+
+    pub fn initialize_server_retention(
+        &self,
+        default_expiry_seconds: Option<u64>,
+        default_max_expiry_seconds: Option<u64>,
+    ) -> Result<()> {
+        let default_expiry_seconds = match (default_expiry_seconds, default_max_expiry_seconds) {
+            (Some(default), Some(maximum)) => Some(default.min(maximum)),
+            (None, Some(maximum)) => Some(maximum),
+            (default, None) => default,
+        };
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO server_retention_settings
+                (id, default_expiry_seconds, default_max_expiry_seconds)
+             VALUES (1, ?1, ?2)
+             ON CONFLICT(id) DO NOTHING",
+            params![
+                default_expiry_seconds.map(|value| value as i64),
+                default_max_expiry_seconds.map(|value| value as i64),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn get_server_retention(&self) -> Result<ServerRetentionSettings> {
+        let conn = self.conn.lock().unwrap();
+        let settings = conn
+            .query_row(
+                "SELECT default_expiry_seconds, default_max_expiry_seconds
+                 FROM server_retention_settings WHERE id = 1",
+                [],
+                |row| {
+                    Ok(ServerRetentionSettings {
+                        default_expiry_seconds: optional_u64(row.get(0)?),
+                        default_max_expiry_seconds: optional_u64(row.get(1)?),
+                    })
+                },
+            )
+            .optional()?;
+        Ok(settings.unwrap_or(ServerRetentionSettings {
+            default_expiry_seconds: Some(30 * 24 * 60 * 60),
+            default_max_expiry_seconds: None,
+        }))
+    }
+
+    pub fn update_server_retention(&self, settings: ServerRetentionSettings) -> Result<usize> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        tx.execute(
+            "INSERT INTO server_retention_settings
+                (id, default_expiry_seconds, default_max_expiry_seconds, updated_at)
+             VALUES (1, ?1, ?2, datetime('now'))
+             ON CONFLICT(id) DO UPDATE SET
+                default_expiry_seconds = excluded.default_expiry_seconds,
+                default_max_expiry_seconds = excluded.default_max_expiry_seconds,
+                updated_at = datetime('now')",
+            params![
+                settings.default_expiry_seconds.map(|value| value as i64),
+                settings
+                    .default_max_expiry_seconds
+                    .map(|value| value as i64),
+            ],
+        )?;
+
+        let adjusted_users = if let Some(maximum) = settings.default_max_expiry_seconds {
+            tx.execute(
+                "UPDATE user_retention_settings
+                 SET default_mode = 'duration', default_seconds = ?1
+                 WHERE maximum_mode = 'inherit'
+                   AND (
+                        default_mode = 'never'
+                        OR (default_mode = 'duration' AND default_seconds > ?1)
+                   )",
+                params![maximum as i64],
+            )?
+        } else {
+            0
+        };
+        tx.commit()?;
+        Ok(adjusted_users)
+    }
+
+    pub fn get_user_retention(&self, user_id: &uuid::Uuid) -> Result<UserRetentionSettings> {
+        let conn = self.conn.lock().unwrap();
+        let settings = conn
+            .query_row(
+                "SELECT maximum_mode, maximum_seconds, default_mode, default_seconds
+                 FROM user_retention_settings WHERE user_id = ?1",
+                params![user_id.to_string()],
+                |row| {
+                    Ok(UserRetentionSettings {
+                        maximum_mode: UserMaximumMode::from(row.get::<_, String>(0)?.as_str()),
+                        maximum_seconds: optional_u64(row.get(1)?),
+                        default_mode: UserDefaultMode::from(row.get::<_, String>(2)?.as_str()),
+                        default_seconds: optional_u64(row.get(3)?),
+                    })
+                },
+            )
+            .optional()?;
+        Ok(settings.unwrap_or_default())
+    }
+
+    pub fn update_user_retention_maximum(
+        &self,
+        user_id: &uuid::Uuid,
+        mode: UserMaximumMode,
+        seconds: Option<u64>,
+        effective_maximum: Option<u64>,
+    ) -> Result<bool> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        let exists: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM users WHERE id = ?1)",
+            params![user_id.to_string()],
+            |row| row.get(0),
+        )?;
+        if !exists {
+            tx.rollback()?;
+            return Ok(false);
+        }
+        tx.execute(
+            "INSERT INTO user_retention_settings
+                (user_id, maximum_mode, maximum_seconds, default_mode, default_seconds)
+             VALUES (?1, ?2, ?3, 'inherit', NULL)
+             ON CONFLICT(user_id) DO UPDATE SET
+                maximum_mode = excluded.maximum_mode,
+                maximum_seconds = excluded.maximum_seconds",
+            params![
+                user_id.to_string(),
+                mode.as_str(),
+                seconds.map(|value| value as i64),
+            ],
+        )?;
+        tx.execute(
+            "UPDATE users SET max_expiry_seconds = ?1 WHERE id = ?2",
+            params![
+                if mode == UserMaximumMode::Duration {
+                    seconds.map(|value| value as i64)
+                } else {
+                    None
+                },
+                user_id.to_string(),
+            ],
+        )?;
+        if let Some(maximum) = effective_maximum {
+            tx.execute(
+                "UPDATE user_retention_settings
+                 SET default_mode = 'duration', default_seconds = ?1
+                 WHERE user_id = ?2
+                   AND (
+                        default_mode = 'never'
+                        OR (default_mode = 'duration' AND default_seconds > ?1)
+                   )",
+                params![maximum as i64, user_id.to_string()],
+            )?;
+        }
+        tx.commit()?;
+        Ok(true)
+    }
+
+    pub fn update_user_retention_default(
+        &self,
+        user_id: &uuid::Uuid,
+        mode: UserDefaultMode,
+        seconds: Option<u64>,
+    ) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let rows = conn.execute(
+            "INSERT INTO user_retention_settings
+                (user_id, maximum_mode, maximum_seconds, default_mode, default_seconds)
+             SELECT ?1, 'inherit', NULL, ?2, ?3
+             WHERE EXISTS(SELECT 1 FROM users WHERE id = ?1)
+             ON CONFLICT(user_id) DO UPDATE SET
+                default_mode = excluded.default_mode,
+                default_seconds = excluded.default_seconds",
+            params![
+                user_id.to_string(),
+                mode.as_str(),
+                seconds.map(|value| value as i64),
+            ],
+        )?;
+        Ok(rows > 0)
     }
 
     // ── User operations ──
@@ -220,6 +431,14 @@ impl Database {
                 user.created_at.to_rfc3339(),
             ],
         )?;
+        if let Some(maximum) = user.max_expiry_seconds {
+            conn.execute(
+                "INSERT INTO user_retention_settings
+                    (user_id, maximum_mode, maximum_seconds, default_mode, default_seconds)
+                 VALUES (?1, 'duration', ?2, 'inherit', NULL)",
+                params![user.id.to_string(), maximum as i64],
+            )?;
+        }
         Ok(())
     }
 
@@ -310,6 +529,53 @@ impl Database {
             params![
                 max_screenshot_size_bytes.map(|v| v as i64),
                 max_expiry_seconds.map(|v| v as i64),
+                id.to_string(),
+            ],
+        )?;
+        if rows > 0 {
+            conn.execute(
+                "INSERT INTO user_retention_settings
+                    (user_id, maximum_mode, maximum_seconds, default_mode, default_seconds)
+                 VALUES (?1, ?2, ?3, 'inherit', NULL)
+                 ON CONFLICT(user_id) DO UPDATE SET
+                    maximum_mode = excluded.maximum_mode,
+                    maximum_seconds = excluded.maximum_seconds",
+                params![
+                    id.to_string(),
+                    if max_expiry_seconds.is_some() {
+                        "duration"
+                    } else {
+                        "inherit"
+                    },
+                    max_expiry_seconds.map(|value| value as i64),
+                ],
+            )?;
+            if let Some(maximum) = max_expiry_seconds {
+                conn.execute(
+                    "UPDATE user_retention_settings
+                     SET default_mode = 'duration', default_seconds = ?1
+                     WHERE user_id = ?2
+                       AND (
+                            default_mode = 'never'
+                            OR (default_mode = 'duration' AND default_seconds > ?1)
+                       )",
+                    params![maximum as i64, id.to_string()],
+                )?;
+            }
+        }
+        Ok(rows > 0)
+    }
+
+    pub fn update_user_screenshot_size_limit(
+        &self,
+        id: &uuid::Uuid,
+        max_screenshot_size_bytes: Option<u64>,
+    ) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        let rows = conn.execute(
+            "UPDATE users SET max_screenshot_size_bytes = ?1 WHERE id = ?2",
+            params![
+                max_screenshot_size_bytes.map(|value| value as i64),
                 id.to_string(),
             ],
         )?;

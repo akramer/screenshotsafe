@@ -240,6 +240,9 @@ impl Config {
         if let Ok(val) = std::env::var("SSS_MAX_EXPIRY_SECONDS") {
             config.server.max_expiry_seconds = parse_optional_u64(&val);
         }
+        if let Ok(val) = std::env::var("SSS_DEFAULT_EXPIRY_SECONDS") {
+            config.auth.default_expiry_seconds = parse_optional_u64(&val);
+        }
         if let Ok(val) = std::env::var("SSS_STORAGE_PATH") {
             config.storage.path = val;
         }
@@ -308,6 +311,10 @@ impl Config {
         config.server.max_expiry_seconds = config
             .server
             .max_expiry_seconds
+            .filter(|seconds| *seconds > 0 && i64::try_from(*seconds).is_ok());
+        config.auth.default_expiry_seconds = config
+            .auth
+            .default_expiry_seconds
             .filter(|seconds| *seconds > 0 && i64::try_from(*seconds).is_ok());
         config.auth.allowed_extension_origins = config
             .auth

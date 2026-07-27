@@ -386,12 +386,12 @@
             <div class="section" id="upload-controls">
                 <label class="label" for="expires-in">Expires</label>
                 <select id="expires-in">
-                    <option value="">Server default</option>
-                    <option value="never">Never</option>
-                    <option value="1h">In 1 hour</option>
-                    <option value="24h">In 24 hours</option>
-                    <option value="7d">In 7 days</option>
-                    <option value="30d">In 30 days</option>
+                    <option value="">Account default</option>
+                    <option value="never" data-seconds="never">Never</option>
+                    <option value="1h" data-seconds="3600">In 1 hour</option>
+                    <option value="24h" data-seconds="86400">In 24 hours</option>
+                    <option value="7d" data-seconds="604800">In 7 days</option>
+                    <option value="30d" data-seconds="2592000">In 30 days</option>
                 </select>
                 <button class="btn btn-primary" id="upload-btn" type="button">Finalize and Upload</button>
             </div>

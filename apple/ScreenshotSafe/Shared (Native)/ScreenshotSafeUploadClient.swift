@@ -17,11 +17,61 @@ struct ScreenshotSafeUploadResult: Decodable {
 struct ScreenshotSafePingResult: Decodable {
     let username: String
     let displayName: String
+    let retention: ScreenshotSafeRetentionPolicy?
 
     enum CodingKeys: String, CodingKey {
         case username
         case displayName = "display_name"
+        case retention
     }
+}
+
+struct ScreenshotSafeRetentionPolicy: Decodable {
+    let userDefaultMode: String
+    let userDefaultSeconds: UInt64?
+    let effectiveDefaultExpirySeconds: UInt64?
+    let effectiveMaxExpirySeconds: UInt64?
+    let allowNever: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case userDefaultMode = "user_default_mode"
+        case userDefaultSeconds = "user_default_seconds"
+        case effectiveDefaultExpirySeconds = "effective_default_expiry_seconds"
+        case effectiveMaxExpirySeconds = "effective_max_expiry_seconds"
+        case allowNever = "allow_never"
+    }
+
+    var editorValue: String {
+        switch userDefaultMode {
+        case "never":
+            return "never"
+        case "duration":
+            guard let seconds = userDefaultSeconds else { return "" }
+            return Self.durationValue(seconds) ?? ""
+        default:
+            return ""
+        }
+    }
+
+    var webDictionary: [String: Any] {
+        [
+            "effectiveDefaultExpirySeconds": effectiveDefaultExpirySeconds ?? NSNull(),
+            "effectiveMaxExpirySeconds": effectiveMaxExpirySeconds ?? NSNull(),
+            "allowNever": allowNever,
+        ]
+    }
+
+    private static func durationValue(_ seconds: UInt64) -> String? {
+        if seconds % 604800 == 0 { return "\(seconds / 604800)w" }
+        if seconds % 86400 == 0 { return "\(seconds / 86400)d" }
+        if seconds % 3600 == 0 { return "\(seconds / 3600)h" }
+        if seconds % 60 == 0 { return "\(seconds / 60)m" }
+        return nil
+    }
+}
+
+private struct ScreenshotSafeRetentionResponse: Decodable {
+    let retention: ScreenshotSafeRetentionPolicy
 }
 
 enum ScreenshotSafeUploadError: LocalizedError {
@@ -97,6 +147,55 @@ final class ScreenshotSafeUploadClient {
         }.resume()
     }
 
+    func updateDefaultRetention(
+        settings: ScreenshotSafeSettings,
+        mode: String,
+        seconds: UInt64?,
+        completion: @escaping (Result<ScreenshotSafeRetentionPolicy, Error>) -> Void
+    ) {
+        guard settings.isConfigured else {
+            completion(.failure(ScreenshotSafeUploadError.notConfigured))
+            return
+        }
+        guard let url = endpoint(path: "/api/user/retention", serverURL: settings.serverURL) else {
+            completion(.failure(ScreenshotSafeUploadError.invalidServerURL))
+            return
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "PUT"
+        request.setValue("Bearer \(settings.apiToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        var payload: [String: Any] = ["mode": mode]
+        if let seconds = seconds {
+            payload["seconds"] = seconds
+        }
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+
+        session.dataTask(with: request) { data, response, error in
+            if let error = error {
+                completion(.failure(error))
+                return
+            }
+            guard let http = response as? HTTPURLResponse, let data = data else {
+                completion(.failure(ScreenshotSafeUploadError.invalidResponse))
+                return
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                let message = Self.serverErrorMessage(from: data)
+                    ?? "Could not save default expiry (\(http.statusCode))."
+                completion(.failure(ScreenshotSafeUploadError.server(message)))
+                return
+            }
+            do {
+                completion(.success(
+                    try JSONDecoder().decode(ScreenshotSafeRetentionResponse.self, from: data).retention
+                ))
+            } catch {
+                completion(.failure(error))
+            }
+        }.resume()
+    }
+
     func revoke(settings: ScreenshotSafeSettings, completion: @escaping (Bool) -> Void) {
         guard
             settings.isConfigured,
@@ -125,6 +224,7 @@ final class ScreenshotSafeUploadClient {
         sourceURL: String?,
         imageDPI: Double? = nil,
         settings: ScreenshotSafeSettings,
+        expiresIn: String? = nil,
         completion: @escaping (Result<ScreenshotSafeUploadResult, Error>) -> Void
     ) {
         guard settings.isConfigured else {
@@ -150,7 +250,7 @@ final class ScreenshotSafeUploadClient {
             title: title,
             sourceURL: sourceURL,
             imageDPI: imageDPI,
-            expiresIn: settings.defaultExpiry
+            expiresIn: expiresIn ?? ""
         )
         request.setValue(String(body.count), forHTTPHeaderField: "Content-Length")
         request.httpBody = body

@@ -79,7 +79,8 @@
             renderEditor();
             try {
                 await refreshPinnedConnection();
-                await verifyConnection();
+                const ping = await verifyConnection();
+                configureExpiryOptions(ping.retention);
             } catch (err) {
                 showError(err.message);
                 await ext.runtime.sendMessage({
@@ -162,7 +163,7 @@
             });
 
             if (resp.ok) {
-                return;
+                return resp.json();
             }
         } catch (_) {
             // Report the same actionable connection error below.
@@ -173,6 +174,44 @@
             reason: 'login-required',
         });
         throw new Error('The selected ScreenshotSafe server is not connected. Check extension settings.');
+    }
+
+    function configureExpiryOptions(retention) {
+        if (!retention) return;
+        const defaultOption = expiresInSelect.querySelector('option[value=""]');
+        if (defaultOption) {
+            defaultOption.textContent = `Account default — ${formatDuration(
+                retention.effective_default_expiry_seconds
+            )}`;
+        }
+        const maximum = retention.effective_max_expiry_seconds;
+        expiresInSelect.querySelectorAll('option[data-seconds]').forEach((option) => {
+            const seconds = option.dataset.seconds === 'never'
+                ? null
+                : Number(option.dataset.seconds);
+            option.hidden = maximum !== null && (seconds === null || seconds > maximum);
+            option.disabled = option.hidden;
+        });
+        if (expiresInSelect.selectedOptions[0]?.disabled) {
+            expiresInSelect.value = '';
+        }
+    }
+
+    function formatDuration(seconds) {
+        if (seconds === null || seconds === undefined) return 'Never';
+        const units = [
+            [604800, 'week'],
+            [86400, 'day'],
+            [3600, 'hour'],
+            [60, 'minute'],
+        ];
+        for (const [unit, label] of units) {
+            if (seconds % unit === 0) {
+                const value = seconds / unit;
+                return `${value} ${label}${value === 1 ? '' : 's'}`;
+            }
+        }
+        return `${seconds} seconds`;
     }
 
     async function refreshPinnedConnection() {

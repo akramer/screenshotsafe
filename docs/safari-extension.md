@@ -21,7 +21,8 @@ resources over the Safari resources.
 ## Configuration And Upload
 
 The containing app owns a versioned list of connected servers, one default
-connection, and the default expiry. Non-secret metadata is stored in the
+connection and legacy expiry-migration state. The active server is authoritative
+for the user's default expiry. Non-secret metadata is stored in the
 `group.com.screenshotsafe.safari` app group, while each bearer token is stored
 in the shared Keychain.
 

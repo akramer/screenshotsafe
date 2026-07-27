@@ -6,6 +6,7 @@ pub mod hit_counter;
 pub mod image_processing;
 pub mod models;
 pub mod rate_limit;
+pub mod retention;
 pub mod routes;
 pub mod share_id;
 
@@ -161,11 +162,25 @@ pub fn build_router(state: SharedState) -> Router {
             get(routes::api::get_user_preferences).put(routes::api::update_user_preferences),
         )
         .route(
+            "/api/user/retention",
+            get(routes::api::get_user_retention).put(routes::api::update_user_retention),
+        )
+        .route(
             "/api/auth/oauth/identities/{id}",
             delete(routes::api::disconnect_oauth_identity),
         )
         .route("/api/admin/users", get(routes::api::admin_list_users))
         .route("/api/admin/users", post(routes::api::admin_create_user))
+        .route(
+            "/api/admin/server-retention",
+            get(routes::api::admin_get_server_retention)
+                .patch(routes::api::admin_update_server_retention),
+        )
+        .route(
+            "/api/admin/users/{id}/retention",
+            get(routes::api::admin_get_user_retention)
+                .patch(routes::api::admin_update_user_retention),
+        )
         .route(
             "/api/admin/users/{id}",
             patch(routes::api::admin_update_user_limits),

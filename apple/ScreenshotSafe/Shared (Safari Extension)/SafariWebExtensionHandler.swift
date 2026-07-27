@@ -62,14 +62,28 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
         switch type {
         case "sss-get-native-settings":
             let settings = settingsStore.load()
-            completion([
-                "ok": true,
-                "settings": [
-                    "configured": settings.isConfigured,
+            guard settings.isConfigured else {
+                completion([
+                    "ok": true,
+                    "settings": [
+                        "configured": false,
+                        "serverUrl": settings.serverURL,
+                        "defaultExpiry": "",
+                    ],
+                ])
+                return
+            }
+            ScreenshotSafeUploadClient().verify(settings: settings) { result in
+                var nativeSettings: [String: Any] = [
+                    "configured": true,
                     "serverUrl": settings.serverURL,
-                    "defaultExpiry": settings.defaultExpiry,
-                ],
-            ])
+                    "defaultExpiry": "",
+                ]
+                if case .success(let ping) = result, let retention = ping.retention {
+                    nativeSettings["retention"] = retention.webDictionary
+                }
+                completion(["ok": true, "settings": nativeSettings])
+            }
 
         case "sss-verify-native-settings":
             let settings = settingsStore.load()
@@ -107,10 +121,7 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 return
             }
 
-            var uploadSettings = settings
-            if let expiresIn = message["expiresIn"] as? String {
-                uploadSettings.defaultExpiry = expiresIn
-            }
+            let expiresIn = message["expiresIn"] as? String
 
             let filename = message["filename"] as? String ?? "screenshot.png"
             let title = message["title"] as? String ?? "Screenshot"
@@ -125,7 +136,8 @@ class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
                 title: title,
                 sourceURL: sourceURL,
                 imageDPI: imageDPI,
-                settings: uploadSettings
+                settings: settings,
+                expiresIn: expiresIn
             ) { result in
                 switch result {
                 case .success(let upload):

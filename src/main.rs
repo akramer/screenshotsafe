@@ -26,6 +26,10 @@ async fn main() -> anyhow::Result<()> {
 
     let database = db::Database::open(&config.database.path)?;
     database.run_migrations()?;
+    database.initialize_server_retention(
+        config.auth.default_expiry_seconds,
+        config.server.max_expiry_seconds,
+    )?;
     tracing::info!("Database initialized at {}", config.database.path);
 
     // Load or generate a persistent JWT secret

@@ -194,6 +194,7 @@
                     displayName: data.display_name || connection.displayName || '',
                     username: data.username || connection.username || '',
                     themePreference: data.theme_preference || null,
+                    retention: data.retention || null,
                 };
             }
             if (response.status === 401) return { status: 'login_required', checkedAt };

@@ -505,6 +505,16 @@ final class ScreenshotSafeSettingsStore {
     }
 
     private func postChange() {
-        NotificationCenter.default.post(name: .screenshotSafeSettingsDidChange, object: self)
+        let notify = {
+            NotificationCenter.default.post(
+                name: .screenshotSafeSettingsDidChange,
+                object: self
+            )
+        }
+        if Thread.isMainThread {
+            notify()
+        } else {
+            DispatchQueue.main.async(execute: notify)
+        }
     }
 }

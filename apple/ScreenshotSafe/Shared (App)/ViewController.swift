@@ -464,6 +464,12 @@ private extension Data {
     }
 }
 
+#if os(macOS)
+private final class FlippedStackView: NSStackView {
+    override var isFlipped: Bool { true }
+}
+#endif
+
 class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMessageHandler {
 
     @IBOutlet var webView: WKWebView!
@@ -472,14 +478,16 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
     private let uploadClient = ScreenshotSafeUploadClient()
     private var authorizationCoordinator: ScreenshotSafeAuthorizationCoordinator!
     private var refreshTimer: Timer?
+    private var retentionPolicy: ScreenshotSafeRetentionPolicy?
 
 #if os(macOS)
     private let serverURLField = NSTextField()
     private let expiryPopup = NSPopUpButton()
     private let statusLabel = NSTextField(labelWithString: "")
     private let safariStatusLabel = NSTextField(labelWithString: "")
-    private let serverListStack = NSStackView()
+    private let serverListStack = FlippedStackView()
     private let serverScrollView = NSScrollView()
+    private var serverScrollHeightConstraint: NSLayoutConstraint!
     private let emptyServersLabel = NSTextField(labelWithString: "No ScreenshotSafe servers are connected yet.")
     private let loginButton = NSButton()
 #elseif os(iOS)
@@ -523,7 +531,12 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
             object: nil
         )
 #endif
-        cleanUpLegacyConfiguration()
+        migrateLegacyConfiguration()
+        let legacyDefaultExpiry = settingsStore.loadRegistry().defaultExpiry
+        if !legacyDefaultExpiry.isEmpty,
+           settingsStore.loadRegistry().defaultConnection != nil {
+            saveDefaultExpiryToServer(legacyDefaultExpiry)
+        }
     }
 
 #if os(macOS)
@@ -565,30 +578,82 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
         authorizationCoordinator?.cancel()
     }
 
-    private func cleanUpLegacyConfiguration() {
+    private func migrateLegacyConfiguration() {
         guard let legacy = settingsStore.legacyConfiguration() else {
             return
         }
-        settingsStore.clearLegacyConfiguration()
+
+        let origin: String
+        do {
+            origin = try ScreenshotSafeServerURLNormalizer.normalize(legacy.serverURL)
+        } catch {
+            settingsStore.clearLegacyConfiguration()
+            showStatus(
+                "The previous server address was invalid. Log in to add it again.",
+                isError: true
+            )
+            return
+        }
+
+        if settingsStore.loadRegistry().connections.contains(where: { $0.origin == origin }) {
+            settingsStore.clearLegacyConfiguration()
+            return
+        }
+
+        showStatus("Importing your previous \(origin) connection…", isError: false)
         let settings = ScreenshotSafeSettings(
-            serverURL: legacy.serverURL,
+            serverURL: origin,
             apiToken: legacy.token,
-            defaultExpiry: ""
+            defaultExpiry: settingsStore.loadRegistry().defaultExpiry
         )
-        uploadClient.revoke(settings: settings) { [weak self] revoked in
-            guard !revoked else { return }
+        uploadClient.verify(settings: settings) { [weak self] result in
             DispatchQueue.main.async {
-#if os(macOS)
-                self?.showStatus(
-                    "The previous token could not be revoked. Revoke it from the server's API-token settings.",
-                    isError: true
-                )
-#else
-                self?.showStatus(
-                    "The previous token could not be revoked. Revoke it from the server's API-token settings.",
-                    isError: true
-                )
-#endif
+                guard let self = self else { return }
+
+                // A user may have completed a new login while migration was
+                // checking the old token. Never replace that newer credential.
+                if self.settingsStore.loadRegistry().connections.contains(where: {
+                    $0.origin == origin
+                }) {
+                    self.settingsStore.clearLegacyConfiguration()
+                    return
+                }
+
+                switch result {
+                case .success(let ping):
+                    do {
+                        let hasDefault = self.settingsStore.loadRegistry().defaultConnectionID != nil
+                        _ = try self.settingsStore.upsertVerifiedConnection(
+                            origin: origin,
+                            token: legacy.token,
+                            displayName: ping.displayName,
+                            username: ping.username,
+                            makeDefault: !hasDefault
+                        )
+                        self.settingsStore.clearLegacyConfiguration()
+                        self.showStatus(
+                            "Imported your previous \(origin) connection.",
+                            isError: false,
+                            success: true
+                        )
+                    } catch {
+                        self.showStatus(error.localizedDescription, isError: true)
+                    }
+                case .failure(let error):
+                    let status = self.connectionStatus(for: error)
+                    if status == .loginRequired || status == .accountDisabled {
+                        self.settingsStore.clearLegacyConfiguration()
+                        self.showStatus(
+                            "Your previous \(origin) token is no longer valid. Log in again.",
+                            isError: true
+                        )
+                    } else {
+                        self.showStatus(
+                            "Could not import your previous \(origin) connection yet: \(error.localizedDescription)",
+                            isError: true
+                        )
+                    }
+                }
             }
         }
     }
@@ -635,12 +700,108 @@ class ViewController: PlatformViewController, WKNavigationDelegate, WKScriptMess
 #endif
     }
 
+    private func saveDefaultExpiryToServer(_ value: String) {
+        let registry = settingsStore.loadRegistry()
+        guard
+            let connection = registry.defaultConnection,
+            let token = try? settingsStore.token(for: connection)
+        else {
+            showStatus("Connect a ScreenshotSafe server before changing the default expiry.", isError: true)
+            return
+        }
+
+        let mode: String
+        let seconds: UInt64?
+        if value.isEmpty {
+            mode = "inherit"
+            seconds = nil
+        } else if value == "never" {
+            mode = "never"
+            seconds = nil
+        } else {
+            mode = "duration"
+            seconds = Self.expirySeconds(from: value)
+        }
+        guard mode != "duration" || seconds != nil else {
+            showStatus("That expiry duration is invalid.", isError: true)
+            return
+        }
+
+        let settings = ScreenshotSafeSettings(
+            serverURL: connection.origin,
+            apiToken: token,
+            defaultExpiry: ""
+        )
+        uploadClient.updateDefaultRetention(
+            settings: settings,
+            mode: mode,
+            seconds: seconds
+        ) { [weak self] result in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                switch result {
+                case .success(let policy):
+                    try? self.settingsStore.setDefaultExpiry("")
+                    self.applyRetentionPolicy(policy)
+                    self.showStatus(
+                        "Default expiry saved for \(connection.origin).",
+                        isError: false,
+                        success: true
+                    )
+                case .failure(let error):
+                    self.showStatus(error.localizedDescription, isError: true)
+                }
+            }
+        }
+    }
+
+    private func applyRetentionPolicy(_ policy: ScreenshotSafeRetentionPolicy?) {
+        guard let policy = policy else { return }
+        retentionPolicy = policy
+#if os(iOS)
+        selectedExpiry = policy.editorValue
+        updateExpiryButtonTitle()
+        updateExpiryMenu()
+#elseif os(macOS)
+        let value = policy.editorValue
+        for index in 0..<expiryPopup.numberOfItems {
+            guard let item = expiryPopup.item(at: index),
+                  let itemValue = item.representedObject as? String else { continue }
+            let seconds = Self.expirySeconds(from: itemValue)
+            item.isEnabled = itemValue.isEmpty
+                || (itemValue == "never" && policy.allowNever)
+                || (seconds != nil
+                    && policy.effectiveMaxExpirySeconds.map { seconds! <= $0 } != false)
+            if itemValue == value {
+                expiryPopup.selectItem(at: index)
+            }
+        }
+#endif
+    }
+
+    private static func expirySeconds(from value: String) -> UInt64? {
+        guard let unit = value.last, let amount = UInt64(value.dropLast()) else {
+            return nil
+        }
+        let multiplier: UInt64
+        switch unit {
+        case "m": multiplier = 60
+        case "h": multiplier = 3600
+        case "d": multiplier = 86400
+        case "w": multiplier = 604800
+        default: return nil
+        }
+        return amount.multipliedReportingOverflow(by: multiplier).overflow
+            ? nil
+            : amount * multiplier
+    }
+
 }
 
 #if os(iOS)
 private extension ViewController {
     var expiryOptions: [(title: String, value: String)] {
-        [
+        let options: [(title: String, value: String)] = [
             ("Server default", ""),
             ("1 hour", "1h"),
             ("24 hours", "24h"),
@@ -648,6 +809,13 @@ private extension ViewController {
             ("30 days", "30d"),
             ("Never expire", "never"),
         ]
+        guard let policy = retentionPolicy else { return options }
+        return options.filter { option in
+            if option.value.isEmpty { return true }
+            if option.value == "never" { return policy.allowNever }
+            guard let seconds = Self.expirySeconds(from: option.value) else { return false }
+            return policy.effectiveMaxExpirySeconds.map { seconds <= $0 } ?? true
+        }
     }
 
     func buildIOSSettingsView() {
@@ -778,13 +946,9 @@ private extension ViewController {
             UIAction(title: option.title, state: option.value == selectedExpiry ? .on : .off) { [weak self] _ in
                 guard let self = self else { return }
                 self.selectedExpiry = option.value
-                do {
-                    try self.settingsStore.setDefaultExpiry(option.value)
-                    self.updateExpiryButtonTitle()
-                    self.updateExpiryMenu()
-                } catch {
-                    self.showStatus(error.localizedDescription, isError: true)
-                }
+                self.updateExpiryButtonTitle()
+                self.updateExpiryMenu()
+                self.saveDefaultExpiryToServer(option.value)
             }
         })
     }
@@ -929,6 +1093,12 @@ private extension ViewController {
     }
 
     @objc func settingsDidChange() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.settingsDidChange()
+            }
+            return
+        }
         loadConnectionsIntoView()
     }
 
@@ -1099,6 +1269,9 @@ private extension ViewController {
                         displayName: ping.displayName,
                         username: ping.username
                     )
+                    if self.settingsStore.loadRegistry().defaultConnectionID == id {
+                        self.applyRetentionPolicy(ping.retention)
+                    }
                 case .failure(let error):
                     try? self.settingsStore.updateConnection(id: id, status: self.connectionStatus(for: error))
                 }
@@ -1344,6 +1517,7 @@ private extension ViewController {
 
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.maximumNumberOfLines = 2
+        statusLabel.isHidden = true
         safariStatusLabel.textColor = .secondaryLabelColor
         safariStatusLabel.maximumNumberOfLines = 2
 
@@ -1363,26 +1537,35 @@ private extension ViewController {
         serverScrollView.documentView = serverListStack
         serverScrollView.drawsBackground = false
         serverScrollView.borderType = .bezelBorder
-        serverScrollView.hasVerticalScroller = true
+        serverScrollView.hasVerticalScroller = false
         serverScrollView.hasHorizontalScroller = false
         serverScrollView.widthAnchor.constraint(equalToConstant: 640).isActive = true
-        serverScrollView.heightAnchor.constraint(equalToConstant: 190).isActive = true
+        serverScrollHeightConstraint = serverScrollView.heightAnchor.constraint(equalToConstant: 56)
+        serverScrollHeightConstraint.isActive = true
         emptyServersLabel.textColor = .secondaryLabelColor
 
         let addTitle = NSTextField(labelWithString: "Add a server")
         addTitle.font = .systemFont(ofSize: 16, weight: .semibold)
+        let serverEntryRow = NSStackView(views: [serverURLField, loginButton])
+        serverEntryRow.orientation = .horizontal
+        serverEntryRow.alignment = .centerY
+        serverEntryRow.spacing = 8
+        serverURLField.widthAnchor.constraint(greaterThanOrEqualToConstant: 350).isActive = true
         let form = NSGridView(views: [
-            [fieldLabel("ScreenshotSafe server"), serverURLField],
+            [fieldLabel("ScreenshotSafe server"), serverEntryRow],
             [fieldLabel("Default Expiry"), expiryPopup],
         ])
         form.column(at: 0).xPlacement = .trailing
-        form.column(at: 1).width = 420
-        form.rowSpacing = 12
+        form.column(at: 1).width = 490
+        form.rowSpacing = 8
         form.columnSpacing = 12
 
-        let buttonRow = NSStackView(views: [loginButton, safariButton])
-        buttonRow.orientation = .horizontal
-        buttonRow.spacing = 10
+        let safariRow = NSStackView(views: [safariStatusLabel, NSView(), safariButton])
+        safariRow.orientation = .horizontal
+        safariRow.alignment = .centerY
+        safariRow.distribution = .fill
+        safariRow.spacing = 10
+        safariRow.widthAnchor.constraint(equalToConstant: 640).isActive = true
 
         let stack = NSStackView(views: [
             title,
@@ -1392,22 +1575,22 @@ private extension ViewController {
             serverScrollView,
             addTitle,
             form,
-            buttonRow,
             statusLabel,
-            safariStatusLabel,
+            safariRow,
         ])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 16
+        stack.spacing = 12
         stack.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(stack)
 
         NSLayoutConstraint.activate([
             root.widthAnchor.constraint(greaterThanOrEqualToConstant: 720),
-            root.heightAnchor.constraint(greaterThanOrEqualToConstant: 700),
+            root.heightAnchor.constraint(greaterThanOrEqualToConstant: 480),
             stack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 32),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -32),
-            stack.topAnchor.constraint(equalTo: root.topAnchor, constant: 30),
+            stack.topAnchor.constraint(equalTo: root.topAnchor, constant: 24),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: root.bottomAnchor, constant: -24),
         ])
 
         loadConnectionsIntoView()
@@ -1434,15 +1617,25 @@ private extension ViewController {
             row.widthAnchor.constraint(equalToConstant: 620).isActive = true
         }
         let fittingSize = serverListStack.fittingSize
+        let listHeight = max(fittingSize.height, 1)
         serverListStack.frame = NSRect(
             x: 0,
             y: 0,
             width: 620,
-            height: max(fittingSize.height, 1)
+            height: listHeight
         )
+        let maximumVisibleHeight: CGFloat = 220
+        serverScrollHeightConstraint.constant = min(listHeight + 2, maximumVisibleHeight)
+        serverScrollView.hasVerticalScroller = listHeight + 2 > maximumVisibleHeight
     }
 
     @objc func settingsDidChange() {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in
+                self?.settingsDidChange()
+            }
+            return
+        }
         loadConnectionsIntoView()
     }
 
@@ -1467,13 +1660,9 @@ private extension ViewController {
     }
 
     @objc func defaultExpiryDidChange() {
-        do {
-            try settingsStore.setDefaultExpiry(
-                expiryPopup.selectedItem?.representedObject as? String ?? ""
-            )
-        } catch {
-            showStatus(error.localizedDescription, isError: true)
-        }
+        saveDefaultExpiryToServer(
+            expiryPopup.selectedItem?.representedObject as? String ?? ""
+        )
     }
 
     @objc func refreshAllConnections() {
@@ -1634,6 +1823,9 @@ private extension ViewController {
                         displayName: ping.displayName,
                         username: ping.username
                     )
+                    if self.settingsStore.loadRegistry().defaultConnectionID == id {
+                        self.applyRetentionPolicy(ping.retention)
+                    }
                 case .failure(let error):
                     try? self.settingsStore.updateConnection(id: id, status: self.connectionStatus(for: error))
                 }
@@ -1689,6 +1881,7 @@ private extension ViewController {
 
     func showStatus(_ message: String, isError: Bool, success: Bool = false) {
         statusLabel.stringValue = message
+        statusLabel.isHidden = message.isEmpty
         statusLabel.textColor = isError ? .systemRed : (success ? .systemGreen : .secondaryLabelColor)
     }
 

@@ -59,6 +59,19 @@ Cookie-authenticated `/api/*` calls are origin-checked. Chrome extension origins
 | `POST` | `/api/admin/users` | Admin session | JSON: username, password, optional display/admin flag/limits | Creates a user. |
 | `PATCH` | `/api/admin/users/{id}` | Admin session | JSON: optional password, account status, and/or limits | Updates user password, status, and limits. |
 | `DELETE` | `/api/admin/users/{id}` | Admin session | None | Deletes a user and associated DB rows/files when allowed. |
+| `GET`, `PATCH` | `/api/admin/server-retention` | Admin session | Optional server default expiry and default maximum seconds | Reads or updates server retention defaults. |
+| `GET`, `PATCH` | `/api/admin/users/{id}/retention` | Admin session | Maximum mode (`inherit`, `duration`, or `unlimited`) and optional seconds | Reads or updates the administrator-owned user maximum. |
+
+## User Retention API
+
+| Method | Path | Auth | Body | Side Effects |
+| --- | --- | --- | --- | --- |
+| `GET` | `/api/user/retention` | API token or session | None | Returns configured and effective retention settings. |
+| `PUT` | `/api/user/retention` | API token or session | Default mode (`inherit`, `duration`, or `never`) and optional seconds | Updates the user's default for new screenshots. |
+
+`GET /api/ping` also includes the resolved retention policy so connected clients
+can label the account default and hide choices that exceed the effective user
+maximum.
 
 ## Screenshot API
 
@@ -74,7 +87,8 @@ Cookie-authenticated `/api/*` calls are origin-checked. Chrome extension origins
 
 Authenticated screenshot-list results include the persisted `hit_count`. Active counts normally lag by no more than the 5-second flush interval; the first hit after at least 5 seconds of inactivity triggers an immediate background flush.
 
-Upload responses include the screenshot metadata plus public `share_url`, `raw_url`, and `share_id`.
+Upload responses include the screenshot metadata, actual `expires_at`, and public
+`share_url`, `raw_url`, and `share_id`.
 
 ## API Token API
 

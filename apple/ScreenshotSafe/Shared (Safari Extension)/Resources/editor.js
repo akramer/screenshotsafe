@@ -67,7 +67,9 @@
             if (!settings.configured) {
                 throw new Error('Configure ScreenshotSafe in the app before uploading.');
             }
-            if (settings.defaultExpiry &&
+            if (settings.retention) {
+                configureExpiryOptions(settings.retention);
+            } else if (settings.defaultExpiry &&
                 Array.from(expiresInSelect.options).some((option) => option.value === settings.defaultExpiry)) {
                 expiresInSelect.value = settings.defaultExpiry;
             }
@@ -94,6 +96,40 @@
             showError(err.message);
             uploadBtn.disabled = true;
         }
+    }
+
+    function configureExpiryOptions(retention) {
+        const defaultOption = expiresInSelect.querySelector('option[value=""]');
+        if (defaultOption) {
+            defaultOption.textContent = `Account default — ${formatDuration(
+                retention.effectiveDefaultExpirySeconds
+            )}`;
+        }
+        const maximum = retention.effectiveMaxExpirySeconds;
+        expiresInSelect.querySelectorAll('option[data-seconds]').forEach((option) => {
+            const seconds = option.dataset.seconds === 'never'
+                ? null
+                : Number(option.dataset.seconds);
+            option.hidden = maximum !== null && maximum !== undefined
+                && (seconds === null || seconds > maximum);
+            option.disabled = option.hidden;
+        });
+    }
+
+    function formatDuration(seconds) {
+        if (seconds === null || seconds === undefined) return 'Never';
+        for (const [unit, label] of [
+            [604800, 'week'],
+            [86400, 'day'],
+            [3600, 'hour'],
+            [60, 'minute'],
+        ]) {
+            if (seconds % unit === 0) {
+                const value = seconds / unit;
+                return `${value} ${label}${value === 1 ? '' : 's'}`;
+            }
+        }
+        return `${seconds} seconds`;
     }
 
     async function uploadEditedScreenshot() {
