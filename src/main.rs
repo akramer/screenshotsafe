@@ -46,7 +46,11 @@ async fn main() -> anyhow::Result<()> {
                     .trim()
                     .to_string()
             } else {
-                let secret = uuid::Uuid::new_v4().to_string();
+                use rand::RngCore;
+                let mut bytes = [0u8; 32];
+                rand::thread_rng().fill_bytes(&mut bytes);
+                let secret = hex::encode(bytes);
+
                 tokio::fs::write(&secret_path, &secret).await?;
                 tracing::info!("Generated new JWT secret at {}", secret_path.display());
                 secret
