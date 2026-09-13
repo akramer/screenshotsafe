@@ -579,7 +579,12 @@ pub async fn editor_page(
         return Err(AppError::NotFound);
     }
 
-    let annotations_json = serde_json::to_string(&screenshot.annotations).unwrap_or("[]".into());
+    // HTML parses script end tags before JavaScript parses JSON. Escape every '<'
+    // (including mixed-case end tags and HTML comments) without changing the text
+    // that JavaScript decodes; HTML entities would corrupt annotation contents.
+    let annotations_json = serde_json::to_string(&screenshot.annotations)
+        .unwrap_or("[]".into())
+        .replace('<', "\\u003c");
     let crop_json = screenshot
         .crop_rect
         .as_ref()
@@ -663,9 +668,9 @@ pub async fn editor_page(
         .replace("{{EXPIRY_OPTIONS}}", &expiry_options)
         .replace("{{SHARE_URL}}", &html_escape(&share_url))
         .replace("{{ID}}", &screenshot.id.to_string())
-        .replace("{{ANNOTATIONS}}", &annotations_json)
         .replace("{{CROP}}", &crop_json)
-        .replace("{{IMAGE_DPI}}", &image_dpi);
+        .replace("{{IMAGE_DPI}}", &image_dpi)
+        .replace("{{ANNOTATIONS}}", &annotations_json);
 
     Ok(Html(html).into_response())
 }
