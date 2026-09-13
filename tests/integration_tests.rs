@@ -24,7 +24,14 @@ mod tests {
         dir: &std::path::Path,
         configure: impl FnOnce(&mut Config),
     ) -> (axum::Router, SharedState) {
-        let db = Database::open_in_memory().unwrap();
+        test_app_with_database(dir, configure, Database::open_in_memory().unwrap())
+    }
+
+    fn test_app_with_database(
+        dir: &std::path::Path,
+        configure: impl FnOnce(&mut Config),
+        db: Database,
+    ) -> (axum::Router, SharedState) {
         db.run_migrations().unwrap();
 
         let storage_path = dir.join("storage");
@@ -1501,13 +1508,98 @@ mod tests {
         assert!(body["raw_url"].as_str().unwrap().ends_with(".png"));
 
         let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
+        assert_eq!(
+            std::fs::read(&screenshot.original_path).unwrap(),
+            minimal_png()
+        );
         let rendered_path = screenshot.rendered_path.unwrap();
+        assert_eq!(std::fs::read(&rendered_path).unwrap(), minimal_png());
         let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
         assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
         assert_eq!(
             tokio::fs::metadata(&preview_path).await.unwrap().len(),
             tokio::fs::metadata(&rendered_path).await.unwrap().len()
         );
+    }
+
+    fn assert_no_uploaded_screenshots(state: &SharedState) {
+        let admin = state.db.get_user_by_username("admin").unwrap().unwrap();
+        assert!(state
+            .db
+            .list_screenshots_for_user(&admin.id, 100, 0)
+            .unwrap()
+            .is_empty());
+        for path in [
+            state.config.storage.originals_path(),
+            state.config.storage.rendered_path(),
+        ] {
+            if path.is_dir() {
+                assert_eq!(std::fs::read_dir(path).unwrap().count(), 0);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_upload_invalid_expiry_leaves_no_artifacts() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+
+        let resp = upload_screenshot_response(&app, &cookie, &[("expires_in", "invalid")]).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        assert_no_uploaded_screenshots(&state);
+        assert!(!state.config.storage.originals_path().exists());
+        assert!(!state.config.storage.rendered_path().exists());
+    }
+
+    #[tokio::test]
+    async fn test_upload_rendered_directory_failure_removes_original() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, state) = test_app(dir.path());
+        let cookie = setup_user(&app).await;
+        let rendered_dir = state.config.storage.rendered_path();
+        std::fs::create_dir_all(rendered_dir.parent().unwrap()).unwrap();
+        std::fs::write(&rendered_dir, b"existing unrelated file").unwrap();
+
+        let resp = upload_screenshot_response(&app, &cookie, &[]).await;
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_no_uploaded_screenshots(&state);
+        assert_eq!(
+            std::fs::read(rendered_dir).unwrap(),
+            b"existing unrelated file"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_upload_database_failure_removes_all_new_artifacts() {
+        let dir = tempfile::tempdir().unwrap();
+        let database_path = dir.path().join("test.sqlite");
+        let db = Database::open(database_path.to_str().unwrap()).unwrap();
+        let (app, state) = test_app_with_database(dir.path(), |_| {}, db);
+        let cookie = setup_user(&app).await;
+        let conn = rusqlite::Connection::open(&database_path).unwrap();
+        conn.execute_batch(
+            "CREATE TRIGGER reject_upload BEFORE INSERT ON screenshots
+             BEGIN SELECT RAISE(ABORT, 'forced upload insert failure'); END;",
+        )
+        .unwrap();
+
+        let resp = upload_screenshot_response(&app, &cookie, &[]).await;
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        assert_no_uploaded_screenshots(&state);
+
+        // Removing the failure restores uploads, with all three artifacts intact.
+        conn.execute_batch("DROP TRIGGER reject_upload;").unwrap();
+        let body = upload_screenshot(&app, &cookie).await;
+        let id = body["id"].as_str().unwrap().parse().unwrap();
+        let screenshot = state.db.get_screenshot_by_id(&id).unwrap().unwrap();
+        let rendered_path = screenshot.rendered_path.unwrap();
+        assert_eq!(
+            std::fs::read(screenshot.original_path).unwrap(),
+            minimal_png()
+        );
+        assert_eq!(std::fs::read(&rendered_path).unwrap(), minimal_png());
+        assert!(image_processing::preview_path_for_rendered_path(&rendered_path).is_file());
     }
 
     #[tokio::test]
@@ -1671,6 +1763,7 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
         let body = body_json(resp).await;
         assert!(body["error"].as_str().unwrap().contains("maximum lifetime"));
+        assert_no_uploaded_screenshots(&state);
     }
 
     #[tokio::test]

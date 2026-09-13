@@ -11,6 +11,7 @@ use chrono::Utc;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use qrcode::{render::svg, QrCode};
 use serde::{Deserialize, Serialize};
+use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
@@ -1448,34 +1449,22 @@ pub async fn upload_screenshot(
     let id = Uuid::new_v4();
     let sid = share_id::generate();
 
-    // Save original file
+    // Reject invalid retention settings before creating any artifacts.
+    let created_at = Utc::now();
+    let retention = load_effective_retention(&state, &user)?;
+    let expires_at = resolve_expires_at(expires_in.as_deref(), retention, created_at)?;
+
     let original_path = state
         .config
         .storage
         .originals_path()
         .join(format!("{}.png", id));
-    if let Some(parent) = original_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    tokio::fs::write(&original_path, &image_data).await?;
-
-    // Copy as initial rendered version
     let rendered_path = state
         .config
         .storage
         .rendered_path()
         .join(format!("{}.png", sid));
-    if let Some(parent) = rendered_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
-    }
-    tokio::fs::write(&rendered_path, &image_data).await?;
-    bake_preview_for_rendered(&rendered_path).await?;
-
-    let created_at = Utc::now();
-
-    // Calculate expiration
-    let retention = load_effective_retention(&state, &user)?;
-    let expires_at = resolve_expires_at(expires_in.as_deref(), retention, created_at)?;
+    let preview_path = image_processing::preview_path_for_rendered(&rendered_path);
 
     let screenshot = Screenshot {
         id,
@@ -1496,7 +1485,37 @@ pub async fn upload_screenshot(
         updated_at: created_at,
     };
 
-    state.db.create_screenshot(&screenshot)?;
+    let mut created_paths = Vec::new();
+    let save_result: crate::Result<()> = async {
+        for (path, bytes) in [
+            (&original_path, image_data.as_slice()),
+            (&rendered_path, image_data.as_slice()),
+            (&preview_path, &[][..]),
+        ] {
+            if let Some(parent) = path.parent() {
+                tokio::fs::create_dir_all(parent).await?;
+            }
+            // Never overwrite or clean up a path belonging to another upload.
+            let mut file = tokio::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .await?;
+            created_paths.push(path.clone());
+            file.write_all(bytes).await?;
+            file.flush().await?;
+        }
+        bake_preview_for_rendered(&rendered_path).await?;
+        state.db.create_screenshot(&screenshot)?;
+        Ok(())
+    }
+    .await;
+    if let Err(err) = save_result {
+        for path in created_paths {
+            remove_file_if_present(&path.to_string_lossy()).await;
+        }
+        return Err(err);
+    }
 
     let base_url = crate::routes::get_base_url(&state.config.server.public_url, &headers);
     let share_url = format!("{}/s/{}", base_url, sid);
