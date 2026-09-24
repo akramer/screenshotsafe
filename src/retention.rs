@@ -128,6 +128,35 @@ pub fn effective_policy(
     }
 }
 
+const MINUTE: u64 = 60;
+const HOUR: u64 = 60 * MINUTE;
+const DAY: u64 = 24 * HOUR;
+const WEEK: u64 = 7 * DAY;
+
+/// Splits a duration into its largest whole unit, e.g. 172800 -> (2, DAY).
+/// Durations that aren't a whole number of minutes are returned as seconds.
+pub fn duration_parts(seconds: u64) -> (u64, u64) {
+    for unit in [WEEK, DAY, HOUR, MINUTE] {
+        if seconds >= unit && seconds.is_multiple_of(unit) {
+            return (seconds / unit, unit);
+        }
+    }
+    (seconds, 1)
+}
+
+/// Formats a duration for display, e.g. "2 days" or "1 hour".
+pub fn format_duration(seconds: u64) -> String {
+    let (value, unit) = duration_parts(seconds);
+    let name = match unit {
+        WEEK => "week",
+        DAY => "day",
+        HOUR => "hour",
+        MINUTE => "minute",
+        _ => "second",
+    };
+    format!("{value} {name}{}", if value == 1 { "" } else { "s" })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -162,5 +191,18 @@ mod tests {
 
         assert_eq!(policy.effective_default_expiry_seconds, Some(90));
         assert!(!policy.allow_never);
+    }
+
+    #[test]
+    fn formats_durations_in_largest_whole_unit() {
+        assert_eq!(format_duration(0), "0 seconds");
+        assert_eq!(format_duration(1), "1 second");
+        assert_eq!(format_duration(90), "90 seconds");
+        assert_eq!(format_duration(MINUTE), "1 minute");
+        assert_eq!(format_duration(90 * MINUTE), "90 minutes");
+        assert_eq!(format_duration(HOUR), "1 hour");
+        assert_eq!(format_duration(2 * DAY), "2 days");
+        assert_eq!(format_duration(WEEK), "1 week");
+        assert_eq!(format_duration(4 * WEEK), "4 weeks");
     }
 }

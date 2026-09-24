@@ -1,8 +1,16 @@
 pub mod api;
+pub(crate) mod html;
 pub mod pages;
 pub mod share;
 
+use axum::body::Body;
 use axum::http::HeaderMap;
+use tokio_util::io::ReaderStream;
+
+pub(crate) async fn stream_png_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Body> {
+    let file = tokio::fs::File::open(path).await?;
+    Ok(Body::from_stream(ReaderStream::new(file)))
+}
 
 pub fn get_base_url(public_url: &str, headers: &HeaderMap) -> String {
     if !public_url.is_empty() {

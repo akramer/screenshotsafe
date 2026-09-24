@@ -45,22 +45,33 @@ pub async fn cleanup_expired_screenshots(state: &AppState) -> Result<usize> {
     let deleted_count = paths.len();
 
     for (original_path, rendered_path) in paths {
-        remove_screenshot_file(&original_path).await;
-        if let Some(path) = rendered_path {
-            remove_screenshot_file(&path).await;
-            let preview_path = image_processing::preview_path_for_rendered_path(&path);
-            remove_screenshot_file(&preview_path.to_string_lossy()).await;
-        }
+        remove_screenshot_files(&original_path, rendered_path.as_deref()).await;
     }
 
     Ok(deleted_count)
 }
 
-async fn remove_screenshot_file(path: &str) {
+/// Remove a screenshot's original, rendered, and preview image files.
+/// Call this only after the screenshot's DB row has been deleted.
+pub async fn remove_screenshot_files(original_path: &str, rendered_path: Option<&str>) {
+    remove_file_if_present(original_path).await;
+    if let Some(path) = rendered_path {
+        remove_file_if_present(path).await;
+        remove_file_if_present(image_processing::preview_path_for_rendered_path(path)).await;
+    }
+}
+
+/// Remove a file, ignoring files that are already gone and logging other failures.
+pub async fn remove_file_if_present(path: impl AsRef<std::path::Path>) {
+    let path = path.as_ref();
     match tokio::fs::remove_file(path).await {
         Ok(()) => {}
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-        Err(err) => tracing::warn!("Failed to remove expired screenshot file {}: {}", path, err),
+        Err(err) => tracing::warn!(
+            "Failed to remove screenshot file {}: {}",
+            path.display(),
+            err
+        ),
     }
 }
 

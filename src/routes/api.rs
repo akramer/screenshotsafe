@@ -1,5 +1,4 @@
 use axum::{
-    body::Body,
     extract::{multipart::Field, Multipart, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::AppendHeaders,
@@ -12,7 +11,6 @@ use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation}
 use qrcode::{render::svg, QrCode};
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
-use tokio_util::io::ReaderStream;
 use uuid::Uuid;
 
 use crate::auth::middleware::{AdminUser, ApiOrSessionUser, ApiTokenUser, AuthUser, MaybeAuthUser};
@@ -22,9 +20,10 @@ use crate::models::{
     Screenshot, ThemePreference, User,
 };
 use crate::retention::{
-    effective_policy, EffectiveRetentionPolicy, ServerRetentionSettings, UserDefaultMode,
-    UserMaximumMode,
+    effective_policy, format_duration, EffectiveRetentionPolicy, ServerRetentionSettings,
+    UserDefaultMode, UserMaximumMode,
 };
+use crate::routes::stream_png_file;
 use crate::{auth, image_processing, share_id, AppError, SharedState};
 
 // ── Setup (first-run) ──
@@ -1003,27 +1002,10 @@ pub async fn admin_delete_user(
 
     let paths = state.db.delete_user(&id)?.ok_or(AppError::NotFound)?;
     for (original_path, rendered_path) in paths {
-        remove_file_if_present(&original_path).await;
-        if let Some(path) = rendered_path {
-            remove_file_if_present(&path).await;
-            let preview_path = image_processing::preview_path_for_rendered_path(&path);
-            remove_file_if_present(&preview_path.to_string_lossy()).await;
-        }
+        crate::remove_screenshot_files(&original_path, rendered_path.as_deref()).await;
     }
 
     Ok(Json(serde_json::json!({ "ok": true })))
-}
-
-async fn remove_file_if_present(path: &str) {
-    match tokio::fs::remove_file(path).await {
-        Ok(()) => {}
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-        Err(err) => tracing::warn!(
-            "Failed to remove user-owned screenshot file {}: {}",
-            path,
-            err
-        ),
-    }
 }
 
 async fn bake_preview_for_rendered(rendered_path: &std::path::Path) -> crate::Result<()> {
@@ -1512,7 +1494,7 @@ pub async fn upload_screenshot(
     .await;
     if let Err(err) = save_result {
         for path in created_paths {
-            remove_file_if_present(&path.to_string_lossy()).await;
+            crate::remove_file_if_present(&path).await;
         }
         return Err(err);
     }
@@ -1688,40 +1670,6 @@ fn parse_expiry_choice(s: &str) -> crate::Result<ExpiryChoice> {
         .filter(|seconds| i64::try_from(*seconds).is_ok())
         .ok_or_else(|| AppError::BadRequest("Expiry value is too large".into()))?;
     Ok(ExpiryChoice::Duration(seconds))
-}
-
-fn format_duration(seconds: u64) -> String {
-    const MINUTE: u64 = 60;
-    const HOUR: u64 = 60 * MINUTE;
-    const DAY: u64 = 24 * HOUR;
-    const WEEK: u64 = 7 * DAY;
-    if seconds.is_multiple_of(WEEK) {
-        format!(
-            "{} week{}",
-            seconds / WEEK,
-            if seconds == WEEK { "" } else { "s" }
-        )
-    } else if seconds.is_multiple_of(DAY) {
-        format!(
-            "{} day{}",
-            seconds / DAY,
-            if seconds == DAY { "" } else { "s" }
-        )
-    } else if seconds.is_multiple_of(HOUR) {
-        format!(
-            "{} hour{}",
-            seconds / HOUR,
-            if seconds == HOUR { "" } else { "s" }
-        )
-    } else if seconds.is_multiple_of(MINUTE) {
-        format!(
-            "{} minute{}",
-            seconds / MINUTE,
-            if seconds == MINUTE { "" } else { "s" }
-        )
-    } else {
-        format!("{} seconds", seconds)
-    }
 }
 
 fn format_bytes(bytes: u64) -> String {
@@ -2089,14 +2037,15 @@ pub async fn delete_screenshot(
         return Err(AppError::NotFound);
     }
 
-    // Delete files
-    let _ = tokio::fs::remove_file(&screenshot.original_path).await;
-    if let Some(rp) = &screenshot.rendered_path {
-        let _ = tokio::fs::remove_file(rp).await;
-        let _ = tokio::fs::remove_file(image_processing::preview_path_for_rendered_path(rp)).await;
+    // Delete the row first so a DB failure never leaves it pointing at missing files.
+    if !state.db.delete_screenshot(&id)? {
+        return Err(AppError::NotFound);
     }
-
-    state.db.delete_screenshot(&id)?;
+    crate::remove_screenshot_files(
+        &screenshot.original_path,
+        screenshot.rendered_path.as_deref(),
+    )
+    .await;
 
     Ok(Json(serde_json::json!({ "ok": true })))
 }
@@ -2204,11 +2153,6 @@ pub async fn serve_preview(
 
     let body = stream_png_file(preview_path).await?;
     Ok(([(header::CONTENT_TYPE, "image/png".to_string())], body))
-}
-
-async fn stream_png_file(path: impl AsRef<std::path::Path>) -> std::io::Result<Body> {
-    let file = tokio::fs::File::open(path).await?;
-    Ok(Body::from_stream(ReaderStream::new(file)))
 }
 
 // ── Browser Extension Authorization ──

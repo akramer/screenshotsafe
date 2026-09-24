@@ -6,41 +6,15 @@ use axum::{
 use serde::Deserialize;
 use std::collections::HashMap;
 
+use super::html::{html_escape, local_time, LOCAL_TIME_SCRIPT};
 use crate::auth::middleware::{AdminUser, AuthUser, MaybeAuthUser};
 use crate::models::ThemePreference;
-use crate::retention::{effective_policy, UserDefaultMode, UserMaximumMode};
+use crate::retention::{
+    duration_parts, effective_policy, format_duration, UserDefaultMode, UserMaximumMode,
+};
 use crate::{AppError, SharedState};
 
 const FAVICON_LINK: &str = r#"<link rel="icon" type="image/x-icon" href="/favicon.ico">"#;
-const LOCAL_TIME_SCRIPT: &str = r#"<script>
-        (() => {
-            const formats = {
-                date: { month: 'short', day: 'numeric', year: 'numeric' },
-                datetime: {
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                    timeZoneName: 'short'
-                },
-                'long-date': { month: 'long', day: 'numeric', year: 'numeric' }
-            };
-
-            document.querySelectorAll('[data-local-time]').forEach((el) => {
-                const value = el.getAttribute('datetime') || el.dataset.datetime;
-                if (!value) return;
-
-                const date = new Date(value);
-                if (Number.isNaN(date.getTime())) return;
-
-                const options = formats[el.dataset.localFormat] || formats.datetime;
-                const formatted = new Intl.DateTimeFormat(undefined, options).format(date);
-                el.textContent = `${el.dataset.localPrefix || ''}${formatted}${el.dataset.localSuffix || ''}`;
-            });
-        })();
-    </script>"#;
-
 #[derive(Deserialize)]
 pub struct ExtensionAuthorizePageQuery {
     redirect_uri: String,
@@ -1336,11 +1310,11 @@ pub async fn settings_page(
         local_time_script = LOCAL_TIME_SCRIPT,
         effective_maximum = retention
             .effective_max_expiry_seconds
-            .map(format_retention_duration)
+            .map(format_duration)
             .unwrap_or_else(|| "No maximum".to_string()),
         server_default = retention
             .server_default_expiry_seconds
-            .map(format_retention_duration)
+            .map(format_duration)
             .unwrap_or_else(|| "Never".to_string()),
         default_inherit_selected =
             selected(user_retention.default_mode == UserDefaultMode::Inherit,),
@@ -1932,11 +1906,11 @@ pub async fn admin_edit_user_page(
         server_size = state.config.server.max_screenshot_size_bytes,
         server_maximum = server_retention
             .default_max_expiry_seconds
-            .map(format_retention_duration)
+            .map(format_duration)
             .unwrap_or_else(|| "No maximum".to_string()),
         effective_maximum = retention
             .effective_max_expiry_seconds
-            .map(format_retention_duration)
+            .map(format_duration)
             .unwrap_or_else(|| "No maximum".to_string()),
         maximum_inherit_selected =
             selected(user_retention.maximum_mode == UserMaximumMode::Inherit,),
@@ -1963,31 +1937,6 @@ fn selected(value: bool) -> &'static str {
     }
 }
 
-fn duration_parts(seconds: u64) -> (u64, u64) {
-    const MINUTE: u64 = 60;
-    const HOUR: u64 = 60 * MINUTE;
-    const DAY: u64 = 24 * HOUR;
-    const WEEK: u64 = 7 * DAY;
-    for unit in [WEEK, DAY, HOUR, MINUTE] {
-        if seconds >= unit && seconds.is_multiple_of(unit) {
-            return (seconds / unit, unit);
-        }
-    }
-    (seconds, 1)
-}
-
-fn format_retention_duration(seconds: u64) -> String {
-    let (value, unit) = duration_parts(seconds);
-    let name = match unit {
-        604800 => "week",
-        86400 => "day",
-        3600 => "hour",
-        60 => "minute",
-        _ => "second",
-    };
-    format!("{value} {name}{}", if value == 1 { "" } else { "s" })
-}
-
 fn expiry_override_options(maximum: Option<u64>) -> String {
     let mut options = Vec::new();
     if maximum.is_none() {
@@ -2004,27 +1953,6 @@ fn expiry_override_options(maximum: Option<u64>) -> String {
         }
     }
     options.join("\n")
-}
-
-fn html_escape(s: &str) -> String {
-    s.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
-        .replace('"', "&quot;")
-        .replace('\'', "&#x27;")
-}
-
-fn local_time(
-    datetime: chrono::DateTime<chrono::Utc>,
-    local_format: &str,
-    fallback_format: &str,
-) -> String {
-    format!(
-        r#"<time datetime="{}" data-local-time data-local-format="{}">{}</time>"#,
-        datetime.to_rfc3339(),
-        html_escape(local_format),
-        html_escape(&datetime.format(fallback_format).to_string()),
-    )
 }
 
 fn theme_attr(theme: ThemePreference) -> &'static str {

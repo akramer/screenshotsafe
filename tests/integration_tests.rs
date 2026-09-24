@@ -2401,8 +2401,11 @@ mod tests {
         let parsed_id: uuid::Uuid = id.parse().unwrap();
         let share_id = upload_body["share_id"].as_str().unwrap();
         let screenshot = state.db.get_screenshot_by_id(&parsed_id).unwrap().unwrap();
+        let original_path = screenshot.original_path;
         let rendered_path = screenshot.rendered_path.unwrap();
         let preview_path = image_processing::preview_path_for_rendered_path(&rendered_path);
+        assert!(tokio::fs::try_exists(&original_path).await.unwrap());
+        assert!(tokio::fs::try_exists(&rendered_path).await.unwrap());
         assert!(tokio::fs::try_exists(&preview_path).await.unwrap());
 
         // Leave one hit pending when the screenshot is deleted.
@@ -2424,6 +2427,8 @@ mod tests {
 
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+        assert!(!tokio::fs::try_exists(&original_path).await.unwrap());
+        assert!(!tokio::fs::try_exists(&rendered_path).await.unwrap());
         assert!(!tokio::fs::try_exists(&preview_path).await.unwrap());
 
         // Should no longer be accessible
